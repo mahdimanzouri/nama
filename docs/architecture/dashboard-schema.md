@@ -1,10 +1,36 @@
 # Dashboard Configuration Schema
 
-**Status:** Proposed (M0). Exact defaults and optionality are finalized in M2.
+**Status:** Implemented in M2 as Zod schemas in `@nama/dashboard-types`.
 
 The persisted configuration is portable data. It never contains credentials,
 ownership, shares or audit fields. Server-owned metadata lives in relational
 columns (see [data-model.md](data-model.md)).
+
+## Implementation deltas (M2)
+
+The schemas are the source of truth. Where this M0 document and the code differ,
+these are the decisions M3 builds on:
+
+- Validation returns warnings as well as errors:
+  `{ ok: true, value, warnings }` or `{ ok: false, issues, warnings }`. Warnings
+  cover the 50-widget advisory threshold and widgets absent from every layout;
+  neither blocks saving.
+- Cross-field checks expose stable codes in `ValidationIssue.code`
+  (`duplicate_widget_id`, `duplicate_variable_name`, `layout_unknown_widget`,
+  `layout_duplicate_widget`, `config_too_large`, `unsupported_schema_version`).
+  Pure field errors keep Zod's codes (`invalid_type`, `too_small`, …).
+- `QueryDefinition.timeRange` accepts a relative range
+  (`{ "mode": "relative", "last": "24h" }`) or an absolute `{ from, to }` range.
+  The server resolves relative ranges; the browser never expands them.
+- `dataSourceId` is an opaque string (1–200 characters), not necessarily a UUIDv7.
+  Only server-owned entity IDs are UUIDv7.
+- The 1 MiB cap is measured on the serialized UTF-8 bytes of the parsed
+  configuration.
+- `settings.refreshInterval` defaults to `60` when omitted; `timezone` is optional
+  and must be a valid IANA zone.
+- Unknown keys are rejected at every level (`.strict()`), so a typo cannot be
+  silently dropped on save.
+
 
 ## Document versus configuration
 

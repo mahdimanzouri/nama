@@ -62,13 +62,14 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M1 (monorepo foundation) is implemented and awaiting acceptance. The workspace
-contains `apps/web`, `apps/api` and exactly four packages:
+M2 (shared contracts and schemas) is implemented and awaiting acceptance. The
+workspace contains `apps/web`, `apps/api` and exactly four packages:
 `@nama/dashboard-types`, `@nama/dashboard-core`, `@nama/dashboard-builder`,
-`@nama/api-client`. Do not create the target-only packages listed in
-`docs/architecture/package-dependencies.md`.
+`@nama/api-client`. `dashboard-types` owns all Zod schemas and public types; the
+other three packages are still empty. Do not create the target-only packages
+listed in `docs/architecture/package-dependencies.md`.
 
-Working rules for M1 and later:
+Working rules for M3 and later:
 
 1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
    `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`).
@@ -76,6 +77,8 @@ Working rules for M1 and later:
    a dependent app.
 3. Do not add cross-package imports outside the approved graph; the boundary
    script fails the build.
-4. Do not implement M2 contracts or SDK APIs while closing M1.
+4. Import contracts from `@nama/dashboard-types`; do not duplicate schema
+   definitions in the SDK or the API.
+5. Do not implement M3 SDK APIs while closing M2.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

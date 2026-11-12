@@ -1,7 +1,10 @@
 # Widget Plugin Contract (Normative)
 
-**Status:** Proposed (M0). This file is the normative source for the widget
-contract. Other documents link here instead of restating it.
+**Status:** Manifest and capability schemas implemented in M2
+(`widgetManifestSchema`, `widgetCapabilitiesSchema` in `@nama/dashboard-types`).
+This file is the normative source for the widget contract; other documents link
+here instead of restating it. The runtime `WidgetPlugin`, render-prop and settings
+interfaces land in M3, because they reference React components.
 
 ## Manifest
 

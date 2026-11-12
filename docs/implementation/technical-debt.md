@@ -1,6 +1,6 @@
 # Technical Debt
 
-**Status:** Updated at M1 (2026-11-12)
+**Status:** Updated at M2 (2026-11-12)
 
 Debt is recorded honestly with impact, owner and target milestone. Items are
 removed only when the fix is merged and verified; closed items are listed at the
@@ -23,12 +23,15 @@ end so IDs stay stable.
 | TD-016 | LTR-only canvas is a documented accessibility limitation | Assistive-technology users get a non-mirrored grid | Accessibility | M10.5 documentation |
 | TD-017 | `dev` builds package dependencies once and does not watch them | Editing `dashboard-core` during `dev` requires a rebuild or restart | Tooling | M3, when SDK source changes constantly |
 | TD-018 | `dashboard-core`, `dashboard-builder` and `api-client` export nothing yet | The packages build and link but provide no API; they must not be published | SDK | M3 / M6 |
-| TD-019 | No coverage collection or thresholds | Test task emits no artefacts; regressions in coverage are invisible | QA | M2 |
+| TD-019 | No coverage collection or thresholds | Test task emits no artefacts; regressions in coverage are invisible | QA | M3.5 |
 | TD-020 | `docs/` and the planning document are excluded from Prettier | Documentation formatting drifts from code formatting | Docs | When docs are stabilised |
 | TD-021 | `apps/web` has no tests | The web shell is only verified manually in M1 | QA | M3.5 walking skeleton |
 | TD-022 | Linting and formatting run only from the repository root | No per-package `lint` script; editor integration depends on the root config | Tooling | Revisit if a package needs its own rules |
 | TD-023 | Transitive MPL-2.0, LGPL-3.0 and CC-BY-4.0 dependencies are installed | `lightningcss`, `@img/sharp-libvips-linux-x64` and `caniuse-lite` need re-scan on lockfile change | Platform | Every dependency change |
 | TD-024 | `allowedDevOrigins` is unset, so non-`localhost` dev hosts are blocked | Next 16 rejects dev resources from e.g. a LAN IP; affects mobile/device testing | Tooling | When device testing starts |
+| TD-025 | `apps/web` runs with `noUnusedLocals: false` | Next 16 generates `.next/dev/types/validator.ts` with unused declarations; only ESLint checks our app sources for unused code | Tooling | When Next stops emitting that file, or routes are added and verified |
+| TD-026 | Widget plugin runtime interfaces (`WidgetPlugin`, render props, settings props) are not defined | Plugin authors cannot type a widget until M3; only manifests exist | SDK | M3 |
+| TD-027 | Migration steps must be registered by callers; there is no on-disk discovery or version table | Import/read paths must wire migrations explicitly; forgetting one fails closed with `missing_migration` | Backend | M6, when persistence lands |
 
 ## Closed
 

@@ -7,14 +7,14 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M1 (monorepo foundation) is implemented and awaiting acceptance.**
+**Milestone M2 (shared contracts and schemas) is implemented and awaiting acceptance.**
 
 The workspace contains:
 
 ```text
 apps/web                 Next.js 16 application
 apps/api                 Fastify 5 service (health endpoint only)
-packages/dashboard-types public constants and types (Zod schemas in M2)
+packages/dashboard-types public contracts: constants plus Zod schemas (M2)
 packages/dashboard-core  dashboard runtime (public API in M3)
 packages/dashboard-builder public React API (public API in M3)
 packages/api-client      typed API client (generated in M6)

@@ -1,6 +1,6 @@
 # Current Phase
 
-**Current milestone:** M1 — Monorepo foundation
+**Current milestone:** M2 — Shared contracts and schemas
 **Status:** Implemented, awaiting acceptance
 **Date:** 2026-11-12
 
@@ -9,10 +9,10 @@
 ```text
 nama/
 ├── apps/
-│   ├── web/                    # Next.js 16 app (moved from the repository root)
+│   ├── web/                    # Next.js 16 app
 │   └── api/                    # Fastify 5 service, /healthz only
 ├── packages/
-│   ├── dashboard-types/        # platform constants; Zod schemas land in M2
+│   ├── dashboard-types/        # platform constants + all runtime contracts (M2)
 │   ├── dashboard-core/         # empty entry point; public API lands in M3
 │   ├── dashboard-builder/      # empty entry point; public API lands in M3
 │   └── api-client/             # empty entry point; generated client lands in M6
@@ -25,38 +25,49 @@ nama/
 └── pnpm-workspace.yaml
 ```
 
+`packages/dashboard-types/src` holds one module per contract area:
+
+| Module | Contents |
+| --- | --- |
+| `primitives.ts` | Locales, breakpoints, themes, UUIDv7 and timestamp schemas, IANA time-zone validation, frozen `PLATFORM_LIMITS` |
+| `errors.ts` | Stable issue codes, `ValidationIssue`, `ValidationResult`, Zod-to-issue mapping |
+| `layout.ts` | `LayoutItem`, per-breakpoint layouts with 12/8/4 columns, overflow and duplicate checks |
+| `widget.ts` | `DashboardWidget` plus visibility |
+| `query.ts` | Query definition, filters, aggregations, variable bindings, absolute/relative time ranges, result and error contracts, `DataAdapter` types |
+| `dashboard.ts` | Metadata, settings, variables, filters, full configuration and document schemas, `parseDashboardConfig` |
+| `realtime.ts` | The ten `/ws/v1` message schemas, close codes, replay/reconnect constants, separate `authenticate` frame |
+| `plugin.ts` | Widget manifest/capabilities and data-source plugin manifest/capabilities |
+| `migration.ts` | Dashboard and per-widget migration runners |
+
 ## Deliverables
 
-- [x] pnpm workspace (`apps/*`, `packages/*`) with a single root lockfile
-- [x] Existing Next.js app moved to `apps/web` with `turbopack.root` pointed at
-      the workspace root
-- [x] `apps/api` Fastify skeleton with a Zod-validated environment and `GET /healthz`
-- [x] Turborepo task graph for `build`, `dev`, `typecheck`, `test`, `clean`
-- [x] Strict shared TypeScript config (`strict`, `noImplicitAny`,
-      `noUncheckedIndexedAccess`, `verbatimModuleSyntax`)
-- [x] ESLint 9 flat config at the root covering every workspace member
-- [x] Prettier configuration and `format` / `format:check` scripts
-- [x] Exactly four `@nama/*` packages with `workspace:*` links, `tsdown` builds
-      (ESM plus declarations) and React as a peer dependency
-- [x] `scripts/verify-workspace.mjs` enforcing the approved dependency graph,
-      host-agnostic SDK rule and a single React version
-- [x] GitHub Actions workflow running boundaries, lint, format, typecheck, test
-      and build
-- [x] Pre-monorepo root build artifacts removed (`.next/`, `next-env.d.ts`,
-      the root Next.js manifest)
+- [x] Public types and Zod schemas for dashboard, widget, layout, query, adapter
+      and realtime contracts, with types inferred from the schemas
+- [x] Plugin manifests (widget and data-source) with capability flags, semver and
+      identifier validation
+- [x] Migration interface for the dashboard `schemaVersion` and per-widget
+      `configVersion`, with idempotency, future-version rejection and typed failures
+- [x] `parseDashboardConfig` runs migrations, validates, enforces the 1 MiB cap and
+      returns warnings for the 50-widget threshold and widgets missing from every layout
+- [x] Stable cross-field issue codes (`duplicate_widget_id`, `duplicate_variable_name`,
+      `layout_unknown_widget`, `layout_duplicate_widget`, `config_too_large`,
+      `unsupported_schema_version`, `many_widgets`, `widget_not_laid_out`)
+- [x] 69 schema tests covering valid/invalid configurations, field paths, caps,
+      migrations, realtime frames and plugin manifests
+- [x] `zod` added as the runtime dependency of `dashboard-types`
 
-## Decisions taken during M1
+## Decisions taken during M2
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| TypeScript major | `^5.9.3` | Next 16.4.6 and tsdown 0.23.7 support 7.x, but `typescript-eslint@8.72.2` (pinned by `eslint-config-next`) does not, so lint would break |
-| ESLint major | `^9.39.5` | `eslint-config-next@16.4.6` allows 10, but `typescript-eslint@8` peers on `^8 \|\| ^9` |
-| ESLint layout | one root config | Avoids per-package config duplication and keeps `eslint .` authoritative; `settings.next.rootDir` points at `apps/web` |
-| Package entry points | `dist` only | Source-condition exports would need host bundler configuration the SDK cannot assume |
-| `dev` task | `dependsOn: ["^build"]` | After `pnpm clean`, `next dev` must not fail on a missing package `dist` |
-| API build | `tsc` (not a bundler) | A Node service should keep its dependencies external |
-| API dev | `tsx watch` | Runs TypeScript directly without a separate compiler process |
-| API runtime deps | `fastify`, `zod` | Health endpoint plus environment validation; no database or auth yet |
+| Schema authoring | Zod schema first, TypeScript type inferred | A value that parses is a value that type-checks; no drift between the two |
+| Configuration validation result | `{ ok, issues, warnings }` on both branches | The M0 shape had no warnings channel; caps that should not block saving need one |
+| Cross-field issue codes | Passed through Zod `params.code` | Zod reports every custom check as `custom`; callers must branch on stable codes, not messages |
+| Persisted widget query range | `{ mode: "relative", last }` or `{ from, to }` | Matches the M0 line-widget example and keeps relative ranges resolvable server-side |
+| Data-source identifiers | Opaque string, not UUIDv7 | The client must not assume a connector uses UUIDs; entity IDs stay UUIDv7 |
+| Realtime `authenticate` frame | Separate schema, not one of the ten message types | Keeps the documented ten-type protocol invariant while supporting embed tokens |
+| Widget plugin runtime interface | Deferred to M3 | It references React components; `dashboard-types` stays React-free |
+| `apps/web` `noUnusedLocals` | Disabled for that project only | Next 16 writes `.next/dev/types/validator.ts` with unused declarations; ESLint still reports unused code in our sources |
 
 ## Open decisions
 
@@ -69,45 +80,41 @@ nama/
 | Public/anonymous sharing | Deferred | — | Organization-scoped sharing only in v1 |
 | External time-series store | Deferred | — | Telemetry stays out of Postgres; product selection later |
 | Plugin sandbox/marketplace | Deferred | — | Trusted install only (ADR-006) |
-| OpenAPI code generation | Deferred to M6 | M6 | Spec is hand-written; the API is not generated from it yet |
+| OpenAPI code generation | Deferred to M6 | M6 | Spec is hand-written; no client generated from it yet |
+| Plugin runtime interfaces | Deferred to M3 | M3 | Manifests exist; component/props contracts need React and the renderer |
 
-## What M2 must not assume
+## What M3 must not assume
 
+- That `@nama/dashboard-types` exports anything beyond schemas, constants and
+  migration helpers. There are no components, hooks or adapters yet.
 - That `dashboard-core`, `dashboard-builder` or `api-client` export anything; all
-  three are empty modules until M3/M6.
-- That the API serves anything other than `/healthz`; there is no database,
-  session handling or agent-based authorisation yet.
-- That the web application renders dashboards; it renders a single static page
-  that imports `@nama/dashboard-types`.
-- That package builds are watched during `dev`; `dev` builds dependencies once.
-  Source-change watch mode is added when SDK code lands.
-- That deployment is serverless or containerised; ADR-011 is still open.
-- That Zod is available in packages other than `apps/api`; it is introduced to
-  `dashboard-types` in M2 with the first schema.
+  three are still empty modules.
+- That the API executes queries, serves dashboards or handles sessions; only
+  `/healthz` exists.
+- That a realtime gateway exists; only the message contracts are defined, and the
+  server side lands with the API.
+- That `dashboard-types` renders or imports React; it must remain host-agnostic.
+- That the web application renders dashboards; it still renders one static page.
 
-## Verification (M1)
+## Verification (M2)
 
 All commands were run from the repository root on Node 24.13.0 with pnpm 10.33.2.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Install | `pnpm install` | 6 workspace projects linked, single lockfile |
-| Boundaries | `pnpm verify:workspace` | Passes; a planted `import "next/server"` in `dashboard-core` correctly fails with exit code 1 |
-| Lint | `pnpm lint` | Clean, no warnings |
+| Install | `pnpm install` | Lockfile updated for `zod`; no peer warnings |
+| Boundaries | `pnpm verify:workspace` | Passes: approved graph, no host imports, single React version |
+| Lint | `pnpm lint` | Clean |
 | Format | `pnpm format:check` | All files match |
 | Typecheck | `pnpm typecheck` | 8 tasks successful (4 packages, web, api) |
-| Test | `pnpm test` | 9 tests pass (5 platform invariants, 4 API/env) |
-| Build | `pnpm build` | 6 tasks successful; `apps/web` prerenders `/` and `/_not-found` |
-| Dev servers | `pnpm dev` | Web on :3000 (HMR connected), API on :3001 |
-| API health | `curl :3001/healthz` | `{"status":"ok","version":"0.1.0"}` |
-| API production build | `node apps/api/dist/index.js` | Serves `/healthz` on the configured port |
-| Web workspace import | browser at `localhost:3000` | Renders values from `@nama/dashboard-types`; no console errors |
-| Clean | `pnpm clean` | Removes `dist/`, `.next/` and build info |
-| React copies | `pnpm verify:workspace` | One React version in the virtual store |
+| Test | `pnpm test` | 69 tests pass in `dashboard-types`; API health/env tests unchanged |
+| Build | `pnpm build` | 6 tasks successful; `dashboard-types` emits ESM, `.d.mts` and a source map |
+| Built exports | `node -e "import('./dist/index.mjs')"` | `parseDashboardConfig`, `dashboardConfigSchema`, `realtimeServerMessageSchema`, `widgetManifestSchema`, `runMigrations`, `PLATFORM_LIMITS` all present |
 
 ## Next action
 
-1. Review the M1 workspace layout, task graph and boundary script.
-2. On acceptance, start M2 (shared contracts and schemas): public types, Zod
-   dashboard/widget/layout/query schemas, plugin manifests, migration interface
-   and schema tests.
+1. Review the `dashboard-types` contract surface and the M2 schema deltas recorded
+   in [dashboard-schema.md](../architecture/dashboard-schema.md).
+2. On acceptance, start M3 (SDK foundation): `DashboardProvider`, runtime context,
+   dependency injection, widget registry, `DashboardViewer`, the renderer, public
+   exports and a standalone consumer.

@@ -1,6 +1,13 @@
 # Realtime Protocol (`/ws/v1`)
 
-**Status:** Proposed (M0)
+**Status:** Proposed (M0). Message schemas, close codes and replay/reconnect
+constants are implemented in M2 (`@nama/dashboard-types`). The gateway, replay
+buffers and client connection manager are not implemented.
+
+The ten message types below are the protocol surface. The `authenticate` frame
+used by embedded clients is a handshake that precedes the session, so it is
+exported separately (`realtimeAuthenticateMessageSchema`) and is not counted as
+an eleventh protocol message.
 
 ## Connection and authentication
 

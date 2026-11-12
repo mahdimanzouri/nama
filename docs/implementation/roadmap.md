@@ -71,6 +71,9 @@ remove pre-monorepo root build artifacts.
 
 ## M2 — Shared contracts and schemas
 
+**Status:** Implemented 2026-11-12; see
+[current-phase.md](current-phase.md).
+
 **Tasks:** public types; Zod dashboard, widget, layout, query, adapter and
 realtime schemas; plugin manifests; migration interface; schema tests and
 examples.

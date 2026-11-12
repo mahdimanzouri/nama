@@ -8,10 +8,10 @@ proposal; code generation begins in M6.
 - Base path `/v1`. Breaking changes create a new major path.
 - Management operations are REST; live updates use `/ws/v1`.
 - `x-m0-status: proposed` means the contract is reviewed but shapes may change
-  in M2. `x-m0-status: stub` reserves the path; detailed schemas arrive with the
-  owning milestone.
-- Dashboard, query and embed-token schemas are detailed in M0. Organization,
-  member, role and preference shapes are indicative.
+  until the API implements them (M6). `x-m0-status: stub` reserves the path;
+  detailed schemas arrive with the owning milestone.
+- Dashboard and query shapes must match the implemented Zod schemas in
+  `@nama/dashboard-types` (M2); those schemas win any disagreement.
 
 ## Authentication
 

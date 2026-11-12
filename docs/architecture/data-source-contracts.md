@@ -1,6 +1,11 @@
 # Data Source and Query Contracts
 
-**Status:** Proposed (M0)
+**Status:** Proposed (M0). Client-side types and Zod schemas are implemented in
+M2 (`@nama/dashboard-types`); no execution service exists yet.
+
+The client-side schemas cover `QueryDefinition`, `QueryRequest`, `QueryResult`,
+`QueryError`, `DataAdapter`, `QueryContext` and subscription handlers. Server-side
+connectors, transports and caching are still proposals.
 
 This document defines the **client-side** data adapter contract. Server-side
 connectors are specified in

@@ -1,6 +1,9 @@
 # Data-Source Plugin Contract (Normative)
 
-**Status:** Proposed (M0). Normative for server-side data-source connectors.
+**Status:** Manifest and capability schema implemented in M2
+(`dataSourcePluginManifestSchema` in `@nama/dashboard-types`). Normative for
+server-side data-source connectors; the runtime interface and loader land with
+the API (M6/M7).
 
 Data-source plugins run inside the API. They are the only code that knows how to
 talk to an external system. The browser never loads them.
