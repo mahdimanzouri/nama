@@ -18,11 +18,13 @@
     "format:check": "prettier --check .",
     "verify:workspace": "node scripts/verify-workspace.mjs",
     "verify:consumer": "node scripts/verify-consumer.mjs",
-    "verify:openapi": "pnpm --filter @nama/api verify:openapi"
+    "verify:openapi": "pnpm --filter @nama/api verify:openapi",
+    "test:coverage": "turbo run test:coverage"
   },
   "devDependencies": {
     "@playwright/test": "1.65.0",
     "@types/node": "^24",
+    "@vitest/coverage-v8": "5.1.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.6",
     "prettier": "^3.10.0",
