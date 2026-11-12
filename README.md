@@ -7,7 +7,7 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M2 (shared contracts and schemas) is implemented and awaiting acceptance.**
+**Milestone M2 (shared contracts and schemas) is complete (accepted 2026-11-12).**
 
 The workspace contains:
 

@@ -1,7 +1,7 @@
 # Current Phase
 
-**Current milestone:** M2 — Shared contracts and schemas
-**Status:** Implemented, awaiting acceptance
+**Current milestone:** M2 — Shared contracts and schemas (complete; next is M3)
+**Status:** Complete, accepted 2026-11-12
 **Date:** 2026-11-12
 
 ## What the repository looks like now
@@ -113,8 +113,7 @@ All commands were run from the repository root on Node 24.13.0 with pnpm 10.33.2
 
 ## Next action
 
-1. Review the `dashboard-types` contract surface and the M2 schema deltas recorded
-   in [dashboard-schema.md](../architecture/dashboard-schema.md).
-2. On acceptance, start M3 (SDK foundation): `DashboardProvider`, runtime context,
-   dependency injection, widget registry, `DashboardViewer`, the renderer, public
-   exports and a standalone consumer.
+M2 is accepted. The next milestone is M3 (SDK foundation): `DashboardProvider`,
+runtime context, dependency injection, widget registry, `DashboardViewer`, the
+renderer, public exports and a standalone consumer. Do not begin M3 until it is
+requested.

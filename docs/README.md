@@ -1,6 +1,6 @@
 # Nama Dashboard Platform — Architecture Package
 
-**Status:** M0 approved; M1 and M2 implemented ([current phase](implementation/current-phase.md))
+**Status:** M0 approved; M1 and M2 complete ([current phase](implementation/current-phase.md))
 **Date:** 2026-11-12
 **Scope:** Architecture and decisions; product features are not implemented.
 **Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)

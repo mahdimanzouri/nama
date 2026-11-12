@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-**Status:** Proposed (M0)
+**Status:** Active — M0, M1 and M2 complete (2026-11-12)
 **Date:** 2026-11-12
 
 Milestones have review gates. Do not begin the next milestone until the current
@@ -10,23 +10,23 @@ engineer should expect roughly 1.8× the elapsed time.
 
 ## Milestones
 
-| Milestone | Scope | Effort | Gate |
-| --- | --- | --- | --- |
-| M0 | Architecture and decisions | 1 week | This package approved |
-| M1 | Monorepo foundation | 1 week | Web + API start; workspace package imports; commands pass |
-| M2 | Contracts and schemas | 1.5 weeks | Valid/invalid configs behave; migration tests pass |
-| M3 | SDK foundation | 2 weeks | Separate React app renders without the web app |
-| M3.5 | Walking skeleton (monitoring) | 2 weeks | Login → KPI + line → save/publish/view in CI |
-| M4 | Visual editor | 3 weeks | Edit, move/resize, draft/publish/restore, 409 flow |
-| M5 | Visualization system | 2.5 weeks | Multiple widget types from validated config |
-| M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI |
-| M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced |
-| M8 | Realtime infrastructure | 3 weeks | Shared connections; resume, gap, cleanup |
-| M9 | Advanced dashboard capabilities | 3 weeks | Variables, filters, import/export, templates |
-| M10 | Internationalization and themes | 2 weeks | en/fa, RTL chrome, LTR canvas disclosed, themes |
-| M10.5 | Accessibility | 1.5 weeks | Automated checks and keyboard review pass |
-| M11 | Plugin ecosystem | 2 weeks | Custom widget and data source via public contracts |
-| M12 | Production readiness | 2 weeks | Tests, docs, security, deployment procedures |
+| Milestone | Scope | Effort | Gate | Status |
+| --- | --- | --- | --- | --- |
+| M0 | Architecture and decisions | 1 week | This package approved | Complete |
+| M1 | Monorepo foundation | 1 week | Web + API start; workspace package imports; commands pass | Complete |
+| M2 | Contracts and schemas | 1.5 weeks | Valid/invalid configs behave; migration tests pass | Complete |
+| M3 | SDK foundation | 2 weeks | Separate React app renders without the web app | Not started |
+| M3.5 | Walking skeleton (monitoring) | 2 weeks | Login → KPI + line → save/publish/view in CI | Not started |
+| M4 | Visual editor | 3 weeks | Edit, move/resize, draft/publish/restore, 409 flow | Not started |
+| M5 | Visualization system | 2.5 weeks | Multiple widget types from validated config | Not started |
+| M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI | Not started |
+| M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced | Not started |
+| M8 | Realtime infrastructure | 3 weeks | Shared connections; resume, gap, cleanup | Not started |
+| M9 | Advanced dashboard capabilities | 3 weeks | Variables, filters, import/export, templates | Not started |
+| M10 | Internationalization and themes | 2 weeks | en/fa, RTL chrome, LTR canvas disclosed, themes | Not started |
+| M10.5 | Accessibility | 1.5 weeks | Automated checks and keyboard review pass | Not started |
+| M11 | Plugin ecosystem | 2 weeks | Custom widget and data source via public contracts | Not started |
+| M12 | Production readiness | 2 weeks | Tests, docs, security, deployment procedures | Not started |
 
 Total: roughly 32 engineer-weeks, excluding review latency and scope changes.
 
@@ -71,7 +71,7 @@ remove pre-monorepo root build artifacts.
 
 ## M2 — Shared contracts and schemas
 
-**Status:** Implemented 2026-11-12; see
+**Status:** Complete — accepted 2026-11-12; see
 [current-phase.md](current-phase.md).
 
 **Tasks:** public types; Zod dashboard, widget, layout, query, adapter and

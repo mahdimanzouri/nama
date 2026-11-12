@@ -62,8 +62,9 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M2 (shared contracts and schemas) is implemented and awaiting acceptance. The
-workspace contains `apps/web`, `apps/api` and exactly four packages:
+M2 (shared contracts and schemas) is complete (accepted 2026-11-12); M3 is the
+next milestone and has not started. The workspace contains `apps/web`,
+`apps/api` and exactly four packages:
 `@nama/dashboard-types`, `@nama/dashboard-core`, `@nama/dashboard-builder`,
 `@nama/api-client`. `dashboard-types` owns all Zod schemas and public types; the
 other three packages are still empty. Do not create the target-only packages
