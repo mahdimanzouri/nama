@@ -27,7 +27,7 @@ system themes. The dashboard canvas is LTR-only in v1 (ADR-005).
 3. **Backend API** — Fastify modular monolith: persistence, authorization,
    data-source management, query execution, realtime gateway, audit.
 
-## Current repository state (after M6)
+## Current repository state (after M7)
 
 The monorepo matches the target structure below:
 
@@ -48,7 +48,9 @@ All four initial packages export working code: `dashboard-types` contracts,
 built-in widgets behind its `./widgets` entry, and the hand-written `api-client`.
 Target-only packages are still absent. The API stores product data in PostgreSQL
 behind the `Persistence` facade (the in-memory adapter remains for tests), enforces
-tenant isolation through row-level security, and realtime remains a contract.
+tenant isolation through row-level security, executes queries through connector
+plugins with SSRF range blocking and tighten-only limits, and realtime remains a
+contract.
 
 ## Target monorepo structure
 

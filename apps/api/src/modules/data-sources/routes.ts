@@ -7,7 +7,6 @@ import {
   type CredentialCipher,
 } from "../../infrastructure/credentials.ts";
 import {
-  HttpError,
   forbidden,
   notFound,
   unauthorized,
@@ -19,6 +18,7 @@ import type {
   TenantScope,
 } from "../../infrastructure/persistence/types.ts";
 import type { AuthContext, AuthHooks } from "../../http/auth.ts";
+import type { QueryService } from "../queries/service.ts";
 
 const KIND = z.enum(["postgres", "mysql", "rest", "mqtt", "static"]);
 
@@ -29,6 +29,15 @@ const createSchema = z
     config: z.record(z.string(), z.unknown()),
     credentials: z.record(z.string(), z.unknown()).optional(),
     allowRawSql: z.boolean().optional(),
+    limits: z
+      .object({
+        timeoutMs: z.number().int().positive().optional(),
+        maxRows: z.number().int().positive().optional(),
+        maxBytes: z.number().int().positive().optional(),
+        maxConcurrent: z.number().int().positive().max(32).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -38,6 +47,15 @@ const updateSchema = z
     config: z.record(z.string(), z.unknown()).optional(),
     credentials: z.record(z.string(), z.unknown()).optional(),
     allowRawSql: z.boolean().optional(),
+    limits: z
+      .object({
+        timeoutMs: z.number().int().positive().optional(),
+        maxRows: z.number().int().positive().optional(),
+        maxBytes: z.number().int().positive().optional(),
+        maxConcurrent: z.number().int().positive().max(32).optional(),
+      })
+      .strict()
+      .optional(),
     status: z.enum(["active", "disabled"]).optional(),
   })
   .strict();
@@ -54,6 +72,7 @@ export interface DataSourceRouteDeps {
   now: () => Date;
   hooks: AuthHooks;
   credentialCipher: CredentialCipher | null;
+  service: QueryService;
 }
 
 function requireAuth(request: FastifyRequest): AuthContext {
@@ -73,6 +92,7 @@ function toDataSource(record: DataSourceRecord) {
     status: record.status,
     allowRawSql: record.allowRawSql,
     config: record.config,
+    limits: record.limits,
     updatedAt: record.updatedAt,
   };
 }
@@ -89,7 +109,7 @@ function encryptCredentials(
 
 export function registerDataSourceRoutes(
   app: FastifyInstance,
-  { persistence, now, hooks, credentialCipher }: DataSourceRouteDeps,
+  { persistence, now, hooks, credentialCipher, service }: DataSourceRouteDeps,
 ): void {
   app.get(
     "/v1/data-sources",
@@ -142,7 +162,7 @@ export function registerDataSourceRoutes(
         kind: parsed.data.kind,
         config: parsed.data.config,
         allowRawSql: parsed.data.allowRawSql ?? false,
-        limits: {},
+        limits: parsed.data.limits ?? {},
         status: "active",
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -223,6 +243,7 @@ export function registerDataSourceRoutes(
             ? {}
             : { allowRawSql: parsed.data.allowRawSql }),
           ...(parsed.data.status === undefined ? {} : { status: parsed.data.status }),
+          ...(parsed.data.limits === undefined ? {} : { limits: parsed.data.limits }),
         });
         if (!updated) throw notFound("Data source not found");
 
@@ -296,14 +317,26 @@ export function registerDataSourceRoutes(
     async (request) => {
       const auth = requireAuth(request);
       const { id } = request.params as { id: string };
-      const record = await persistence.withTenant(scopeOf(auth), () =>
-        persistence.dataSources.find(auth.organization.id, id),
-      );
-      if (!record) throw notFound("Data source not found");
 
-      throw new HttpError(501, {
-        code: "NOT_IMPLEMENTED",
-        message: "Connectivity testing arrives with the M7 data adapters",
+      return service.test(auth, id, {
+        requestId: request.id,
+        logger: request.log,
+      });
+    },
+  );
+
+  app.get(
+    "/v1/data-sources/:id/schema",
+    {
+      preHandler: [hooks.authenticate, hooks.requirePermission("datasource.read")],
+    },
+    async (request) => {
+      const auth = requireAuth(request);
+      const { id } = request.params as { id: string };
+
+      return service.discover(auth, id, {
+        requestId: request.id,
+        logger: request.log,
       });
     },
   );

@@ -645,7 +645,7 @@ export function createMemoryPersistence(env: Env): Persistence {
       organizationId: string,
       id: string,
       patch: Partial<
-        Pick<DataSourceRecord, "name" | "config" | "allowRawSql" | "status">
+        Pick<DataSourceRecord, "name" | "config" | "allowRawSql" | "limits" | "status">
       >,
     ) {
       const source = await this.find(organizationId, id);

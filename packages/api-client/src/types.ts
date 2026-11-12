@@ -133,6 +133,13 @@ export interface EmbedTokenIssued {
 
 export type DataSourceKind = "postgres" | "mysql" | "rest" | "mqtt" | "static";
 
+export interface DataSourceLimits {
+  timeoutMs?: number;
+  maxRows?: number;
+  maxBytes?: number;
+  maxConcurrent?: number;
+}
+
 export interface DataSourceSummary {
   id: string;
   name: string;
@@ -144,6 +151,7 @@ export interface DataSourceSummary {
 
 export interface DataSource extends DataSourceSummary {
   config: Record<string, unknown>;
+  limits?: DataSourceLimits;
 }
 
 export interface DataSourceCreateRequest {
@@ -152,6 +160,7 @@ export interface DataSourceCreateRequest {
   config: Record<string, unknown>;
   credentials?: Record<string, unknown>;
   allowRawSql?: boolean;
+  limits?: DataSourceLimits;
 }
 
 export interface DataSourceUpdateRequest {
@@ -159,6 +168,7 @@ export interface DataSourceUpdateRequest {
   config?: Record<string, unknown>;
   credentials?: Record<string, unknown>;
   allowRawSql?: boolean;
+  limits?: DataSourceLimits;
   status?: "active" | "disabled";
 }
 
@@ -167,6 +177,42 @@ export interface DataSourceTestResult {
   latencyMs?: number;
   message?: string;
   errorCode?: string;
+}
+
+export interface DataSourceCapabilities {
+  test: boolean;
+  execute: boolean;
+  stream?: boolean;
+  rawSql?: boolean;
+  schemaDiscovery?: boolean;
+}
+
+export interface DataSourceDatasetField {
+  name: string;
+  type: string;
+  label?: string;
+}
+
+export interface DataSourceDataset {
+  name: string;
+  fields: DataSourceDatasetField[];
+}
+
+export interface DataSourceSchema {
+  dataSourceId: string;
+  kind: string;
+  capabilities: DataSourceCapabilities;
+  datasets: DataSourceDataset[];
+}
+
+export interface QueryValidationIssue {
+  path: Array<string | number>;
+  message: string;
+}
+
+export interface QueryValidationResult {
+  valid: boolean;
+  issues: QueryValidationIssue[];
 }
 
 export interface DataSourceList {

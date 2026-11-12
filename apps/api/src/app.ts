@@ -18,6 +18,8 @@ import { registerDataSourceRoutes } from "./modules/data-sources/routes.ts";
 import { registerOrganizationRoutes } from "./modules/organizations/routes.ts";
 import { registerPreferenceRoutes } from "./modules/preferences/routes.ts";
 import { registerQueryRoutes } from "./modules/queries/routes.ts";
+import { createPluginRegistry } from "./modules/queries/plugins/registry.ts";
+import { QueryService } from "./modules/queries/service.ts";
 
 export const API_VERSION = "0.1.0";
 
@@ -25,6 +27,8 @@ export interface BuildAppOptions {
   /** Injected persistence so tests can seed extra organizations or freeze time. */
   persistence?: Persistence;
   now?: () => Date;
+  /** Injected transport so connector tests reach loopback fixtures. */
+  fetch?: typeof globalThis.fetch;
   /** Observes every registered route; used by the OpenAPI drift check. */
   onRoute?: (route: { method: string | string[]; url: string }) => void;
 }
@@ -34,6 +38,13 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
   const ownsPersistence = options.persistence === undefined;
   const now = options.now ?? (() => new Date());
   const credentialCipher = createCredentialCipher(env.CREDENTIAL_ENCRYPTION_KEY);
+  const queryService = new QueryService({
+    persistence,
+    plugins: createPluginRegistry(),
+    cipher: credentialCipher,
+    allowPrivateNetwork: env.ALLOW_PRIVATE_DATA_SOURCES,
+    fetch: options.fetch ?? globalThis.fetch,
+  });
 
   const app = Fastify({
     logger: env.LOG_LEVEL === "silent" ? false : { level: env.LOG_LEVEL },
@@ -68,10 +79,16 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
   registerDashboardRoutes(app, { persistence, now, hooks });
   registerShareRoutes(app, { persistence, now, hooks });
   registerEmbedTokenRoutes(app, { persistence, now, hooks });
-  registerDataSourceRoutes(app, { persistence, now, hooks, credentialCipher });
+  registerDataSourceRoutes(app, {
+    persistence,
+    now,
+    hooks,
+    credentialCipher,
+    service: queryService,
+  });
   registerOrganizationRoutes(app, { persistence, now, hooks });
   registerPreferenceRoutes(app, { persistence, hooks });
-  registerQueryRoutes(app, { now, hooks });
+  registerQueryRoutes(app, { service: queryService, hooks });
 
   app.get("/healthz", async () => ({
     status: "ok",

@@ -1,6 +1,6 @@
 # Technical Debt
 
-**Status:** Updated at M6 (2026-11-12)
+**Status:** Updated at M7 (2026-11-12)
 
 Debt is recorded honestly with impact, owner and target milestone. Items are
 removed only when the fix is merged and verified; closed items are listed at the
@@ -37,11 +37,15 @@ end so IDs stay stable.
 | TD-040 | Every built-in chart renders a single series; there is no groupBy, multi-series, stacked or combo chart support | Users cannot compare categories on one chart; the demo dataset has no grouping | Product/Frontend | M9, with variables and filters |
 | TD-041 | Canvas charts stay LTR inside RTL chrome: axes, legends and tooltips are not mirrored, only text is locale-formatted | Persian dashboards read chart axes left-to-right; disclosed alongside the LTR canvas | Product/UX | Same review as TD-001 |
 | TD-042 | Charts expose only `role="img"` with the widget title; there is no data-table fallback or keyboard interaction | Screen-reader users cannot inspect chart values | Accessibility | M10.5 |
-| TD-043 | `apps/web` hard-codes a demo query and data source per built-in type; hosts cannot choose bindings in the UI | Real sources cannot be attached without code changes | Frontend | M7, with data-source selection |
+| TD-043 | `apps/web` still hard-codes a demo query per built-in type; the SDK adapters are wired but hosts cannot choose data sources in the UI | Real sources cannot be attached without code changes | Frontend | M9, with data-source selection |
+| TD-052 | The egress guard resolves DNS once and relies on disabled redirects; the connect address is not pinned | A hostile DNS answer could rebind between resolution and connect (SSRF) | Security | M12 hardening |
+| TD-053 | `postgres`, `mysql` and `mqtt` data-source kinds are accepted by metadata CRUD but no connector exists; execution returns `501 NOT_IMPLEMENTED` | Users can register sources that cannot run queries | Backend | When SQL/MQTT connectors are scheduled |
+| TD-054 | Query concurrency limits are per process and there is no request rate limiting | Multiple API replicas multiply the effective concurrency; bursts are unbounded | Backend | M12 |
+| TD-055 | Local query evaluation exists twice: the API plugin helper and the SDK static adapter | Filter/aggregation semantics can drift between offline and server execution | SDK/Backend | Revisit if a shared evaluation package is justified |
+| TD-056 | The REST connector has no schema discovery; `GET /v1/data-sources/:id/schema` returns `501` for it | Hosts cannot list REST fields before writing a query | Backend | M9 or when the data-source picker needs it |
 | TD-044 | ECharts modules are registered manually in `registerModules`; adding a chart type requires an SDK code change | A host cannot add an ECharts chart type without forking the built-ins | SDK | When a third-party chart plugin is requested |
 | TD-045 | `api-client` is still hand-written; `verify:openapi` compares routes only | Request/response shapes can drift from the spec without detection | Backend | M12 |
 | TD-046 | `Idempotency-Key` is accepted but not enforced | A retried `POST` can duplicate an effect | Backend | M12 |
-| TD-047 | Data-source connectivity test returns `501 NOT_IMPLEMENTED` | Administrators cannot validate a source until M7 | Backend | M7 |
 | TD-048 | RLS covers tenant tables only; global tables (`users`, `permissions`, `sessions`) rely on application scoping | A repository bug on a global table is not caught by the database | Backend/Security | M12 security review |
 | TD-049 | Audit rows are write-only; there is no read/export endpoint or retention policy | Operators cannot query the audit trail yet | Backend | M12 |
 | TD-050 | The Postgres integration suite skips unless `NAMA_TEST_DATABASE_URL` is set | Isolation regressions are caught in CI but not by a plain local `pnpm test` | QA | M12 CI hardening |
@@ -64,6 +68,7 @@ end so IDs stay stable.
 | TD-010 | Prisma pinned to stable 7.10.1 with `@prisma/adapter-pg`; migrations and seed verified against PostgreSQL 17 | M6 |
 | TD-012 | `pnpm verify:openapi` compares every served Fastify route with `docs/api/openapi.yaml` and fails on drift; code generation remains tracked as TD-045 | M6 |
 | TD-034 | PostgreSQL persistence behind the `Persistence` facade; migrations, seed and restart-surviving state verified by the Postgres integration suite | M6 |
+| TD-047 | Connector registry and `QueryService` execute/validate/discover/test; the connectivity endpoint runs the connector test, audits it and maps failures to the query error codes | M7 |
 
 ## Process
 

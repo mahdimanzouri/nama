@@ -7,8 +7,8 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M6 (backend and persistence) is complete and awaiting acceptance
-(2026-11-12).** M7 (data infrastructure) is next.
+**Milestone M7 (data infrastructure) is complete and awaiting acceptance
+(2026-11-12).** M8 (realtime infrastructure) is next.
 
 The workspace contains:
 
@@ -20,7 +20,8 @@ apps/api                  Fastify 5 service: PostgreSQL persistence, auth, RBAC,
                           queries, health endpoint
 packages/dashboard-types  public contracts: constants plus Zod schemas (M2)
 packages/dashboard-core   host-agnostic runtime: plugin contract, registry,
-                          query keys, i18n, layout, theme (M3)
+                          query keys, i18n, layout, theme, HTTP/static data
+                          adapters (M3, adapters in M7)
 packages/dashboard-builder React provider, viewer, editor, grid canvas, hooks,
                           stylesheet and built-in widgets behind `./widgets`
                           (M3, editor in M4, widgets in M5)
@@ -39,8 +40,12 @@ validated settings, theme-aware colours and loading/error/empty/truncated states
 M6 moves state to PostgreSQL behind a `Persistence` facade: Prisma migrations,
 row-level tenant isolation, Argon2id authentication, RBAC and organization
 administration, sharing, scoped embed tokens, encrypted data-source credentials
-and audit logging. An in-memory adapter remains for tests; realtime lands in M8 —
-see the [roadmap](docs/implementation/roadmap.md).
+and audit logging. M7 adds server-side connector plugins (`static`, `rest`) with
+SSRF range blocking, tighten-only limits (15 s, 10,000 rows, 5 MiB, 4 concurrent)
+and truncation reporting, plus query validate/schema/test endpoints and SDK HTTP
+and static adapters used by the web app. An in-memory persistence adapter remains
+for tests; realtime lands in M8 — see the
+[roadmap](docs/implementation/roadmap.md).
 
 ## Architecture documentation
 

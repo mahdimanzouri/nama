@@ -20,7 +20,7 @@ engineer should expect roughly 1.8× the elapsed time.
 | M4 | Visual editor | 3 weeks | Edit, move/resize, draft/publish/restore, 409 flow | Complete |
 | M5 | Visualization system | 2.5 weeks | Multiple widget types from validated config | Complete |
 | M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI | Complete |
-| M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced | Not started |
+| M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced | Complete |
 | M8 | Realtime infrastructure | 3 weeks | Shared connections; resume, gap, cleanup | Not started |
 | M9 | Advanced dashboard capabilities | 3 weeks | Variables, filters, import/export, templates | Not started |
 | M10 | Internationalization and themes | 2 weeks | en/fa, RTL chrome, LTR canvas disclosed, themes | Not started |
@@ -252,6 +252,39 @@ limits; data-source plugin example.
 **Acceptance:** widgets retrieve normalized data through the adapter contract
 without coupling to a source technology. Limits are enforced and truncation is
 reported.
+
+**Delivered:** server-side connector runtime in `apps/api/src/modules/queries`:
+a `ServerDataSourcePlugin` contract (manifest, capabilities, config/credential
+schemas, `test`/`validate`/`execute`/`discover`), a registry with the `static`
+and `rest` connectors, and a shared local evaluation of filters, ordering,
+limits and aggregations. `QueryService` loads tenant-scoped sources through
+`Persistence.withTenant`, decrypts credentials just in time, resolves per-source
+limits clamped to the platform maxima (15 s, 10,000 rows, 5 MiB, concurrency 4),
+aborts on timeout or client disconnect, validates plugin results with
+`queryResultSchema`, and truncates rows/bytes with an accurate flag. The REST
+connector enforces an egress guard (http/https only; loopback, private,
+link-local, multicast and metadata ranges rejected; redirects refused), maps
+upstream statuses to `DATASOURCE_UNREACHABLE`, `DATASOURCE_AUTH_FAILED`,
+`RATE_LIMITED` and `QUERY_INVALID`, and never logs credentials. `POST
+/v1/queries/validate`, `GET /v1/data-sources/:id/schema` and a real `POST
+/v1/data-sources/:id/test` (audited) complete the surface. `@nama/dashboard-core`
+ships `createHttpDataAdapter` (host-injected base URL, transport, headers and
+CSRF token) and `createStaticDataAdapter` (in-memory evaluation), and `apps/web`
+now uses the SDK HTTP adapter instead of a hand-written one. TanStack Query
+snapshot caching and the 250 ms stream buffer remain in `dashboard-builder` from
+M5 and are exercised through the new adapters.
+
+**Verified 2026-11-12:** adapter tests cover filters, ordering, truncation,
+aggregation, relative ranges and envelope errors; API tests cover the REST
+connector end to end, private-target rejection, 504 timeout, byte-limit
+rejection, row-cap truncation, validate, schema discovery, connectivity test and
+the 501 path for connectors without discovery. `pnpm lint`, `format:check`,
+`typecheck`, `test`, `build`, `verify:workspace`, `verify:consumer` and
+`verify:openapi` pass; drift check reports 38 served and 38 documented
+operations. Not delivered: SQL/MQTT connectors (their kinds stay declared but
+return `501 NOT_IMPLEMENTED`), DNS-pinning against rebinding between resolution
+and connect, cross-process concurrency limits, and realtime/SSE adapters
+(M8).
 
 ## M8 — Realtime infrastructure
 

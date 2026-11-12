@@ -62,16 +62,16 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M6 (backend and persistence) is complete and awaiting acceptance (2026-11-12);
-M7 (data infrastructure) is the next milestone and has not started. ADR-011 is
+M7 (data infrastructure) is complete and awaiting acceptance (2026-11-12); M8
+(realtime infrastructure) is the next milestone and has not started. ADR-011 is
 accepted as a self-hosted Docker topology. The workspace contains `apps/web`,
 `apps/api`, `examples/standalone-consumer` and exactly four packages:
 `@nama/dashboard-types` (contracts), `@nama/dashboard-core` (host-agnostic
-runtime: plugin contract, registry, query keys, i18n, layout, theme),
-`@nama/dashboard-builder` (React provider, viewer, editor, canvas, renderer,
-hooks, plus seven built-in widgets behind the `./widgets` subpath) and
-`@nama/api-client` (hand-written typed transport; codegen is deferred). Do not
-create the target-only packages listed in
+runtime: plugin contract, registry, query keys, i18n, layout, theme, HTTP/static
+data adapters), `@nama/dashboard-builder` (React provider, viewer, editor,
+canvas, renderer, hooks, plus seven built-in widgets behind the `./widgets`
+subpath) and `@nama/api-client` (hand-written typed transport; codegen is
+deferred). Do not create the target-only packages listed in
 `docs/architecture/package-dependencies.md`.
 
 The API persists product data in PostgreSQL behind the `Persistence` facade when
@@ -85,7 +85,7 @@ role. Demo accounts are seeded from `DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD`
 `nama-viewer-123`). The web app proxies `/api/*` to `NAMA_API_URL` (default
 `http://localhost:3001`).
 
-Working rules for M7 and later:
+Working rules for M8 and later:
 
 1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
    `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`,
@@ -123,6 +123,15 @@ Working rules for M7 and later:
     keeps returning `503 CREDENTIALS_NOT_CONFIGURED`.
 15. Update `docs/api/openapi.yaml` with every route change; `pnpm verify:openapi`
     must report the contract in sync.
-16. Do not implement work from a later milestone while closing the current one.
+16. Query execution goes through `QueryService` and the connector registry; never
+    add a route that decrypts credentials or contacts an external system
+    directly. Keep the tighten-only limit clamp and the row/byte truncation flag.
+17. Network connectors must use the egress guard: http/https only, private,
+    loopback, link-local, multicast and metadata ranges rejected, redirects
+    disabled. `ALLOW_PRIVATE_DATA_SOURCES` is test-only.
+18. SDK data adapters stay host-injected: no cookies, CSRF, base URLs or
+    credentials inside `dashboard-core`; the host passes base URL, transport,
+    headers and CSRF token.
+19. Do not implement work from a later milestone while closing the current one.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

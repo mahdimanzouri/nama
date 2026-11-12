@@ -1,9 +1,9 @@
 # Security
 
-**Status:** Implemented in part (M6): authentication, RBAC, tenant isolation and
-credential encryption are live; rate limiting, audit read access and the
-production review remain open (see technical debt). Reviewed again before
-production.
+**Status:** Implemented in part (M7): authentication, RBAC, tenant isolation,
+credential encryption, SSRF range blocking and per-source query limits are live.
+Rate limiting, DNS pinning, audit read access and the production review remain
+open (see technical debt). Reviewed again before production.
 
 ## Trust boundaries
 
@@ -112,6 +112,9 @@ include a query hash and row count.
 ## Residual risks (accepted in v1)
 
 - Trusted plugins can execute arbitrary code in the application context.
+- DNS rebinding is not yet prevented: the egress guard resolves once and the
+  HTTP client resolves again; redirects are refused but the address is not
+  pinned (TD-052).
 - The LTR-only canvas may cause user errors in RTL layouts; disclosed in UI.
 - Deployment selection (ADR-011) may weaken egress control if serverless hosting
   is chosen; the decision must be reviewed against this document.

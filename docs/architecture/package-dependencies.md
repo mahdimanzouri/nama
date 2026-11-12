@@ -1,13 +1,13 @@
 # Package Dependencies
 
-**Status:** Implemented through M6 (2026-11-12)
+**Status:** Implemented through M7 (2026-11-12)
 
 ## Initial packages (created in M1)
 
 | Package | Responsibility | Runtime dependencies | Peer dependencies |
 | --- | --- | --- | --- |
 | `@nama/dashboard-types` | Public types and Zod schemas for dashboard config, widgets, layout, queries, realtime events, plugin manifests | `zod` | — |
-| `@nama/dashboard-core` | Host-agnostic runtime: registries, widget resolution, layout helpers, i18n, theme tokens, query helpers | `@nama/dashboard-types`, `zod` | `react` (types only) |
+| `@nama/dashboard-core` | Host-agnostic runtime: registries, widget resolution, layout helpers, i18n, theme tokens, query helpers, HTTP/static data adapters | `@nama/dashboard-types`, `zod` | `react` (types only) |
 | `@nama/dashboard-builder` | Public React API and UI: provider, viewer, renderer, hooks, editor, stylesheet; built-in widgets behind the `./widgets` subpath | `@nama/dashboard-types`, `@nama/dashboard-core`, `@tanstack/react-query`, `zustand`, `react-grid-layout`, `zod`, `echarts` | `react`, `react-dom` |
 | `@nama/api-client` | Typed HTTP transport for the platform API: requests, cookie/CSRF handling, `ApiError` mapping | `@nama/dashboard-types` (query types) | — |
 

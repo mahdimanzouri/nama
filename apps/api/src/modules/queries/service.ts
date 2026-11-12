@@ -1,198 +1,496 @@
 import {
-  PLATFORM_LIMITS,
-  type QueryResult,
+  queryResultSchema,
+  type QueryDefinition,
   type QueryRequest,
+  type QueryResult,
 } from "@nama/dashboard-types";
 
-import { HttpError } from "../../infrastructure/errors.ts";
+import {
+  requireCredentialCipher,
+  type CredentialCipher,
+} from "../../infrastructure/credentials.ts";
+import { HttpError, notFound } from "../../infrastructure/errors.ts";
+import type {
+  DataSourceRecord,
+  Persistence,
+  TenantScope,
+} from "../../infrastructure/persistence/types.ts";
+import type { AuthContext } from "../../http/auth.ts";
+import { ConcurrencyGate, resolveLimits, type DataSourceLimits } from "./limits.ts";
+import type { PluginRegistry } from "./plugins/registry.ts";
+import { DEMO_DATA_SOURCE_ID } from "./plugins/static.ts";
+import {
+  DataSourceError,
+  type DatasetSchema,
+  type PluginContext,
+  type PluginLogger,
+  type ServerDataSourcePlugin,
+  type TestResult,
+  type ValidationResult,
+} from "./plugins/types.ts";
 
-export const DEMO_DATA_SOURCE_ID = "demo-source";
+export { DEMO_DATA_SOURCE_ID };
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 3_600_000;
-const MAX_POINTS = 240;
+const ERROR_STATUS = {
+  DATASOURCE_UNREACHABLE: 502,
+  DATASOURCE_AUTH_FAILED: 502,
+  QUERY_INVALID: 422,
+  QUERY_TIMEOUT: 504,
+  RESULT_TOO_LARGE: 422,
+  RATE_LIMITED: 429,
+  RAW_SQL_FORBIDDEN: 403,
+  CANCELLED: 408,
+  INTERNAL: 500,
+} as const;
 
-interface DemoRow {
-  timestamp: string;
-  value: number;
+export interface QueryServiceDeps {
+  persistence: Persistence;
+  plugins: PluginRegistry;
+  cipher: CredentialCipher | null;
+  /** Test-only: lets fixtures reach a loopback address. */
+  allowPrivateNetwork: boolean;
+  fetch: typeof globalThis.fetch;
+  concurrency?: ConcurrencyGate;
 }
 
-function pseudoValue(index: number): number {
-  const wave = Math.sin(index / 3.1) * 28 + Math.sin(index / 9.7 + 1.4) * 12;
-  const noise = Math.sin(index * 12.9898) * 4;
-  return Math.round((120 + wave + noise) * 10) / 10;
+export interface ExecuteOptions {
+  requestId: string;
+  signal?: AbortSignal;
+  logger?: PluginLogger;
 }
 
-function generateMetrics(fromMs: number, toMs: number): DemoRow[] {
-  const span = Math.max(toMs - fromMs, MINUTE_MS);
-  const stepMs = Math.max(
-    MINUTE_MS,
-    Math.ceil(span / MAX_POINTS / MINUTE_MS) * MINUTE_MS,
-  );
-  const rows: DemoRow[] = [];
-
-  for (
-    let time = fromMs;
-    time <= toMs && rows.length < PLATFORM_LIMITS.maxQueryRows;
-    time += stepMs
-  ) {
-    rows.push({
-      timestamp: new Date(time).toISOString(),
-      value: pseudoValue(rows.length),
-    });
-  }
-
-  return rows;
+export interface DiscoveredSource {
+  dataSourceId: string;
+  kind: string;
+  capabilities: ServerDataSourcePlugin["capabilities"];
+  datasets: DatasetSchema[];
 }
 
-function compareValues(left: unknown, right: unknown, operator: string): boolean {
-  switch (operator) {
-    case "eq":
-      return left === right;
-    case "neq":
-      return left !== right;
-    case "in":
-      return Array.isArray(right) && right.includes(left);
-    case "contains":
-      return (
-        typeof left === "string" && typeof right === "string" && left.includes(right)
-      );
-    case "gt":
-      return typeof left === "number" && typeof right === "number" && left > right;
-    case "gte":
-      return typeof left === "number" && typeof right === "number" && left >= right;
-    case "lt":
-      return typeof left === "number" && typeof right === "number" && left < right;
-    case "lte":
-      return typeof left === "number" && typeof right === "number" && left <= right;
-    case "between":
-      return (
-        typeof left === "number" &&
-        Array.isArray(right) &&
-        right.length === 2 &&
-        typeof right[0] === "number" &&
-        typeof right[1] === "number" &&
-        left >= right[0] &&
-        left <= right[1]
-      );
-    default:
-      return false;
-  }
+const SILENT_LOGGER: PluginLogger = { warn: () => {} };
+
+function demoRecord(organizationId: string): DataSourceRecord {
+  return {
+    id: DEMO_DATA_SOURCE_ID,
+    organizationId,
+    name: "Demo metrics",
+    kind: "static",
+    config: {},
+    allowRawSql: false,
+    limits: {},
+    status: "active",
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+  };
 }
 
-function applyAggregation(
-  rows: DemoRow[],
-  aggregation: { field: string; fn: string },
-): number | undefined {
-  const values = rows
-    .map((row) => row[aggregation.field as keyof DemoRow])
-    .filter((value): value is number => typeof value === "number");
-
-  if (values.length === 0) return undefined;
-
-  switch (aggregation.fn) {
-    case "sum":
-      return values.reduce((total, value) => total + value, 0);
-    case "avg":
-      return values.reduce((total, value) => total + value, 0) / values.length;
-    case "min":
-      return Math.min(...values);
-    case "max":
-      return Math.max(...values);
-    case "count":
-      return values.length;
-    default:
-      return undefined;
-  }
+function resultBytes(result: QueryResult): number {
+  return Buffer.byteLength(JSON.stringify(result.rows), "utf8");
 }
 
 /**
- * Deterministic demo execution for the walking skeleton. It exercises the real
- * request/response contract and limits; M6 replaces it with connector plugins.
+ * Applies the source limits to a plugin result. Rows are cut at `maxRows`, and
+ * when the payload still exceeds `maxBytes` the row prefix is found with a
+ * binary search so the truncation flag stays accurate.
  */
-export function executeDemoQuery(request: QueryRequest, now: Date): QueryResult {
-  const startedAt = performance.now();
-  const definition = request.query;
+export function enforceResultLimits(
+  result: QueryResult,
+  limits: DataSourceLimits,
+): QueryResult {
+  let rows = result.rows;
+  let truncated = result.meta.truncated;
 
-  if ((definition.dataset ?? "metrics") !== "metrics") {
-    throw new HttpError(422, {
-      code: "QUERY_INVALID",
-      message: `The demo source does not provide the dataset "${definition.dataset}"`,
-    });
+  if (rows.length > limits.maxRows) {
+    rows = rows.slice(0, limits.maxRows);
+    truncated = true;
   }
 
-  if (definition.groupBy && definition.groupBy.length > 0) {
-    throw new HttpError(422, {
-      code: "QUERY_INVALID",
-      message: "The demo source does not support groupBy",
-    });
+  const budget = (candidate: QueryResult["rows"]): QueryResult => ({
+    ...result,
+    rows: candidate,
+    meta: {
+      ...result.meta,
+      rowCount: candidate.length,
+      truncated,
+    },
+  });
+
+  if (resultBytes(budget(rows)) <= limits.maxBytes) return budget(rows);
+
+  let low = 0;
+  let high = rows.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (resultBytes(budget(rows.slice(0, middle))) <= limits.maxBytes) low = middle;
+    else high = middle - 1;
   }
 
-  const toMs = request.timeRange ? Date.parse(request.timeRange.to) : now.getTime();
-  const fromMs = request.timeRange
-    ? Date.parse(request.timeRange.from)
-    : toMs - 24 * HOUR_MS;
-
-  let rows: DemoRow[] = generateMetrics(fromMs, toMs);
-
-  for (const filter of definition.filters ?? []) {
-    rows = rows.filter((row) =>
-      compareValues(row[filter.field as keyof DemoRow], filter.value, filter.operator),
+  truncated = true;
+  if (low === 0 && resultBytes(budget([])) > limits.maxBytes) {
+    throw new DataSourceError(
+      "RESULT_TOO_LARGE",
+      "The query columns alone exceed the result byte limit",
     );
   }
 
-  const limit = Math.min(definition.limit ?? 1_000, PLATFORM_LIMITS.maxQueryRows);
-  const truncated = rows.length > limit;
-  rows = rows.slice(0, limit);
+  return budget(rows.slice(0, low));
+}
 
-  const timestamp = now.toISOString();
-  const executionTimeMs = Math.round((performance.now() - startedAt) * 100) / 100;
+export class QueryService {
+  private readonly persistence: Persistence;
+  private readonly plugins: PluginRegistry;
+  private readonly cipher: CredentialCipher | null;
+  private readonly allowPrivateNetwork: boolean;
+  private readonly fetchImpl: typeof globalThis.fetch;
+  private readonly gate: ConcurrencyGate;
 
-  if (definition.aggregations && definition.aggregations.length > 0) {
-    const aggregates = definition.aggregations.flatMap((aggregation) => {
-      const value = applyAggregation(rows, aggregation);
-      return value === undefined ? [] : [{ key: aggregation.field, value }];
-    });
-
-    const row = Object.fromEntries(aggregates.map((entry) => [entry.key, entry.value]));
-
-    return {
-      queryId: request.queryId,
-      columns: aggregates.map((entry) => ({
-        name: entry.key,
-        type: "number",
-      })),
-      rows: [row],
-      timestamp,
-      meta: {
-        rowCount: 1,
-        truncated,
-        executionTimeMs,
-        cached: false,
-      },
-    };
+  constructor({
+    persistence,
+    plugins,
+    cipher,
+    allowPrivateNetwork,
+    fetch,
+    concurrency = new ConcurrencyGate(),
+  }: QueryServiceDeps) {
+    this.persistence = persistence;
+    this.plugins = plugins;
+    this.cipher = cipher;
+    this.allowPrivateNetwork = allowPrivateNetwork;
+    this.fetchImpl = fetch;
+    this.gate = concurrency;
   }
 
-  const fields = definition.fields.filter(
-    (field) => field in (rows[0] ?? { timestamp: "", value: 0 }),
-  );
-  const projected = rows.map((row) =>
-    Object.fromEntries(fields.map((field) => [field, row[field as keyof DemoRow]])),
-  );
+  private scope(auth: AuthContext): TenantScope {
+    return { organizationId: auth.organization.id, userId: auth.user.id };
+  }
 
-  return {
-    queryId: request.queryId,
-    columns: fields.map((field) => ({
-      name: field,
-      type: field === "timestamp" ? "timestamp" : "number",
-    })),
-    rows: projected,
-    timestamp,
-    meta: {
-      rowCount: projected.length,
-      truncated,
-      executionTimeMs,
-      cached: false,
-    },
-  };
+  private async loadSource(
+    auth: AuthContext,
+    dataSourceId: string,
+  ): Promise<DataSourceRecord> {
+    if (dataSourceId === DEMO_DATA_SOURCE_ID) {
+      return demoRecord(auth.organization.id);
+    }
+
+    const record = await this.persistence.withTenant(this.scope(auth), () =>
+      this.persistence.dataSources.find(auth.organization.id, dataSourceId),
+    );
+    if (!record) throw notFound("Data source not found");
+    return record;
+  }
+
+  private pluginFor(record: DataSourceRecord): ServerDataSourcePlugin {
+    const plugin = this.plugins.get(record.kind);
+    if (!plugin) {
+      throw new HttpError(501, {
+        code: "NOT_IMPLEMENTED",
+        message: `Data-source kind "${record.kind}" is not supported yet`,
+      });
+    }
+    return plugin;
+  }
+
+  private pluginConfig(
+    plugin: ServerDataSourcePlugin,
+    record: DataSourceRecord,
+  ): Record<string, unknown> {
+    const parsed = plugin.configSchema.safeParse(record.config);
+    if (!parsed.success) {
+      throw new HttpError(422, {
+        code: "QUERY_INVALID",
+        message: `The "${record.name}" data source has an invalid configuration`,
+        fieldPaths: parsed.error.issues.map((issue) => issue.path.join(".")),
+      });
+    }
+    return parsed.data as Record<string, unknown>;
+  }
+
+  private async credentials(
+    auth: AuthContext,
+    record: DataSourceRecord,
+  ): Promise<Record<string, unknown>> {
+    if (record.id === DEMO_DATA_SOURCE_ID) return {};
+
+    const stored = await this.persistence.withTenant(this.scope(auth), () =>
+      this.persistence.dataSources.getCredential(auth.organization.id, record.id),
+    );
+    if (!stored) return {};
+
+    const cipher = requireCredentialCipher(this.cipher);
+    try {
+      const parsed: unknown = JSON.parse(
+        cipher.decrypt(stored.ciphertext).toString("utf8"),
+      );
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        return {};
+      }
+      return parsed as Record<string, unknown>;
+    } catch {
+      throw new HttpError(500, {
+        code: "INTERNAL",
+        message: "The stored data-source credentials could not be read",
+      });
+    }
+  }
+
+  private async buildContext(
+    auth: AuthContext,
+    record: DataSourceRecord,
+    plugin: ServerDataSourcePlugin,
+    options: { requestId: string; signal: AbortSignal; logger?: PluginLogger },
+  ): Promise<{ context: PluginContext; limits: DataSourceLimits }> {
+    const limits = resolveLimits(record.limits);
+    let pending: Promise<Record<string, unknown>> | undefined;
+    const context: PluginContext = {
+      organizationId: auth.organization.id,
+      dataSourceId: record.id,
+      requestId: options.requestId,
+      config: this.pluginConfig(plugin, record),
+      credentials: () => {
+        pending ??= this.credentials(auth, record);
+        return pending;
+      },
+      limits,
+      allowPrivateNetwork: this.allowPrivateNetwork,
+      fetch: this.fetchImpl,
+      signal: options.signal,
+      logger: options.logger ?? SILENT_LOGGER,
+    };
+    return { context, limits };
+  }
+
+  async execute(
+    auth: AuthContext,
+    request: QueryRequest,
+    options: ExecuteOptions,
+  ): Promise<QueryResult> {
+    const record = await this.loadSource(auth, request.dataSourceId);
+    if (record.status === "disabled") {
+      throw new HttpError(422, {
+        code: "QUERY_INVALID",
+        message: "The data source is disabled",
+      });
+    }
+
+    const plugin = this.pluginFor(record);
+    const limits = resolveLimits(record.limits);
+
+    const key = `${auth.organization.id}:${record.id}`;
+    const release = this.gate.tryAcquire(key, limits.maxConcurrent);
+    if (!release) {
+      throw new HttpError(429, {
+        code: "RATE_LIMITED",
+        message: "Too many concurrent queries for this data source",
+        retryAfterMs: 1_000,
+      });
+    }
+
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, limits.timeoutMs);
+
+    const forwardAbort = () => controller.abort();
+    options.signal?.addEventListener("abort", forwardAbort, { once: true });
+    if (options.signal?.aborted) controller.abort();
+
+    const startedAt = performance.now();
+
+    try {
+      const { context } = await this.buildContext(auth, record, plugin, {
+        requestId: options.requestId,
+        signal: controller.signal,
+        logger: options.logger,
+      });
+
+      let raw: QueryResult;
+      try {
+        raw = await plugin.execute(
+          {
+            queryId: request.queryId,
+            query: request.query,
+            parameters: request.parameters ?? {},
+            ...(request.timeRange ? { timeRange: request.timeRange } : {}),
+          },
+          context,
+        );
+      } catch (error) {
+        throw this.mapError(error, {
+          timedOut,
+          externallyAborted: options.signal?.aborted === true,
+        });
+      }
+
+      if (timedOut) {
+        throw new HttpError(504, {
+          code: "QUERY_TIMEOUT",
+          message: `The query exceeded the ${limits.timeoutMs} ms timeout`,
+        });
+      }
+
+      const parsed = queryResultSchema.safeParse(raw);
+      if (!parsed.success) {
+        options.logger?.warn(
+          { dataSourceId: record.id, issues: parsed.error.issues },
+          "data-source plugin returned an invalid result",
+        );
+        throw new HttpError(500, {
+          code: "INTERNAL",
+          message: "The data source returned an invalid result",
+        });
+      }
+
+      const limited = enforceResultLimits(parsed.data, limits);
+      return {
+        ...limited,
+        meta: {
+          ...limited.meta,
+          executionTimeMs: Math.round((performance.now() - startedAt) * 100) / 100,
+        },
+      };
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", forwardAbort);
+      release();
+    }
+  }
+
+  async validate(
+    auth: AuthContext,
+    request: QueryRequest,
+    options: Pick<ExecuteOptions, "requestId" | "logger">,
+  ): Promise<ValidationResult> {
+    const record = await this.loadSource(auth, request.dataSourceId);
+    const plugin = this.pluginFor(record);
+    const controller = new AbortController();
+    const { context } = await this.buildContext(auth, record, plugin, {
+      requestId: options.requestId,
+      signal: controller.signal,
+      logger: options.logger,
+    });
+
+    try {
+      return await plugin.validate(request.query, context);
+    } catch (error) {
+      throw this.mapError(error, { timedOut: false, externallyAborted: false });
+    }
+  }
+
+  async discover(
+    auth: AuthContext,
+    dataSourceId: string,
+    options: Pick<ExecuteOptions, "requestId" | "logger">,
+  ): Promise<DiscoveredSource> {
+    const record = await this.loadSource(auth, dataSourceId);
+    const plugin = this.pluginFor(record);
+    if (!plugin.discover) {
+      throw new HttpError(501, {
+        code: "NOT_IMPLEMENTED",
+        message: `The "${record.kind}" connector does not support schema discovery`,
+      });
+    }
+
+    const limits = resolveLimits(record.limits);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), limits.timeoutMs);
+    const { context } = await this.buildContext(auth, record, plugin, {
+      requestId: options.requestId,
+      signal: controller.signal,
+      logger: options.logger,
+    });
+
+    try {
+      const datasets = await plugin.discover(context);
+      return {
+        dataSourceId: record.id,
+        kind: record.kind,
+        capabilities: plugin.capabilities,
+        datasets,
+      };
+    } catch (error) {
+      throw this.mapError(error, {
+        timedOut: controller.signal.aborted,
+        externallyAborted: false,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async test(
+    auth: AuthContext,
+    dataSourceId: string,
+    options: Pick<ExecuteOptions, "requestId" | "logger">,
+  ): Promise<TestResult> {
+    const record = await this.loadSource(auth, dataSourceId);
+    const plugin = this.pluginFor(record);
+    const limits = resolveLimits(record.limits);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), limits.timeoutMs);
+    const { context } = await this.buildContext(auth, record, plugin, {
+      requestId: options.requestId,
+      signal: controller.signal,
+      logger: options.logger,
+    });
+
+    try {
+      const result = await plugin.test(context);
+      if (record.id !== DEMO_DATA_SOURCE_ID) {
+        await this.persistence.withTenant(this.scope(auth), () =>
+          this.persistence.audit.record({
+            organizationId: auth.organization.id,
+            actorType: "user",
+            actorId: auth.user.id,
+            action: "datasource.test",
+            resourceType: "data_source",
+            resourceId: record.id,
+            metadata: { ok: result.ok },
+            requestId: options.requestId,
+          }),
+        );
+      }
+      return result;
+    } catch (error) {
+      throw this.mapError(error, {
+        timedOut: controller.signal.aborted,
+        externallyAborted: false,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private mapError(
+    error: unknown,
+    state: { timedOut: boolean; externallyAborted: boolean },
+  ): HttpError {
+    if (error instanceof HttpError) return error;
+
+    if (state.timedOut) {
+      return new HttpError(504, {
+        code: "QUERY_TIMEOUT",
+        message: "The data source did not respond before the timeout",
+      });
+    }
+    if (state.externallyAborted) {
+      return new HttpError(408, {
+        code: "CANCELLED",
+        message: "The client cancelled the request",
+      });
+    }
+    if (error instanceof DataSourceError) {
+      return new HttpError(ERROR_STATUS[error.code], {
+        code: error.code,
+        message: error.message,
+      });
+    }
+
+    return new HttpError(500, {
+      code: "INTERNAL",
+      message: "The data source failed unexpectedly",
+    });
+  }
 }
+
+export type { QueryDefinition };

@@ -326,7 +326,9 @@ export interface DataSourceRepository {
   update(
     organizationId: PlatformId,
     id: PlatformId,
-    patch: Partial<Pick<DataSourceRecord, "name" | "config" | "allowRawSql" | "status">>,
+    patch: Partial<
+      Pick<DataSourceRecord, "name" | "config" | "allowRawSql" | "limits" | "status">
+    >,
   ): Promise<DataSourceRecord | null>;
   remove(organizationId: PlatformId, id: PlatformId): Promise<boolean>;
   saveCredential(record: DataSourceCredentialRecord): Promise<void>;

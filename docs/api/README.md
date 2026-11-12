@@ -1,10 +1,10 @@
 # API Conventions
 
-**Status:** M6 implemented (2026-11-12). [`openapi.yaml`](openapi.yaml) describes
+**Status:** M7 implemented (2026-11-12). [`openapi.yaml`](openapi.yaml) describes
 the contract; operations marked `x-m0-status: implemented` are served by
 `apps/api` today and verified by `pnpm verify:openapi`.
 
-## Implemented endpoints (M6)
+## Implemented endpoints (M7)
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -30,7 +30,8 @@ the contract; operations marked `x-m0-status: implemented` are served by
 | `GET` | `/v1/data-sources/{id}` | Metadata only |
 | `PATCH` | `/v1/data-sources/{id}` | Metadata, credentials or status |
 | `DELETE` | `/v1/data-sources/{id}` | Deletes the source and its credential row |
-| `POST` | `/v1/data-sources/{id}/test` | Returns `501 NOT_IMPLEMENTED` until the M7 adapters |
+| `POST` | `/v1/data-sources/{id}/test` | Runs the connector test and audits `datasource.test`; unknown kinds return `501` |
+| `GET` | `/v1/data-sources/{id}/schema` | Discovered datasets and fields; connectors without discovery return `501` |
 | `GET` | `/v1/organizations/{id}/members` | Requires `organization.members.manage` |
 | `POST` | `/v1/organizations/{id}/members` | Invites a user with roles |
 | `PATCH` | `/v1/organizations/{id}/members/{memberId}` | Roles and status |
@@ -42,7 +43,8 @@ the contract; operations marked `x-m0-status: implemented` are served by
 | `GET` | `/v1/organizations/{id}/permissions` | Caller's effective permissions |
 | `GET` | `/v1/me/preferences` | Locale, theme, timezone, default organization |
 | `PATCH` | `/v1/me/preferences` | Validated IANA timezone and membership |
-| `POST` | `/v1/queries/execute` | Demo query engine; 15 s / 10,000 rows / 5 MiB limits |
+| `POST` | `/v1/queries/execute` | Connector execution; 15 s / 10,000 rows / 5 MiB / 4-concurrent limits, truncation flagged |
+| `POST` | `/v1/queries/validate` | Connector validation without execution; `200 { valid, issues }` |
 
 With `APP_DATABASE_URL` set the API uses Postgres and enforces tenant isolation
 with row-level security; without it the seeded in-memory adapter is used for

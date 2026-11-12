@@ -23,6 +23,14 @@ const envSchema = z.object({
   APP_DATABASE_URL: z.string().url().optional(),
   /** 32-byte base64 key used to encrypt data-source credentials at rest. */
   CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
+  /**
+   * Allows REST connectors to reach loopback/private addresses. Only for local
+   * fixtures and acceptance tests; the egress guard rejects them by default.
+   */
+  ALLOW_PRIVATE_DATA_SOURCES: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   DEMO_EDITOR_EMAIL: z.email().default("demo@nama.local"),
   DEMO_EDITOR_PASSWORD: z.string().min(8).default("nama-demo-123"),
   DEMO_VIEWER_EMAIL: z.email().default("viewer@nama.local"),

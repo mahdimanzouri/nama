@@ -1,14 +1,22 @@
-import type { ApiClient } from "@nama/api-client";
+import { createHttpDataAdapter } from "@nama/dashboard-core";
 import type { DataAdapter } from "@nama/dashboard-builder";
 
+function readCsrfCookie(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const entry = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("nama_csrf="));
+  return entry ? decodeURIComponent(entry.slice("nama_csrf=".length)) : undefined;
+}
+
 /**
- * Executes widget queries through the typed API client. Credentials and CSRF
- * stay in the host transport; the SDK only sees this interface.
+ * Same-origin adapter over `POST /api/v1/queries/execute`. CSRF stays in the
+ * host transport; the SDK only sees the `DataAdapter` interface.
  */
-export function createHttpDataAdapter(client: ApiClient): DataAdapter {
-  return {
-    execute(request, context) {
-      return client.executeQuery(request, { signal: context.signal });
-    },
-  };
+export function createAdapter(): DataAdapter {
+  return createHttpDataAdapter({
+    baseUrl: "/api",
+    csrfToken: readCsrfCookie,
+  });
 }

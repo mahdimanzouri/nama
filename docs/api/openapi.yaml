@@ -573,7 +573,7 @@ paths:
       tags: [Data sources]
       operationId: testDataSource
       summary: Test connectivity and permissions
-      x-m0-status: stub
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -596,12 +596,39 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '501':
-          description: Connectivity testing is not implemented before M7
+          description: The connector does not support connectivity testing
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '502': { $ref: '#/components/responses/UpstreamError' }
         '504': { $ref: '#/components/responses/UpstreamTimeout' }
+
+  /v1/data-sources/{id}/schema:
+    parameters:
+      - $ref: '#/components/parameters/DataSourceId'
+    get:
+      tags: [Data sources]
+      operationId: getDataSourceSchema
+      summary: Discover datasets and fields exposed by a data source
+      x-m0-status: implemented
+      responses:
+        '200':
+          description: Discovered datasets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSourceSchema'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '501':
+          description: The connector does not support schema discovery
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+        '504': { $ref: '#/components/responses/UpstreamTimeout' }
+        '500': { $ref: '#/components/responses/InternalError' }
 
   /v1/queries/execute:
     post:
@@ -638,7 +665,7 @@ paths:
       tags: [Queries]
       operationId: validateQuery
       summary: Validate a query without executing it
-      x-m0-status: proposed
+      x-m0-status: implemented
       requestBody:
         required: true
         content:
@@ -1360,17 +1387,16 @@ components:
         cached: { type: boolean }
     QueryValidateResult:
       type: object
-      required: [ok, issues]
+      required: [valid, issues]
       properties:
-        ok: { type: boolean }
+        valid: { type: boolean }
         issues:
           type: array
           items: { $ref: '#/components/schemas/ValidationIssue' }
     ValidationIssue:
       type: object
-      required: [code, path, message]
+      required: [path, message]
       properties:
-        code: { type: string }
         path:
           type: array
           items:
@@ -1474,6 +1500,14 @@ components:
         kind: { type: string, enum: [postgres, mysql, rest, mqtt, static] }
         status: { type: string, enum: [active, disabled, error] }
         allowRawSql: { type: boolean }
+        limits:
+          type: object
+          description: Per-source caps that may only tighten the platform limits.
+          properties:
+            timeoutMs: { type: integer, maximum: 15000 }
+            maxRows: { type: integer, maximum: 10000 }
+            maxBytes: { type: integer, maximum: 5242880 }
+            maxConcurrent: { type: integer, maximum: 32 }
         updatedAt: { type: string, format: date-time }
     DataSource:
       allOf:
@@ -1498,6 +1532,13 @@ components:
           additionalProperties: true
           writeOnly: true
         allowRawSql: { type: boolean, default: false }
+        limits:
+          type: object
+          properties:
+            timeoutMs: { type: integer, minimum: 1, maximum: 15000 }
+            maxRows: { type: integer, minimum: 1, maximum: 10000 }
+            maxBytes: { type: integer, minimum: 1, maximum: 5242880 }
+            maxConcurrent: { type: integer, minimum: 1, maximum: 32 }
     DataSourceUpdate:
       type: object
       properties:
@@ -1510,15 +1551,53 @@ components:
           additionalProperties: true
           writeOnly: true
         allowRawSql: { type: boolean }
+        limits:
+          type: object
+          properties:
+            timeoutMs: { type: integer, minimum: 1, maximum: 15000 }
+            maxRows: { type: integer, minimum: 1, maximum: 10000 }
+            maxBytes: { type: integer, minimum: 1, maximum: 5242880 }
+            maxConcurrent: { type: integer, minimum: 1, maximum: 32 }
         status: { type: string, enum: [active, disabled] }
     DataSourceTestResult:
       type: object
       required: [ok]
       properties:
         ok: { type: boolean }
-        latencyMs: { type: integer }
+        latencyMs: { type: number }
         message: { type: string }
         errorCode: { type: string }
+    DataSourceSchema:
+      type: object
+      required: [dataSourceId, kind, capabilities, datasets]
+      properties:
+        dataSourceId: { type: string, format: uuid }
+        kind: { type: string }
+        capabilities:
+          type: object
+          required: [test, execute]
+          properties:
+            test: { type: boolean }
+            execute: { type: boolean }
+            stream: { type: boolean }
+            rawSql: { type: boolean }
+            schemaDiscovery: { type: boolean }
+        datasets:
+          type: array
+          items:
+            type: object
+            required: [name, fields]
+            properties:
+              name: { type: string }
+              fields:
+                type: array
+                items:
+                  type: object
+                  required: [name, type]
+                  properties:
+                    name: { type: string }
+                    type: { type: string }
+                    label: { type: string }
     DataSourceList:
       type: object
       required: [items, pagination]

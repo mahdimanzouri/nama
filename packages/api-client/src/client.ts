@@ -13,6 +13,7 @@ import type {
   DataSource,
   DataSourceCreateRequest,
   DataSourceList,
+  DataSourceSchema,
   DataSourceTestResult,
   DataSourceUpdateRequest,
   EmbedTokenIssued,
@@ -25,6 +26,7 @@ import type {
   PermissionList,
   Preferences,
   PreferencesUpdate,
+  QueryValidationResult,
   RevisionResponse,
   Role,
   RoleCreateRequest,
@@ -94,6 +96,10 @@ export interface ApiClient {
     options?: RequestOptions,
   ): Promise<DashboardDraft>;
   executeQuery(request: QueryRequest, options?: RequestOptions): Promise<QueryResult>;
+  validateQuery(
+    request: QueryRequest,
+    options?: RequestOptions,
+  ): Promise<QueryValidationResult>;
   listDashboardShares(id: string, options?: RequestOptions): Promise<ShareList>;
   replaceDashboardShares(
     id: string,
@@ -120,6 +126,7 @@ export interface ApiClient {
   ): Promise<DataSource>;
   deleteDataSource(id: string, options?: RequestOptions): Promise<void>;
   testDataSource(id: string, options?: RequestOptions): Promise<DataSourceTestResult>;
+  getDataSourceSchema(id: string, options?: RequestOptions): Promise<DataSourceSchema>;
   listMembers(organizationId: string, options?: ListOptions): Promise<MemberList>;
   inviteMember(
     organizationId: string,
@@ -348,6 +355,14 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       });
     },
 
+    validateQuery(queryRequest, requestOptions) {
+      return request<QueryValidationResult>("/v1/queries/validate", {
+        method: "POST",
+        body: queryRequest,
+        ...requestOptions,
+      });
+    },
+
     updateDashboard(id, input, revision, requestOptions) {
       return request<DashboardSummary>(dashboardPath(id), {
         method: "PATCH",
@@ -432,6 +447,13 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       return request<DataSourceTestResult>(
         `/v1/data-sources/${encodeURIComponent(id)}/test`,
         { method: "POST", ...requestOptions },
+      );
+    },
+
+    getDataSourceSchema(id, requestOptions) {
+      return request<DataSourceSchema>(
+        `/v1/data-sources/${encodeURIComponent(id)}/schema`,
+        requestOptions ?? {},
       );
     },
 

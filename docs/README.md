@@ -1,6 +1,6 @@
 # Nama Dashboard Platform — Architecture Package
 
-**Status:** M0 approved; M1, M2, M3, M3.5, M4, M5 and M6 complete ([current phase](implementation/current-phase.md))
+**Status:** M0 approved; M1, M2, M3, M3.5, M4, M5, M6 and M7 complete ([current phase](implementation/current-phase.md))
 **Date:** 2026-11-12
 **Scope:** Architecture and decisions, plus the implemented walking skeleton.
 **Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)
@@ -40,6 +40,9 @@ organization administration, dashboard sharing, scoped embed tokens, encrypted
 data-source credentials and audit logging. The OpenAPI document marks every
 served operation `implemented`, and `pnpm verify:openapi` fails on drift.
 `api-client` remains hand-written; code generation is deferred (technical debt).
+M7 added server-side connector plugins (`static`, `rest`) with SSRF range
+blocking, per-source limits and truncation, query execution/validation/schema
+endpoints, and SDK HTTP/static adapters used by the web app.
 Documents describing target-only packages list them as such.
 
 ## Status legend

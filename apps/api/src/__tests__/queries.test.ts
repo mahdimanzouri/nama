@@ -91,8 +91,8 @@ describe("query execution", () => {
         query: { queryId: "q", fields: ["value"] },
       },
     });
-    expect(unknown.statusCode).toBe(422);
-    expect(unknown.json().error.code).toBe("QUERY_INVALID");
+    expect(unknown.statusCode).toBe(404);
+    expect(unknown.json().error.code).toBe("NOT_FOUND");
 
     const malformed = await app.inject({
       method: "POST",

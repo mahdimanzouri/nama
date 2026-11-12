@@ -971,7 +971,7 @@ export function createPostgresPersistence(connectionString: string): Persistence
       organizationId: string,
       id: string,
       patch: Partial<
-        Pick<DataSourceRecord, "name" | "config" | "allowRawSql" | "status">
+        Pick<DataSourceRecord, "name" | "config" | "allowRawSql" | "limits" | "status">
       >,
     ) {
       const result = await db().dataSource.updateMany({
@@ -980,6 +980,7 @@ export function createPostgresPersistence(connectionString: string): Persistence
           ...(patch.name === undefined ? {} : { name: patch.name }),
           ...(patch.config === undefined ? {} : { config: toJson(patch.config) }),
           ...(patch.allowRawSql === undefined ? {} : { allowRawSql: patch.allowRawSql }),
+          ...(patch.limits === undefined ? {} : { limits: toJson(patch.limits) }),
           ...(patch.status === undefined ? {} : { status: patch.status }),
           updatedAt: new Date(),
         },

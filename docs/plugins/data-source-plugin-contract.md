@@ -1,9 +1,10 @@
 # Data-Source Plugin Contract (Normative)
 
-**Status:** Manifest and capability schema implemented in M2
-(`dataSourcePluginManifestSchema` in `@nama/dashboard-types`). Normative for
-server-side data-source connectors; the runtime interface and loader land with
-the API (M6/M7).
+**Status:** Runtime implemented in M7 (`apps/api/src/modules/queries/plugins`).
+Manifest and capability schemas landed in M2
+(`dataSourcePluginManifestSchema` in `@nama/dashboard-types`). Streaming
+(`subscribe`), cancellation callbacks and raw SQL remain normative targets for
+later milestones; the implemented surface is marked below.
 
 Data-source plugins run inside the API. They are the only code that knows how to
 talk to an external system. The browser never loads them.
@@ -11,43 +12,38 @@ talk to an external system. The browser never loads them.
 ## Interface
 
 ```ts
-interface DataSourcePlugin {
-  /** Stable kind, e.g. "rest", "postgres", "mqtt". */
+interface ServerDataSourcePlugin {
+  /** Stable kind, e.g. "rest", "static". */
   kind: string;
   manifest: { version: string; name: string };
-
-  /** Non-secret connection configuration. */
-  configSchema: ZodType<DataSourceConfig>;
-
-  /** Secret credential shape; stored encrypted, never returned. */
-  credentialSchema?: ZodType<DataSourceCredential>;
 
   capabilities: {
     test: boolean;
     execute: boolean;
-    stream?: boolean;
-    rawSql?: boolean;
+    stream?: boolean;          // planned (M8+)
+    rawSql?: boolean;          // planned (ADR-010 connector)
     schemaDiscovery?: boolean;
   };
 
+  /** Non-secret connection configuration. */
+  configSchema: ZodType;
+
+  /** Secret credential shape; stored encrypted, never returned. */
+  credentialSchema?: ZodType;
+
   test(ctx: PluginContext): Promise<TestResult>;
 
-  validate(query: QueryDefinition | RawSqlQuery, ctx: PluginContext): Promise<ValidationResult>;
+  validate(query: QueryDefinition, ctx: PluginContext): Promise<ValidationResult>;
 
   execute(request: PluginQueryRequest, ctx: PluginContext): Promise<QueryResult>;
 
-  /** Cancels upstream work; called when the request is aborted. */
-  cancel?(executionId: string): Promise<void>;
-
-  subscribe?(
-    request: PluginQueryRequest,
-    ctx: PluginContext,
-    handlers: PluginStreamHandlers,
-  ): Promise<Unsubscribe>;
-
-  dispose?(): Promise<void>;
+  /** Optional: datasets and fields for the source picker. */
+  discover?(ctx: PluginContext): Promise<DatasetSchema[]>;
 }
 ```
+
+Cancellation is delivered through `ctx.signal`; there is no separate `cancel`
+callback yet. Streaming plugins and `dispose` arrive with the M8 gateway.
 
 ## Plugin context
 
@@ -55,18 +51,21 @@ interface DataSourcePlugin {
 interface PluginContext {
   organizationId: string;
   dataSourceId: string;
-  /** Decrypted just-in-time; never serialized or logged. */
-  credentials: () => Promise<DataSourceCredential>;
-  limits: {
-    timeoutMs: number;        // default 15000
-    maxRows: number;          // default 10000
-    maxBytes: number;         // default 5 MiB
-    maxConcurrent: number;
-  };
-  egress: EgressPolicy;
-  logger: Logger;
-  signal: AbortSignal;
   requestId: string;
+  /** Validated non-secret configuration. */
+  config: Record<string, unknown>;
+  /** Decrypted just-in-time and memoized; never serialized or logged. */
+  credentials: () => Promise<Record<string, unknown>>;
+  limits: {
+    timeoutMs: number;        // default 15000, clamped
+    maxRows: number;          // default 10000, clamped
+    maxBytes: number;         // default 5 MiB, clamped
+    maxConcurrent: number;    // default 4, clamped
+  };
+  allowPrivateNetwork: boolean; // test-only escape hatch
+  fetch: typeof globalThis.fetch;
+  signal: AbortSignal;
+  logger: { warn(meta: Record<string, unknown>, message: string): void };
 }
 ```
 
@@ -129,15 +128,15 @@ For network plugins (REST, MQTT, SQL):
 
 1. Resolve hostnames server-side and reject private, loopback, link-local,
    multicast and metadata-service ranges unless the deployment explicitly
-   allowlists them.
-2. Re-check the resolved IP after DNS resolution and on redirects to prevent DNS
-   rebinding.
-3. Follow redirects only within the allowed scheme/host policy; never redirect to
+   allowlists them (`ALLOW_PRIVATE_DATA_SOURCES`, test-only).
+2. Reject non-HTTP protocols for REST (`file:`, `gopher:` and other schemes).
+3. Refuse redirects entirely in v1; a public host cannot bounce the request into
    a private range.
-4. Enforce TLS verification; do not offer a "skip certificate" option in v1.
-5. Allow only HTTP/HTTPS for REST by default; no `file:`, `gopher:` or arbitrary
-   protocols.
-6. Apply the same policy to MQTT brokers and database hosts.
+4. Enforce TLS verification; there is no "skip certificate" option.
+5. Re-check the resolved address on connect. **Not yet implemented:** the
+   current guard resolves once and does not pin the address (TD-052).
+6. Apply the same policy to MQTT brokers and database hosts when those
+   connectors arrive.
 
 See [security.md](../architecture/security.md).
 
@@ -151,7 +150,7 @@ See [security.md](../architecture/security.md).
 - Dataset allowlists are server-owned; the browser cannot name arbitrary tables
   (ADR-010).
 
-## Streaming plugins
+## Streaming plugins (planned, M8)
 
 - `subscribe` runs server-side; the browser connects only to `/ws/v1`.
 - Events carry a per-subscription sequence assigned by the gateway, not by the
@@ -159,6 +158,8 @@ See [security.md](../architecture/security.md).
 - The gateway throttles to the configured window (default 250 ms) and bounds the
   replay buffer to 60 s or 1,000 events, whichever is smaller.
 - The plugin must stop upstream subscriptions on unsubscribe and on abort.
+
+No streaming connector exists yet; the current adapters expose `execute` only.
 
 ## Testing checklist
 

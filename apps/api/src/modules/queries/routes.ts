@@ -2,17 +2,27 @@ import type { FastifyInstance } from "fastify";
 import { issuesFromZod, queryRequestSchema } from "@nama/dashboard-types";
 
 import { HttpError } from "../../infrastructure/errors.ts";
-import type { AuthHooks } from "../../http/auth.ts";
-import { DEMO_DATA_SOURCE_ID, executeDemoQuery } from "./service.ts";
+import type { AuthContext, AuthHooks } from "../../http/auth.ts";
+import type { QueryService } from "./service.ts";
 
 export interface QueryRouteDeps {
-  now: () => Date;
+  service: QueryService;
   hooks: AuthHooks;
+}
+
+function requireAuth(request: { auth?: AuthContext }): AuthContext {
+  if (!request.auth) {
+    throw new HttpError(401, {
+      code: "UNAUTHENTICATED",
+      message: "Authentication required",
+    });
+  }
+  return request.auth;
 }
 
 export function registerQueryRoutes(
   app: FastifyInstance,
-  { now, hooks }: QueryRouteDeps,
+  { service, hooks }: QueryRouteDeps,
 ): void {
   app.post(
     "/v1/queries/execute",
@@ -24,6 +34,7 @@ export function registerQueryRoutes(
       ],
     },
     async (request) => {
+      const auth = requireAuth(request);
       const parsed = queryRequestSchema.safeParse(request.body);
       if (!parsed.success) {
         const issues = issuesFromZod(parsed.error);
@@ -35,14 +46,48 @@ export function registerQueryRoutes(
         });
       }
 
-      if (parsed.data.dataSourceId !== DEMO_DATA_SOURCE_ID) {
+      const controller = new AbortController();
+      const onAborted = () => controller.abort();
+      request.raw.once("aborted", onAborted);
+
+      try {
+        return await service.execute(auth, parsed.data, {
+          requestId: request.id,
+          signal: controller.signal,
+          logger: request.log,
+        });
+      } finally {
+        request.raw.off("aborted", onAborted);
+      }
+    },
+  );
+
+  app.post(
+    "/v1/queries/validate",
+    {
+      preHandler: [
+        hooks.authenticate,
+        hooks.requireCsrf,
+        hooks.requirePermission("datasource.execute"),
+      ],
+    },
+    async (request) => {
+      const auth = requireAuth(request);
+      const parsed = queryRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        const issues = issuesFromZod(parsed.error);
         throw new HttpError(422, {
           code: "QUERY_INVALID",
-          message: `Unknown data source "${parsed.data.dataSourceId}"`,
+          message: "The query request failed validation",
+          issues,
+          fieldPaths: issues.map((issue) => issue.path.join(".")),
         });
       }
 
-      return executeDemoQuery(parsed.data, now());
+      return service.validate(auth, parsed.data, {
+        requestId: request.id,
+        logger: request.log,
+      });
     },
   );
 }

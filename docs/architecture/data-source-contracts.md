@@ -1,11 +1,14 @@
 # Data Source and Query Contracts
 
-**Status:** Proposed (M0). Client-side types and Zod schemas are implemented in
-M2 (`@nama/dashboard-types`); no execution service exists yet.
+**Status:** Implemented in M7 (2026-11-12). Client contracts and schemas landed in
+M2; the API execution service, connector registry, static and REST connectors,
+and the SDK HTTP/static adapters are live.
 
 The client-side schemas cover `QueryDefinition`, `QueryRequest`, `QueryResult`,
 `QueryError`, `DataAdapter`, `QueryContext` and subscription handlers. Server-side
-connectors, transports and caching are still proposals.
+connectors implement the plugin contract in
+[../plugins/data-source-plugin-contract.md](../plugins/data-source-plugin-contract.md);
+streaming transports remain M8.
 
 This document defines the **client-side** data adapter contract. Server-side
 connectors are specified in
@@ -152,13 +155,14 @@ A query definition (persisted on the widget) supports:
 
 | Limit | Default | Notes |
 | --- | --- | --- |
-| Execution timeout | 15 s | Per data source may only tighten |
+| Execution timeout | 15 s | Per data source may only tighten; enforced with `AbortSignal` → `504` |
 | Result rows | 10,000 | Truncation flagged |
-| Result bytes | 5 MiB | Inclusive of rows payload |
-| Concurrent queries | Bounded per user and per data source | Configuration with documented defaults |
-| Result cache | TanStack Query | Deduplicated by resolved request |
+| Result bytes | 5 MiB | Row payload; over-budget results are cut to the largest fitting prefix |
+| Concurrent queries | 4 per data source | In-process gate keyed by organization and source → `429` with `retryAfterMs` |
+| Result cache | TanStack Query | Deduplicated by the persisted query and resolved parameters |
 
-Cancellation aborts upstream work; it does not merely discard the response.
+Cancellation aborts upstream work; an external `AbortSignal` aborts the plugin
+and returns `408 CANCELLED`.
 
 ## Variable and filter resolution
 
@@ -180,25 +184,28 @@ Cancellation aborts upstream work; it does not merely discard the response.
 
 ## Transports
 
-| Transport | Use |
-| --- | --- |
-| HTTP polling | Default for snapshots in v1 |
-| WebSocket | Live updates and multiplexed subscriptions |
-| SSE | One-way fallback |
-| Static/mock | Tests, demos, offline previews |
+| Transport | Status | Use |
+| --- | --- | --- |
+| HTTP polling | Implemented (`createHttpDataAdapter`) | Default for snapshots |
+| Static/mock | Implemented (`createStaticDataAdapter`) | Tests, demos, offline previews |
+| WebSocket | M8 | Live updates and multiplexed subscriptions |
+| SSE | M8 | One-way fallback |
 
 Backend execution is mandatory for credentialed sources; static/mock and
 explicitly public REST may execute client-side.
 
 ## Schema discovery and validation
 
-Proposed endpoints (M7):
+Implemented endpoints:
 
-- `GET /v1/data-sources/:id/schema` — datasets, fields and types.
-- `POST /v1/queries/validate` — validates a structured query without executing.
+- `GET /v1/data-sources/:id/schema` — datasets, fields and types
+  (`datasource.read`); connectors without discovery return `501`.
+- `POST /v1/queries/validate` — validates a structured query without executing
+  it and returns `200 { valid, issues }` (`datasource.execute`).
 
-Both require `datasource.read`; discovery results are cached and scoped per
-organization.
+Discovery results are scoped per organization. Connector-side validation runs
+after the request schema check, so both envelope and plugin problems are
+reported.
 
 ## Credentials
 
@@ -206,6 +213,20 @@ The browser receives opaque data-source identifiers and authorized query
 capabilities. It never receives database passwords, connection strings or
 privileged credentials. Credentials are decrypted only inside the API, just in
 time for execution.
+
+## Implemented connectors (M7)
+
+| Kind | Capabilities | Notes |
+| --- | --- | --- |
+| `static` | test, execute, schema discovery | Internal demo metrics (`demo-source`); deterministic rows generated from the time range; rejects `groupBy` |
+| `rest` | test, execute | JSON array or `{ rows }` via `rowsPath`; optional column declarations; credential headers; no schema discovery |
+
+The REST connector resolves the URL before every request and rejects non-HTTP
+protocols and private, loopback, link-local, multicast and metadata addresses.
+Redirects are refused so a public host cannot bounce into a private range. DNS
+pinning between resolution and connect is not yet implemented (TD-052).
+`postgres`, `mysql` and `mqtt` remain declared kinds that return `501`
+(TD-053).
 
 ## Related documents
 

@@ -1,10 +1,10 @@
 # Data Flow
 
 **Status:** Implemented except realtime. The editor save/publish/restore and
-viewer read paths landed in M4, M5 added widget rendering, and M6 moved the store
-to PostgreSQL with per-request tenant scoping and row-level security. Version
-restore copies into the draft without publishing, and realtime remains a contract
-only.
+viewer read paths landed in M4, M5 added widget rendering, M6 moved the store to
+PostgreSQL with per-request tenant scoping and row-level security, and M7 added
+connector-backed query execution with limits and truncation. Version restore
+copies into the draft without publishing, and realtime remains a contract only.
 
 ## Editor: load, edit, save, publish
 
