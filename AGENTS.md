@@ -7,3 +7,69 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Project objective
+
+Build an extensible, reusable, multilingual dashboard platform consisting of a
+React SDK, a Next.js web application and an independent backend API.
+
+## Architectural rules
+
+1. The dashboard SDK must not depend on Next.js.
+2. The SDK must not access the backend database directly.
+3. Authentication and authorization must be injected through explicit interfaces.
+4. TanStack Query owns server state.
+5. Zustand owns local editor state.
+6. Dashboard configurations are versioned and validated.
+7. Data acquisition is independent of visualization rendering.
+8. Plugins use documented public contracts.
+9. Untrusted plugins never execute arbitrary code in the main application context.
+10. Backend authorization is authoritative.
+11. Support Persian and English.
+12. Support RTL and LTR for chrome, text, forms and charts; the grid canvas is
+    LTR-only in v1 and the limitation must be disclosed.
+13. Support light, dark and system themes.
+14. Avoid circular dependencies.
+15. Avoid unnecessary abstractions.
+16. Preserve compatibility of persisted dashboard configurations.
+17. Viewers only ever see published configurations.
+18. Configuration writes are conditional on the last known revision.
+
+## Development rules
+
+- Work incrementally, milestone by milestone.
+- Do not implement all milestones in one operation.
+- Inspect the repository before changing it.
+- Plan before substantial changes.
+- Test after each meaningful increment.
+- Document significant decisions.
+- Do not claim completion without verification.
+- Report technical debt honestly.
+- Ask for approval at milestone gates.
+
+## CI-enforced rules (target, from M1)
+
+- Type checking and linting run on every change with `noImplicitAny` enabled; an
+  intentional escape hatch requires a justification comment and is reviewed.
+- Package builds fail when built output loses a `"use client"` directive or
+  exceeds the bundle-size budget.
+- Shipped packages do not export placeholder implementations; stubs live under
+  test-only paths excluded from builds.
+- Schema changes require passing migration tests for every supported
+  `schemaVersion` before merge.
+- Cross-tenant isolation and `If-Match` conflict tests run on every change to the
+  affected modules.
+
+## Current milestone
+
+M0 (architecture and decisions) is recorded in `docs/`. Do not start M1 until the
+M0 gate is approved. When M1 begins:
+
+1. Create the pnpm + Turborepo workspace.
+2. Move the existing Next.js app to `apps/web`.
+3. Create `apps/api` and exactly four packages: `@nama/dashboard-types`,
+   `@nama/dashboard-core`, `@nama/dashboard-builder`, `@nama/api-client`.
+4. Do not create the target-only packages listed in
+   `docs/architecture/package-dependencies.md`.
+
+Read `docs/implementation/current-phase.md` before starting any milestone.

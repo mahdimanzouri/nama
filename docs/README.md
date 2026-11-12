@@ -1,0 +1,131 @@
+# Nama Dashboard Platform — Architecture Package (M0)
+
+**Status:** Proposed — awaiting architecture approval
+**Date:** 2026-11-12
+**Scope:** Milestone M0 only. No product code, no monorepo restructure.
+**Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)
+
+## Purpose
+
+This package records the architecture, contracts and decisions that M1–M12 will
+implement. It exists so the dashboard SDK, web application and backend API can
+evolve independently without re-deciding fundamentals or requiring a rewrite.
+
+## Current repository state
+
+The repository is a single Create Next App project at the root:
+
+- Next.js 16.4.6, React 19.3.0, TypeScript 5.x, Tailwind CSS 4.3.3
+- `cacheComponents: true` in `next.config.ts`
+- `app/` at the root, `pnpm-workspace.yaml` present but only for ignored build dependencies
+- No `apps/`, `packages/`, `turbo.json`, or `docs/` (before M0)
+
+The target monorepo described in these documents **does not exist yet**. M1
+performs the restructure. Any document that describes `apps/web`, `apps/api` or
+`packages/*` is describing the target state.
+
+## Status legend
+
+| Status | Meaning |
+| --- | --- |
+| Accepted | Decided in M0; implementation may rely on it |
+| Proposed | Recommended but requiring approval or external input |
+| Unresolved | Deliberately open; a milestone is blocked until decided |
+| Target-only | Described package/module that M1 does not create |
+
+## §19 first-assignment coverage
+
+| # | Required output | Document |
+| --- | --- | --- |
+| 1 | Detailed monorepo structure | [architecture/overview.md](architecture/overview.md), [architecture/package-dependencies.md](architecture/package-dependencies.md) |
+| 2 | Package dependency graph | [architecture/package-dependencies.md](architecture/package-dependencies.md) |
+| 3 | Public SDK API proposal | [architecture/sdk-api.md](architecture/sdk-api.md) |
+| 4 | Dashboard configuration schema | [architecture/dashboard-schema.md](architecture/dashboard-schema.md) |
+| 5 | Widget plugin contract | [plugins/widget-plugin-contract.md](plugins/widget-plugin-contract.md) |
+| 6 | Data-source plugin contract | [plugins/data-source-plugin-contract.md](plugins/data-source-plugin-contract.md) |
+| 7 | Realtime protocol proposal | [architecture/realtime-protocol.md](architecture/realtime-protocol.md) |
+| 8 | Backend module architecture | [architecture/backend-architecture.md](architecture/backend-architecture.md) |
+| 9 | Database entity relationship proposal | [architecture/data-model.md](architecture/data-model.md) |
+| 10 | Internationalization and theme strategy | [architecture/i18n-theme.md](architecture/i18n-theme.md) |
+| 11 | Security risk assessment | [architecture/security.md](architecture/security.md) |
+| 12 | Decision records (auth, RLS, embed tokens, SQL model, deployment) | [architecture/decisions/](architecture/decisions/) |
+| 13 | Milestone acceptance criteria and recalibrated estimate | [implementation/roadmap.md](implementation/roadmap.md) |
+
+## §18.4 required progress files
+
+| Required path | Present |
+| --- | --- |
+| `architecture/overview.md` | yes |
+| `architecture/package-dependencies.md` | yes |
+| `architecture/data-flow.md` | yes |
+| `architecture/security.md` | yes |
+| `architecture/plugin-system.md` | yes |
+| `architecture/decisions/ADR-001..006` | yes |
+| `implementation/roadmap.md` | yes |
+| `implementation/current-phase.md` | yes |
+| `implementation/technical-debt.md` | yes |
+| `api/openapi.yaml` | yes |
+| `plugins/` | yes |
+
+## Invariants
+
+These values are normative. Every document that mentions them must use these
+exact values. A change requires an ADR amendment.
+
+1. **Initial packages:** exactly `@nama/dashboard-types`, `@nama/dashboard-core`,
+   `@nama/dashboard-builder`, `@nama/api-client`. All other packages in the
+   target tree are target-only; M1 does not create them.
+2. **Independent versions:** configuration `schemaVersion`, per-widget
+   `configVersion`, and plugin package `version` move independently.
+3. **Concurrency:** every configuration write carries `If-Match` with the last
+   known `revision`. A stale write returns `409 Conflict` with the current
+   revision. Publishing copies `draftConfig` to `publishedConfig`, increments
+   `revision`, and inserts a `DashboardVersion` in one transaction.
+4. **Draft versus published:** viewers read `publishedConfig` only. The draft
+   endpoint is editor-only.
+5. **Caps:** 1 MiB configuration, 100 widgets per dashboard (warn above 50),
+   15 s query timeout, 10,000 rows or 5 MiB per result, 12 live chart instances
+   per viewport, 50 undo/redo entries, 50 retained published versions.
+6. **Realtime:** endpoint `/ws/v1`; per-subscription `sequence`; replay buffer
+   is 60 s or 1,000 events, whichever is smaller; server-side stream throttle
+   250 ms; client coalesces to 4 UI updates per second per widget; ten message
+   types (`connected`, `subscribe`, `subscribed`, `snapshot`, `data`, `gap`,
+   `unsubscribe`, `unsubscribed`, `error`, `heartbeat`); a snapshot replaces
+   client state.
+7. **Localization and themes:** locales `en` and `fa`; RTL chrome with an
+   LTR-only canvas (disclosed to users); themes `light`, `dark`, `system`;
+   message fallback is host → SDK built-in → English.
+8. **Identifiers and time:** UUIDv7 identifiers; UTC ISO-8601 timestamps;
+   timezone precedence is user preference → dashboard setting → organization
+   default.
+9. **Breakpoints:** `desktop`, `tablet`, `mobile`; `LayoutItem` entries are the
+   only source of widget position; a missing breakpoint inherits the next wider
+   breakpoint and materializes on first edit.
+10. **Tenancy:** organization scoping in repository/service layers **and**
+    PostgreSQL row-level security with per-request `SET LOCAL`; permission names
+    use the `dashboard.read`, `datasource.update` form; embed tokens narrow the
+    issuer's permissions, never widen them.
+11. **Stack pins:** React Grid Layout 2.x (1.5.x documented fallback), Apache
+    ECharts v6 with module-level imports, `cacheComponents` enabled, built SDK
+    output preserves `"use client"`.
+
+## Reading order
+
+1. [overview.md](architecture/overview.md) — product, current state, target topology
+2. [decisions/](architecture/decisions/) — ADR-001..011
+3. [package-dependencies.md](architecture/package-dependencies.md)
+4. [dashboard-schema.md](architecture/dashboard-schema.md) and [data-model.md](architecture/data-model.md)
+5. [sdk-api.md](architecture/sdk-api.md), [plugin-system.md](architecture/plugin-system.md), [plugins/](plugins/)
+6. [data-source-contracts.md](architecture/data-source-contracts.md), [realtime-protocol.md](architecture/realtime-protocol.md)
+7. [backend-architecture.md](architecture/backend-architecture.md), [security.md](architecture/security.md)
+8. [data-flow.md](architecture/data-flow.md), [i18n-theme.md](architecture/i18n-theme.md)
+9. [api/](api/), [implementation/](implementation/)
+
+## Notes
+
+- Documents are written in English. The product ships English and Persian; the
+  documentation-language decision is recorded in
+  [implementation/technical-debt.md](implementation/technical-debt.md).
+- `docs/guides/` is deliberately absent in M0; it is tracked as technical debt.
+- `AGENTS.md` contains a block that `next dev` rewrites. Project rules are
+  appended below that block and must never replace it.

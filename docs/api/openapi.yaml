@@ -1,0 +1,1538 @@
+openapi: 3.0.3
+info:
+  title: Nama Dashboard Platform API
+  version: 0.1.0-m0
+  description: |
+    M0 proposal for the Nama dashboard platform API. Management operations use
+    REST; live updates use `/ws/v1` (see docs/architecture/realtime-protocol.md).
+
+    Conventions:
+    - All configuration writes carry `If-Match` with the last known revision.
+    - Stale writes return `409` with the current revision.
+    - Mutating cookie-authenticated requests carry `X-CSRF-Token`.
+    - Retryable POST endpoints accept `Idempotency-Key`.
+    - Timestamps are UTC ISO-8601. IDs are UUIDv7.
+    - Errors use the ErrorEnvelope with a stable code and request ID.
+
+    `x-m0-status` values: `proposed` (contract reviewed, shapes may change in M2),
+    `stub` (path reserved; detailed schema arrives with its milestone).
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder; deployment is unresolved (ADR-011)
+security:
+  - sessionCookie: []
+  - embedBearer: []
+tags:
+  - name: Dashboards
+  - name: Dashboard versions
+  - name: Shares
+  - name: Embed tokens
+  - name: Data sources
+  - name: Queries
+  - name: Widgets
+  - name: Organizations
+  - name: Roles
+  - name: Preferences
+
+paths:
+  /v1/dashboards:
+    get:
+      tags: [Dashboards]
+      operationId: listDashboards
+      summary: List authorized dashboards
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Authorized dashboards
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Dashboards]
+      operationId: createDashboard
+      summary: Create a dashboard
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDashboardRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardDocument'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/dashboards/{id}:
+    parameters:
+      - $ref: '#/components/parameters/DashboardId'
+    get:
+      tags: [Dashboards]
+      operationId: getDashboard
+      summary: Get dashboard metadata and published configuration
+      x-m0-status: proposed
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardDocument'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      tags: [Dashboards]
+      operationId: updateDashboard
+      summary: Update dashboard metadata
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDashboardRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Dashboards]
+      operationId: deleteDashboard
+      summary: Delete a dashboard
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Deleted
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/dashboards/{id}/draft:
+    parameters:
+      - $ref: '#/components/parameters/DashboardId'
+    get:
+      tags: [Dashboards]
+      operationId: getDashboardDraft
+      summary: Get the draft configuration (editor only)
+      description: Requires edit permission. Viewers never receive draft data.
+      x-m0-status: proposed
+      responses:
+        '200':
+          description: Draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardDraft'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [Dashboards]
+      operationId: saveDashboardDraft
+      summary: Save the draft configuration
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveDraftRequest'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevisionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/dashboards/{id}/publish:
+    parameters:
+      - $ref: '#/components/parameters/DashboardId'
+    post:
+      tags: [Dashboards]
+      operationId: publishDashboard
+      summary: Publish the draft and create a version
+      description: Requires dashboard.publish. Atomic config copy, revision increment and version insert.
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishRequest'
+      responses:
+        '200':
+          description: Published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardDocument'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/dashboards/{id}/versions:
+    parameters:
+      - $ref: '#/components/parameters/DashboardId'
+    get:
+      tags: [Dashboard versions]
+      operationId: listDashboardVersions
+      summary: List published versions
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Versions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/dashboards/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/DashboardId'
+    post:
+      tags: [Dashboard versions]
+      operationId: restoreDashboardVersion
+      summary: Restore a version as a new draft
+      description: Does not publish. Increments revision and clears editor history in the client.
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreRequest'
+      responses:
+        '200':
+          description: Draft replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardDraft'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/dashboards/{id}/shares:
+    parameters:
+      - $ref: '#/components/parameters/DashboardId'
+    get:
+      tags: [Shares]
+      operationId: listDashboardShares
+      summary: List dashboard shares
+      x-m0-status: proposed
+      responses:
+        '200':
+          description: Shares
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [Shares]
+      operationId: replaceDashboardShares
+      summary: Replace dashboard shares
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareListReplace'
+      responses:
+        '200':
+          description: Shares replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/dashboards/{id}/embed-tokens:
+    parameters:
+      - $ref: '#/components/parameters/DashboardId'
+    post:
+      tags: [Embed tokens]
+      operationId: issueEmbedToken
+      summary: Issue a scoped embed token
+      description: Requires dashboard.share. The plaintext token is returned once and never stored.
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmbedTokenRequest'
+      responses:
+        '201':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbedTokenIssued'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/dashboards/{id}/embed-tokens/{tokenId}:
+    parameters:
+      - $ref: '#/components/parameters/DashboardId'
+      - $ref: '#/components/parameters/EmbedTokenId'
+    delete:
+      tags: [Embed tokens]
+      operationId: revokeEmbedToken
+      summary: Revoke an embed token
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Revoked
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/data-sources:
+    get:
+      tags: [Data sources]
+      operationId: listDataSources
+      summary: List authorized data sources
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Data sources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSourceList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Data sources]
+      operationId: createDataSource
+      summary: Create a data source
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataSourceCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSource'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/data-sources/{id}:
+    parameters:
+      - $ref: '#/components/parameters/DataSourceId'
+    get:
+      tags: [Data sources]
+      operationId: getDataSource
+      summary: Get data-source metadata (credentials are never returned)
+      x-m0-status: proposed
+      responses:
+        '200':
+          description: Data source
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSource'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      tags: [Data sources]
+      operationId: updateDataSource
+      summary: Update a data source
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataSourceUpdate'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSource'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Data sources]
+      operationId: deleteDataSource
+      summary: Delete a data source
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Deleted
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/data-sources/{id}/test:
+    parameters:
+      - $ref: '#/components/parameters/DataSourceId'
+    post:
+      tags: [Data sources]
+      operationId: testDataSource
+      summary: Test connectivity and permissions
+      x-m0-status: proposed
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional unsaved connection settings to test
+              additionalProperties: true
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSourceTestResult'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+        '504': { $ref: '#/components/responses/UpstreamTimeout' }
+
+  /v1/queries/execute:
+    post:
+      tags: [Queries]
+      operationId: executeQuery
+      summary: Execute a query
+      description: Server-side execution with 15 s timeout and 10,000 rows / 5 MiB caps.
+      x-m0-status: proposed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Query result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+        '504': { $ref: '#/components/responses/UpstreamTimeout' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/queries/validate:
+    post:
+      tags: [Queries]
+      operationId: validateQuery
+      summary: Validate a query without executing it
+      x-m0-status: proposed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryValidateResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/widgets:
+    get:
+      tags: [Widgets]
+      operationId: listWidgets
+      summary: List available widget definitions
+      x-m0-status: proposed
+      responses:
+        '200':
+          description: Widgets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WidgetList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/organizations/{id}/members:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Organizations]
+      operationId: listMembers
+      summary: List organization members
+      x-m0-status: stub
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Organizations]
+      operationId: inviteMember
+      summary: Invite a member
+      x-m0-status: stub
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberCreate'
+      responses:
+        '201':
+          description: Invited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/organizations/{id}/members/{memberId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/MemberId'
+    patch:
+      tags: [Organizations]
+      operationId: updateMember
+      summary: Update member roles or status
+      x-m0-status: stub
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberUpdate'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Organizations]
+      operationId: removeMember
+      summary: Remove a member
+      x-m0-status: stub
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Removed
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/organizations/{id}/roles:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Roles]
+      operationId: listRoles
+      summary: List roles and their permissions
+      x-m0-status: stub
+      responses:
+        '200':
+          description: Roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Roles]
+      operationId: createRole
+      summary: Create a custom role
+      x-m0-status: stub
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/organizations/{id}/roles/{roleId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+      - $ref: '#/components/parameters/RoleId'
+    patch:
+      tags: [Roles]
+      operationId: updateRole
+      summary: Update a role
+      x-m0-status: stub
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdate'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Roles]
+      operationId: deleteRole
+      summary: Delete a custom role
+      x-m0-status: stub
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Deleted
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/organizations/{id}/permissions:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Roles]
+      operationId: listEffectivePermissions
+      summary: Retrieve the caller's effective permissions
+      x-m0-status: stub
+      responses:
+        '200':
+          description: Permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/me/preferences:
+    get:
+      tags: [Preferences]
+      operationId: getPreferences
+      summary: Read user preferences
+      x-m0-status: stub
+      responses:
+        '200':
+          description: Preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferences'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      tags: [Preferences]
+      operationId: updatePreferences
+      summary: Update user preferences
+      x-m0-status: stub
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreferencesUpdate'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preferences'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: nama_session
+      description: Opaque server-side session; httpOnly, Secure, SameSite=Lax.
+    embedBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Scoped, expiring, revocable embed token.
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Last known revision as a quoted integer (for example `"12"`). Stale values return 409.
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: Required for cookie-authenticated mutations; validated by double-submit.
+      schema: { type: string }
+    DashboardId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DataSourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EmbedTokenId:
+      name: tokenId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    OrganizationId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    MemberId:
+      name: memberId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RoleId:
+      name: roleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unauthorized:
+      description: Authentication required or expired
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: Authenticated but not permitted
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: Resource absent or outside tenant
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: Stale revision, duplicate resource or idempotency mismatch
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ValidationError:
+      description: Domain validation failed with field paths
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    PayloadTooLarge:
+      description: Configuration exceeds 1 MiB or 100 widgets
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    TooManyRequests:
+      description: Rate limited
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    UpstreamError:
+      description: Data source unreachable or rejected credentials
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    UpstreamTimeout:
+      description: Query exceeded the 15 s timeout
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    InternalError:
+      description: Unexpected failure; request ID only
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string, example: REVISION_CONFLICT }
+            message: { type: string }
+            requestId: { type: string }
+            fieldPaths:
+              type: array
+              items:
+                oneOf:
+                  - { type: string }
+                  - { type: integer }
+            retryAfterMs: { type: integer }
+    Pagination:
+      type: object
+      required: [page, pageSize, total]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+
+    DashboardSummary:
+      type: object
+      required: [id, organizationId, name, revision, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        name: { type: string }
+        revision: { type: integer }
+        updatedAt: { type: string, format: date-time }
+        publishedAt: { type: string, format: date-time, nullable: true }
+    DashboardDocument:
+      allOf:
+        - $ref: '#/components/schemas/DashboardSummary'
+        - type: object
+          required: [draftConfig]
+          properties:
+            draftConfig: { $ref: '#/components/schemas/DashboardConfig' }
+            publishedConfig:
+              allOf:
+                - $ref: '#/components/schemas/DashboardConfig'
+              nullable: true
+            permissions:
+              type: array
+              items: { type: string }
+    DashboardDraft:
+      type: object
+      required: [config, revision, updatedAt]
+      properties:
+        config: { $ref: '#/components/schemas/DashboardConfig' }
+        revision: { type: integer }
+        updatedAt: { type: string, format: date-time }
+    RevisionResponse:
+      type: object
+      required: [revision]
+      properties:
+        revision: { type: integer }
+    DashboardList:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardSummary' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    DashboardConfig:
+      type: object
+      required: [schemaVersion, metadata, settings, variables, filters, layouts, widgets]
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        metadata: { $ref: '#/components/schemas/DashboardMetadata' }
+        settings: { $ref: '#/components/schemas/DashboardSettings' }
+        variables:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardVariable' }
+        filters:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardFilter' }
+        layouts: { $ref: '#/components/schemas/DashboardLayouts' }
+        widgets:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/DashboardWidget' }
+    DashboardMetadata:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        tags:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 40 }
+    DashboardSettings:
+      type: object
+      properties:
+        refreshInterval: { type: integer, minimum: 0, default: 60 }
+        timezone: { type: string, example: Asia/Tehran }
+    DashboardLayouts:
+      type: object
+      required: [desktop, tablet, mobile]
+      properties:
+        desktop: { $ref: '#/components/schemas/DashboardLayout' }
+        tablet: { $ref: '#/components/schemas/DashboardLayout' }
+        mobile: { $ref: '#/components/schemas/DashboardLayout' }
+    DashboardLayout:
+      type: object
+      required: [columns, rowHeight, gap, items]
+      properties:
+        columns: { type: integer }
+        rowHeight: { type: integer }
+        gap: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/LayoutItem' }
+    LayoutItem:
+      type: object
+      required: [widgetId, x, y, w, h]
+      properties:
+        widgetId: { type: string, format: uuid }
+        x: { type: integer, minimum: 0 }
+        y: { type: integer, minimum: 0 }
+        w: { type: integer, minimum: 1 }
+        h: { type: integer, minimum: 1 }
+    DashboardWidget:
+      type: object
+      required: [id, type, configVersion, title, config]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, example: kpi }
+        configVersion: { type: integer, minimum: 1 }
+        title: { type: string }
+        dataSourceId: { type: string, format: uuid }
+        config:
+          type: object
+          additionalProperties: true
+        query: { $ref: '#/components/schemas/QueryDefinition' }
+        visibility:
+          type: object
+          properties:
+            enabled: { type: boolean }
+            condition: { type: string }
+    DashboardVariable:
+      type: object
+      required: [id, name, type]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type:
+          type: string
+          enum: [string, number, boolean, date, timeRange]
+        defaultValue: {}
+        bindings:
+          type: array
+          items: { $ref: '#/components/schemas/VariableBinding' }
+    VariableBinding:
+      type: object
+      required: [target, parameter]
+      properties:
+        target:
+          type: string
+          enum: [query.parameter, query.timeRange, filter.value]
+        parameter: { type: string }
+    DashboardFilter:
+      type: object
+      required: [id, field, operator, value]
+      properties:
+        id: { type: string, format: uuid }
+        field: { type: string }
+        operator:
+          type: string
+          enum: [eq, neq, in, contains, gt, gte, lt, lte, between]
+        value: {}
+
+    QueryDefinition:
+      type: object
+      required: [queryId, fields]
+      properties:
+        queryId: { type: string }
+        dataset: { type: string }
+        fields:
+          type: array
+          items: { type: string }
+        aggregations:
+          type: array
+          items:
+            type: object
+            required: [field, fn]
+            properties:
+              field: { type: string }
+              fn:
+                type: string
+                enum: [sum, avg, min, max, count]
+        filters:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardFilter' }
+        groupBy:
+          type: array
+          items: { type: string }
+        orderBy:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              direction: { type: string, enum: [asc, desc] }
+        limit: { type: integer, minimum: 1, maximum: 10000 }
+        variableBindings:
+          type: array
+          items: { $ref: '#/components/schemas/VariableBinding' }
+    QueryRequest:
+      type: object
+      required: [queryId, dataSourceId, query]
+      properties:
+        queryId: { type: string }
+        dataSourceId: { type: string, format: uuid }
+        query: { $ref: '#/components/schemas/QueryDefinition' }
+        parameters:
+          type: object
+          additionalProperties: true
+        timeRange:
+          type: object
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+    QueryResult:
+      type: object
+      required: [queryId, columns, rows, timestamp, meta]
+      properties:
+        queryId: { type: string }
+        columns:
+          type: array
+          items: { $ref: '#/components/schemas/QueryColumn' }
+        rows:
+          type: array
+          maxItems: 10000
+          items:
+            type: object
+            additionalProperties: true
+        timestamp: { type: string, format: date-time }
+        meta: { $ref: '#/components/schemas/QueryMeta' }
+    QueryColumn:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        label: { type: string }
+    QueryMeta:
+      type: object
+      required: [rowCount, truncated, executionTimeMs, cached]
+      properties:
+        rowCount: { type: integer }
+        truncated: { type: boolean }
+        executionTimeMs: { type: integer }
+        cached: { type: boolean }
+    QueryValidateResult:
+      type: object
+      required: [ok, issues]
+      properties:
+        ok: { type: boolean }
+        issues:
+          type: array
+          items: { $ref: '#/components/schemas/ValidationIssue' }
+    ValidationIssue:
+      type: object
+      required: [code, path, message]
+      properties:
+        code: { type: string }
+        path:
+          type: array
+          items:
+            oneOf:
+              - { type: string }
+              - { type: integer }
+        message: { type: string }
+
+    CreateDashboardRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        config: { $ref: '#/components/schemas/DashboardConfig' }
+    UpdateDashboardRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        metadata: { $ref: '#/components/schemas/DashboardMetadata' }
+    SaveDraftRequest:
+      type: object
+      required: [config]
+      properties:
+        config: { $ref: '#/components/schemas/DashboardConfig' }
+    PublishRequest:
+      type: object
+      properties:
+        comment: { type: string, maxLength: 500 }
+
+    DashboardVersion:
+      type: object
+      required: [id, dashboardId, revision, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        dashboardId: { type: string, format: uuid }
+        revision: { type: integer }
+        createdBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        config:
+          allOf:
+            - $ref: '#/components/schemas/DashboardConfig'
+          nullable: true
+    VersionList:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardVersion' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+    RestoreRequest:
+      type: object
+      required: [versionId]
+      properties:
+        versionId: { type: string, format: uuid }
+
+    DashboardShare:
+      type: object
+      required: [subjectType, subjectId, permission]
+      properties:
+        id: { type: string, format: uuid }
+        subjectType: { type: string, enum: [user, role, organization] }
+        subjectId: { type: string, format: uuid }
+        permission: { type: string, enum: [view, edit] }
+    ShareList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardShare' }
+    ShareListReplace:
+      type: object
+      required: [shares]
+      properties:
+        shares:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardShare' }
+
+    EmbedTokenRequest:
+      type: object
+      required: [expiresInSeconds]
+      properties:
+        expiresInSeconds: { type: integer, minimum: 60, maximum: 31536000 }
+        viewerIdentity: { type: string, maxLength: 200 }
+        scope:
+          type: object
+          description: Optional pre-bound variables and filters; validated server-side.
+          additionalProperties: true
+    EmbedTokenIssued:
+      type: object
+      required: [id, token, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        token:
+          type: string
+          description: Returned once; never retrievable again.
+        expiresAt: { type: string, format: date-time }
+
+    DataSourceSummary:
+      type: object
+      required: [id, name, kind, status, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [postgres, mysql, rest, mqtt, static] }
+        status: { type: string, enum: [active, disabled, error] }
+        allowRawSql: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    DataSource:
+      allOf:
+        - $ref: '#/components/schemas/DataSourceSummary'
+        - type: object
+          properties:
+            config:
+              type: object
+              additionalProperties: true
+              description: Non-secret connection metadata only.
+    DataSourceCreate:
+      type: object
+      required: [name, kind, config]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [postgres, mysql, rest, mqtt, static] }
+        config:
+          type: object
+          additionalProperties: true
+        credentials:
+          type: object
+          additionalProperties: true
+          writeOnly: true
+        allowRawSql: { type: boolean, default: false }
+    DataSourceUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        config:
+          type: object
+          additionalProperties: true
+        credentials:
+          type: object
+          additionalProperties: true
+          writeOnly: true
+        allowRawSql: { type: boolean }
+        status: { type: string, enum: [active, disabled] }
+    DataSourceTestResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        latencyMs: { type: integer }
+        message: { type: string }
+        errorCode: { type: string }
+    DataSourceList:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DataSourceSummary' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    WidgetDefinition:
+      type: object
+      required: [type, manifest, configVersion, isBuiltin]
+      properties:
+        type: { type: string }
+        manifest:
+          type: object
+          required: [id, version, name]
+          properties:
+            id: { type: string }
+            version: { type: string }
+            name: { type: string }
+            description: { type: string }
+            capabilities:
+              type: object
+              properties:
+                realtime: { type: boolean }
+                export: { type: boolean }
+                filters: { type: boolean }
+        configVersion: { type: integer }
+        defaultSize:
+          type: object
+          properties:
+            w: { type: integer }
+            h: { type: integer }
+        isBuiltin: { type: boolean }
+    WidgetList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/WidgetDefinition' }
+
+    Member:
+      type: object
+      required: [id, userId, email, status, roles]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        status: { type: string, enum: [invited, active, suspended] }
+        roles:
+          type: array
+          items: { type: string, format: uuid }
+    MemberCreate:
+      type: object
+      required: [email, roleIds]
+      properties:
+        email: { type: string, format: email }
+        roleIds:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+    MemberUpdate:
+      type: object
+      properties:
+        roleIds:
+          type: array
+          items: { type: string, format: uuid }
+        status: { type: string, enum: [active, suspended] }
+    MemberList:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Member' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    Role:
+      type: object
+      required: [id, name, isSystem, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        isSystem: { type: boolean }
+        permissions:
+          type: array
+          items: { type: string }
+    RoleCreate:
+      type: object
+      required: [name, permissions]
+      properties:
+        name: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+    RoleUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+    RoleList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+    Permission:
+      type: object
+      required: [key]
+      properties:
+        key: { type: string, example: dashboard.read }
+        description: { type: string }
+    PermissionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
+
+    Preferences:
+      type: object
+      properties:
+        locale: { type: string, enum: [en, fa] }
+        theme: { type: string, enum: [light, dark, system] }
+        timezone: { type: string }
+        defaultOrganizationId: { type: string, format: uuid }
+    PreferencesUpdate:
+      type: object
+      properties:
+        locale: { type: string, enum: [en, fa] }
+        theme: { type: string, enum: [light, dark, system] }
+        timezone: { type: string }
+        defaultOrganizationId: { type: string, format: uuid }
