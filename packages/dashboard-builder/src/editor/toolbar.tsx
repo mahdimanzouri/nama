@@ -1,5 +1,10 @@
+import { useRef, useState } from "react";
 import { useStore } from "zustand";
-import type { Breakpoint } from "@nama/dashboard-types";
+import {
+  exportDashboardConfig,
+  importDashboardConfig,
+  type Breakpoint,
+} from "@nama/dashboard-types";
 
 import { joinClassNames } from "../classnames";
 import { useDashboardRuntime } from "../context";
@@ -7,6 +12,17 @@ import { useEditorContext } from "./context";
 import { isDirty } from "./store";
 
 const BREAKPOINTS: readonly Breakpoint[] = ["desktop", "tablet", "mobile"];
+
+const APPLICATION_VERSION = "@nama/dashboard-builder@0.0.0";
+
+function fileNameFor(title: string): string {
+  const slug = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  return `${slug || "dashboard"}.nama.json`;
+}
 
 /** Title, history, breakpoint, preview and save/publish actions. */
 export function DashboardToolbar({ className }: { className?: string }) {
@@ -18,6 +34,46 @@ export function DashboardToolbar({ className }: { className?: string }) {
   const dirty = isDirty(state);
   const pending = state.phase !== "idle";
   const interactive = !readOnly && !state.preview;
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [importFailed, setImportFailed] = useState(false);
+
+  const handleExport = () => {
+    const envelope = exportDashboardConfig(state.config, {
+      applicationVersion: APPLICATION_VERSION,
+    });
+    const blob = new Blob([JSON.stringify(envelope, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileNameFor(state.config.metadata.title);
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = async (file: File) => {
+    let payload: unknown;
+
+    try {
+      payload = JSON.parse(await file.text());
+    } catch {
+      setImportFailed(true);
+      return;
+    }
+
+    const result = importDashboardConfig(payload);
+
+    if (!result.ok) {
+      setImportFailed(true);
+      return;
+    }
+
+    if (!window.confirm(translate("builder.import.confirm"))) return;
+
+    setImportFailed(false);
+    store.getState().importConfig(result.value);
+  };
 
   return (
     <header className={joinClassNames("nama-toolbar", className)}>
@@ -74,6 +130,31 @@ export function DashboardToolbar({ className }: { className?: string }) {
         </div>
 
         <div className="nama-toolbar__group" role="group">
+          <button type="button" className="nama-button" onClick={handleExport}>
+            {translate("builder.toolbar.export")}
+          </button>
+          <button
+            type="button"
+            className="nama-button"
+            disabled={!interactive}
+            onClick={() => fileInput.current?.click()}
+          >
+            {translate("builder.toolbar.import")}
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) void handleImport(file);
+            }}
+          />
+        </div>
+
+        <div className="nama-toolbar__group" role="group">
           {BREAKPOINTS.map((breakpoint) => (
             <button
               key={breakpoint}
@@ -126,6 +207,12 @@ export function DashboardToolbar({ className }: { className?: string }) {
           </button>
         ) : null}
       </div>
+
+      {importFailed ? (
+        <div className="nama-notice nama-notice--error" role="alert">
+          {translate("builder.import.error")}
+        </div>
+      ) : null}
     </header>
   );
 }

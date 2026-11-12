@@ -78,6 +78,8 @@ export interface DashboardList {
 export interface CreateDashboardRequest {
   name: string;
   description?: string;
+  /** Optional starting configuration; validated like any saved draft. */
+  config?: DashboardConfig;
 }
 
 export interface UpdateDashboardRequest {

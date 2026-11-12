@@ -94,6 +94,8 @@ export interface EditorStoreActions {
     },
   ): void;
   updateMetadata(patch: { title?: string }): void;
+  /** Replaces the draft with an imported configuration, keeping it unsaved. */
+  importConfig(config: DashboardConfig): void;
   setVariables(variables: readonly DashboardVariable[]): void;
   setFilters(filters: readonly DashboardFilter[]): void;
   /** Renaming a variable rewrites widget interactions that referenced it. */
@@ -308,6 +310,11 @@ export function createEditorStore(options: CreateEditorStoreOptions): EditorStor
       updateMetadata(patch) {
         const state = get();
         commit(updateMetadataInConfig(state.config, patch));
+      },
+
+      importConfig(config) {
+        set({ selectedWidgetId: null });
+        commit(config);
       },
 
       setVariables(variables) {

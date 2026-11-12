@@ -1473,10 +1473,17 @@ components:
 
     CreateDashboardRequest:
       type: object
-      required: [name]
+      description: |
+        Either `name` (creates an empty dashboard) or `config` (creates a
+        dashboard from a template or an imported configuration) is required.
+        When both are present, `name` renames the supplied configuration.
+      anyOf:
+        - required: [name]
+        - required: [config]
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
         description: { type: string, maxLength: 2000 }
+        config: { $ref: '#/components/schemas/DashboardConfig' }
     UpdateDashboardRequest:
       type: object
       properties:

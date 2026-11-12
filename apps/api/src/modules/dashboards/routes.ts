@@ -5,6 +5,7 @@ import {
   createId,
   issuesFromZod,
   parseDashboardConfig,
+  type DashboardConfig,
   type ValidationIssue,
 } from "@nama/dashboard-types";
 import { z } from "zod";
@@ -28,10 +29,16 @@ import { parseIfMatch, toDraft, toSummary, toVersionSummary, toView } from "./se
 
 const createSchema = z
   .object({
-    name: z.string().trim().min(1).max(200),
+    name: z.string().trim().min(1).max(200).optional(),
     description: z.string().max(2000).optional(),
+    /** Creates the dashboard with an imported or templated configuration. */
+    config: z.unknown().optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.name !== undefined || value.config !== undefined, {
+    message: "name or config is required",
+    path: ["name"],
+  });
 
 const updateSchema = z
   .object({
@@ -142,15 +149,34 @@ export function registerDashboardRoutes(
       if (!parsed.success) throw validationFailed(issuesFromZod(parsed.error));
 
       const timestamp = now().toISOString();
-      const config = createEmptyDashboardConfig(parsed.data.name);
-      if (parsed.data.description) {
-        config.metadata.description = parsed.data.description;
+      let config: DashboardConfig;
+
+      if (parsed.data.config === undefined) {
+        config = createEmptyDashboardConfig(parsed.data.name ?? "Untitled dashboard");
+        if (parsed.data.description) {
+          config.metadata.description = parsed.data.description;
+        }
+      } else {
+        const result = parseDashboardConfig(parsed.data.config);
+        if (!result.ok) throw validationFailure(result.issues);
+        config = {
+          ...result.value,
+          metadata: {
+            ...result.value.metadata,
+            ...(parsed.data.name === undefined ? {} : { title: parsed.data.name }),
+            ...(parsed.data.description === undefined
+              ? {}
+              : { description: parsed.data.description }),
+          },
+        };
       }
+
+      const name = (parsed.data.name ?? config.metadata.title).trim();
 
       const record: DashboardRecord = {
         id: createId(),
         organizationId: auth.organization.id,
-        name: parsed.data.name,
+        name,
         draftConfig: config,
         publishedConfig: null,
         revision: 1,

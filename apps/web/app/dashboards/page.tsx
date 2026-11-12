@@ -8,6 +8,7 @@ import type { DashboardList, DashboardSummary, SessionPayload } from "@nama/api-
 import { WorkspaceGate } from "@/components/workspace-gate";
 import { apiClient } from "@/lib/api";
 import { errorMessage } from "@/lib/error-message";
+import { DASHBOARD_TEMPLATES, findTemplate } from "@/lib/templates";
 
 export default function DashboardsPage() {
   return (
@@ -20,10 +21,14 @@ function DashboardListPage({ session }: { session: SessionPayload }) {
   const [list, setList] = useState<DashboardList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [templateId, setTemplateId] = useState("");
   const [creating, setCreating] = useState(false);
 
   const canCreate = session.permissions.includes("dashboard.create");
   const canEdit = session.permissions.includes("dashboard.update");
+  const templateDescription = templateId
+    ? findTemplate(templateId)?.description
+    : undefined;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -50,7 +55,10 @@ function DashboardListPage({ session }: { session: SessionPayload }) {
     setError(null);
 
     try {
-      const view = await apiClient.createDashboard({ name: title });
+      const template = templateId ? findTemplate(templateId) : undefined;
+      const view = await apiClient.createDashboard(
+        template ? { name: title, config: template.create(title) } : { name: title },
+      );
       router.push(`/dashboards/${view.id}`);
     } catch (failure) {
       setError(errorMessage(failure));
@@ -86,6 +94,22 @@ function DashboardListPage({ session }: { session: SessionPayload }) {
               required
               placeholder="Operations overview"
             />
+          </label>
+          <label className="app-field">
+            <span>Template</span>
+            <select
+              className="app-input"
+              value={templateId}
+              onChange={(event) => setTemplateId(event.target.value)}
+            >
+              <option value="">Blank dashboard</option>
+              {DASHBOARD_TEMPLATES.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+            {templateDescription ? <span>{templateDescription}</span> : null}
           </label>
           <button
             type="submit"
