@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-**Status:** Active — M0, M1, M2, M3 and M3.5 complete (2026-11-12)
+**Status:** Active — M0, M1, M2, M3, M3.5 and M4 complete (2026-11-12)
 **Date:** 2026-11-12
 
 Milestones have review gates. Do not begin the next milestone until the current
@@ -17,7 +17,7 @@ engineer should expect roughly 1.8× the elapsed time.
 | M2 | Contracts and schemas | 1.5 weeks | Valid/invalid configs behave; migration tests pass | Complete |
 | M3 | SDK foundation | 2 weeks | Separate React app renders without the web app | Complete |
 | M3.5 | Walking skeleton (monitoring) | 2 weeks | Login → KPI + line → save/publish/view in CI | Complete |
-| M4 | Visual editor | 3 weeks | Edit, move/resize, draft/publish/restore, 409 flow | Not started |
+| M4 | Visual editor | 3 weeks | Edit, move/resize, draft/publish/restore, 409 flow | Complete |
 | M5 | Visualization system | 2.5 weeks | Multiple widget types from validated config | Not started |
 | M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI | Not started |
 | M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced | Not started |
@@ -125,7 +125,7 @@ Browser-level automation in CI is deferred (technical debt).
 
 **Gate:** M3.5 precedes M4. The full editor is not built on an unproven slice.
 
-## M4 — Visual editor
+## M4 — Visual editor (complete 2026-11-12)
 
 **Tasks:** React Grid Layout v2 with the required container-width API and a
 React 19 compatibility test (fallback to 1.5.x only with a recorded decision);
@@ -133,9 +133,30 @@ widget insertion; drag/resize on the LTR canvas; per-breakpoint layout editing;
 selection; settings panel; toolbar; save/publish/restore callbacks; `409`
 conflict handling; undo/redo (50 entries); preview mode; editor tests.
 
+**Delivered:** React Grid Layout 2.3.0 canvas using `useContainerWidth` and
+`noCompactor`, with a React 19 integration test; a Zustand draft store inside
+`@nama/dashboard-builder` (add/remove/select, keyboard and pointer move/resize,
+per-breakpoint materialize-on-edit, 50-entry undo/redo, preview, dirty and save
+phases); `DashboardEditor`, `DashboardToolbar`, `WidgetPalette` and
+`WidgetSettings`; provider `onChange`/`onSave`/`onPublish`/`onConflict` wiring
+with `RevisionConflictError`; version listing and restore in the API and web
+app; host-owned conflict recovery through the editor `children` slot; widget
+plugins can declare creation defaults (`defaultQuery`, `defaultDataSourceId`).
+The web editor now renders the SDK editor instead of its own store.
+
 **Acceptance:** a user creates a dashboard, adds/configures widgets,
 moves/resizes them, saves a draft, publishes, reloads and restores a version.
 Concurrent stale saves are rejected visibly instead of overwriting.
+
+**Verified 2026-11-12:** a headless-browser walkthrough created a dashboard,
+added KPI and line widgets with live data, dragged and resized items, switched
+breakpoints and edited a tablet layout, renamed a widget, undid/redid, previewed,
+saved (revision 1→2), published (2→3), restored a version (3→4), saved from a
+second tab (4→5) and observed the stale save rejected with the conflict banner
+and current revision; "Reload latest draft" recovered the editor at revision 5.
+`pnpm lint`, `format:check`, `typecheck`, `test`, `build`, `verify:workspace`
+and `verify:consumer` pass. The walkthrough is manual; a CI browser suite is
+still deferred (technical debt).
 
 ## M5 — Visualization system
 

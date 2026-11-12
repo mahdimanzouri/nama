@@ -33,7 +33,7 @@ truth for what ships.
 | `echarts` | 6.1.0 | Apache-2.0 | Charts | Pin v6 major; import only used modules; bundle budget |
 | `next-intl` | 4.15.0 | MIT | Web app i18n | Web only; never in SDK; verify Next 16 compatibility at M1 |
 | `zod` | 4.6.7 | MIT | Validation | Shared schema version across packages |
-| `zustand` | 5.1.0 | MIT | Editor state (`apps/web` editor store) | Internal implementation detail; not re-exported by the SDK |
+| `zustand` | 5.1.0 | MIT | Editor draft state (inside `dashboard-builder`) | Internal implementation detail; not re-exported by the SDK |
 | `@tanstack/react-query` | 5.107.1 | MIT | Server state | Snapshot queries in the builder |
 | `fastify` | 5.12.8 | MIT | API framework | Requires Node ≥ 20; repo runs Node 24 |
 | `@fastify/cookie` | 11.1.5 | MIT | Session/CSRF cookies | Session and CSRF cookie parsing and signing |
@@ -72,7 +72,10 @@ Assessment:
   every lockfile change.
 
 M3.5 added `@fastify/cookie`, `@node-rs/argon2`, `zustand` and `vitest` — all
-MIT; the lockfile was re-verified with `pnpm licenses list` on 2026-11-12.
+MIT; the lockfile was re-verified with `pnpm licenses list` on 2026-11-12. M4
+moved `zustand` into `@nama/dashboard-builder` and added `react-grid-layout`
+2.3.0 (MIT), which brings `react-resizable` and `react-draggable` (both MIT). No
+new license categories were introduced.
 
 ## Not yet verified (verify at M1)
 
@@ -92,8 +95,14 @@ MIT; the lockfile was re-verified with `pnpm licenses list` on 2026-11-12.
   container-width hook.
 - The library provides no RTL support; drag/resize math is LTR-only. This is the
   reason for the canvas decision (ADR-005).
-- Verify React 19.3 compatibility with an integration test in M4. Keep 1.5.x as
-  the documented fallback; switching requires a recorded decision.
+- React 19.3 compatibility was verified in M4 by
+  `packages/dashboard-builder/src/editor/__tests__/grid.test.tsx` and a browser
+  walkthrough. Keep 1.5.x as the documented fallback; switching requires a
+  recorded decision.
+- RGL v2 ships `css/styles.css`, but the SDK keeps a single documented
+  stylesheet export: the required grid and resize rules are reproduced in
+  `@nama/dashboard-builder/styles.css`, so hosts never import a second CSS file.
+  Those rules must be re-checked on every RGL upgrade (technical debt).
 
 ### Apache ECharts 6.x
 

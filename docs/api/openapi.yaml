@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
   title: Nama Dashboard Platform API
-  version: 0.2.0-m3.5
+  version: 0.3.0-m4
   description: |
-    Contract for the Nama dashboard platform API. The M3.5 walking skeleton
-    implements authentication, dashboard list/create/draft/publish, the published
-    dashboard read and query execution; remaining paths are proposals. Management
-    operations use REST; live updates use `/ws/v1` (see
+    Contract for the Nama dashboard platform API. The M4 editor slice implements
+    authentication, dashboard list/create/draft/publish/restore, version listing,
+    the published dashboard read and query execution; remaining paths are
+    proposals. Management operations use REST; live updates use `/ws/v1` (see
     docs/architecture/realtime-protocol.md).
 
     Conventions:
@@ -17,7 +17,7 @@ info:
     - Timestamps are UTC ISO-8601. IDs are UUIDv7.
     - Errors use the ErrorEnvelope with a stable code and request ID.
 
-    `x-m0-status` values: `implemented` (served by apps/api in M3.5), `proposed`
+    `x-m0-status` values: `implemented` (served by apps/api), `proposed`
     (contract reviewed, shapes may still change), `stub` (path reserved; detailed
     schema arrives with its milestone).
 servers:
@@ -310,7 +310,8 @@ paths:
       tags: [Dashboard versions]
       operationId: listDashboardVersions
       summary: List published versions
-      x-m0-status: proposed
+      description: Requires dashboard.read. Summaries only; version configuration is not returned.
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -333,8 +334,8 @@ paths:
       tags: [Dashboard versions]
       operationId: restoreDashboardVersion
       summary: Restore a version as a new draft
-      description: Does not publish. Increments revision and clears editor history in the client.
-      x-m0-status: proposed
+      description: Requires dashboard.update. Does not publish; increments the revision and returns the new draft.
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1389,17 +1390,12 @@ components:
 
     DashboardVersion:
       type: object
-      required: [id, dashboardId, revision, createdAt]
+      required: [id, revision, title, createdAt]
       properties:
         id: { type: string, format: uuid }
-        dashboardId: { type: string, format: uuid }
         revision: { type: integer }
-        createdBy: { type: string, format: uuid }
+        title: { type: string }
         createdAt: { type: string, format: date-time }
-        config:
-          allOf:
-            - $ref: '#/components/schemas/DashboardConfig'
-          nullable: true
     VersionList:
       type: object
       required: [items, pagination]

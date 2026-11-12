@@ -19,6 +19,8 @@ export type {
   DashboardDraft,
   DashboardList,
   DashboardSummary,
+  DashboardVersionList,
+  DashboardVersionSummary,
   DashboardView,
   LoginRequest,
   QueryRequest,

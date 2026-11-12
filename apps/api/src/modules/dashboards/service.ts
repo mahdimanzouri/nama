@@ -3,6 +3,7 @@ import type { DashboardConfig } from "@nama/dashboard-types";
 import { badRequest } from "../../infrastructure/errors.ts";
 import type {
   DashboardRecord,
+  DashboardVersionRecord,
   SessionRecord,
   Store,
 } from "../../infrastructure/store.ts";
@@ -26,6 +27,13 @@ export interface DraftPayload {
   config: DashboardConfig;
   revision: number;
   updatedAt: string;
+}
+
+export interface DashboardVersionSummary {
+  id: string;
+  revision: number;
+  title: string;
+  createdAt: string;
 }
 
 export function toSummary(record: DashboardRecord): DashboardSummary {
@@ -56,6 +64,17 @@ export function toDraft(record: DashboardRecord): DraftPayload {
     config: record.draftConfig,
     revision: record.revision,
     updatedAt: record.updatedAt,
+  };
+}
+
+export function toVersionSummary(
+  version: DashboardVersionRecord,
+): DashboardVersionSummary {
+  return {
+    id: version.id,
+    revision: version.revision,
+    title: version.config.metadata.title,
+    createdAt: version.createdAt,
   };
 }
 

@@ -8,6 +8,7 @@ import {
   resolveTheme,
   type Direction,
   type ErasedWidgetPlugin,
+  type RevisionConflictError,
 } from "@nama/dashboard-core";
 import {
   dashboardConfigSchema,
@@ -19,6 +20,7 @@ import {
 } from "@nama/dashboard-types";
 
 import { DashboardRuntimeContext, type DashboardRuntime } from "./context";
+import type { DashboardPublishHandler, DashboardSaveHandler } from "./editor/types";
 import { useSystemPrefersDark } from "./media";
 
 export interface DashboardProviderProps {
@@ -26,6 +28,9 @@ export interface DashboardProviderProps {
   config: DashboardConfig;
   /** Last known server revision; conflict handling uses it from M4. */
   revision?: number;
+  /** Published revision metadata shown by the editor; the viewer ignores it. */
+  publishedAt?: string | null;
+  publishedRevision?: number | null;
   /** Stable dashboard id passed to data adapters. */
   dashboardId?: string;
   locale: string;
@@ -43,6 +48,15 @@ export interface DashboardProviderProps {
   widgets?: readonly ErasedWidgetPlugin[];
   /** Share a cache when the host already owns one. */
   queryClient?: QueryClient;
+
+  /** Controlled mode: called with every committed configuration. */
+  onChange?: (config: DashboardConfig) => void;
+  /** Uncontrolled mode: persists the draft; reject on 409 to signal a conflict. */
+  onSave?: DashboardSaveHandler;
+  /** Publishes the saved draft. Omit to hide the publish action. */
+  onPublish?: DashboardPublishHandler;
+  /** Notified after a `REVISION_CONFLICT` rejection of save or publish. */
+  onConflict?: (error: RevisionConflictError) => void;
 
   children: ReactNode;
 }
@@ -68,6 +82,8 @@ function createQueryClient(): QueryClient {
 export function DashboardProvider({
   config,
   revision = 0,
+  publishedAt = null,
+  publishedRevision = null,
   dashboardId = "dashboard",
   locale,
   direction,
@@ -78,6 +94,10 @@ export function DashboardProvider({
   realtimeAdapter,
   widgets,
   queryClient,
+  onChange,
+  onSave,
+  onPublish,
+  onConflict,
   children,
 }: DashboardProviderProps) {
   const [defaultClient] = useState(createQueryClient);
@@ -92,11 +112,17 @@ export function DashboardProvider({
     [locale, direction, messages, timezone],
   );
   const resolvedTimeZone = timezone ?? parsedConfig.settings.timezone ?? "UTC";
+  const editor = useMemo(
+    () => ({ onChange, onSave, onPublish, onConflict }),
+    [onChange, onSave, onPublish, onConflict],
+  );
 
   const runtime = useMemo<DashboardRuntime>(
     () => ({
       config: parsedConfig,
       revision,
+      publishedAt,
+      publishedRevision,
       dashboardId,
       i18n,
       theme: { mode: theme, resolved: resolvedTheme, tokens },
@@ -104,10 +130,13 @@ export function DashboardProvider({
       dataAdapter,
       realtimeAdapter,
       timezone: resolvedTimeZone,
+      editor,
     }),
     [
       parsedConfig,
       revision,
+      publishedAt,
+      publishedRevision,
       dashboardId,
       i18n,
       theme,
@@ -117,6 +146,7 @@ export function DashboardProvider({
       dataAdapter,
       realtimeAdapter,
       resolvedTimeZone,
+      editor,
     ],
   );
 

@@ -67,6 +67,18 @@ export interface RevisionResponse {
   updatedAt: string;
 }
 
+export interface DashboardVersionSummary {
+  id: string;
+  revision: number;
+  title: string;
+  createdAt: string;
+}
+
+export interface DashboardVersionList {
+  items: DashboardVersionSummary[];
+  pagination: { page: number; pageSize: number; total: number };
+}
+
 export interface ApiErrorBody {
   code: string;
   message: string;

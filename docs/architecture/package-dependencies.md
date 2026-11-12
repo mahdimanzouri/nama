@@ -1,6 +1,6 @@
 # Package Dependencies
 
-**Status:** Implemented through M3.5 (2026-11-12)
+**Status:** Implemented through M4 (2026-11-12)
 
 ## Initial packages (created in M1)
 
@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | `@nama/dashboard-types` | Public types and Zod schemas for dashboard config, widgets, layout, queries, realtime events, plugin manifests | `zod` | — |
 | `@nama/dashboard-core` | Host-agnostic runtime: registries, widget resolution, layout helpers, i18n, theme tokens, query helpers | `@nama/dashboard-types`, `zod` | `react` (types only) |
-| `@nama/dashboard-builder` | Public React API and UI: provider, viewer, renderer, hooks, editor (M4), stylesheet | `@nama/dashboard-types`, `@nama/dashboard-core`, `@tanstack/react-query` | `react`, `react-dom` |
+| `@nama/dashboard-builder` | Public React API and UI: provider, viewer, renderer, hooks, editor, stylesheet | `@nama/dashboard-types`, `@nama/dashboard-core`, `@tanstack/react-query`, `zustand`, `react-grid-layout` | `react`, `react-dom` |
 | `@nama/api-client` | Typed HTTP transport for the platform API: requests, cookie/CSRF handling, `ApiError` mapping | `@nama/dashboard-types` (query types) | — |
 
 Rules:
@@ -17,21 +17,21 @@ Rules:
   only what the foundation needed.
 - **M3 decision:** TanStack Query lives in `dashboard-builder`, not
   `dashboard-core`. Core must stay free of React runtime imports; caching and
-  hooks are React concerns. `zustand` (editor state), `react-grid-layout` (M4)
-  and `echarts` (M5) follow the same rule: whichever package owns the code owns
-  the dependency.
-- **M3.5 state:** `api-client` is hand-written against `openapi.yaml` and depends
-  on `dashboard-types` for query contracts. `apps/web` links `builder`,
-  `dashboard-types` and `api-client`, and owns `zustand` for editor state and
-  `@tanstack/react-query` through the builder. `apps/api` runs on `fastify`,
-  `@fastify/cookie`, `@node-rs/argon2`, `zod` and `dashboard-types`.
+  hooks are React concerns. `zustand` (editor state) and `react-grid-layout`
+  (M4 canvas) follow the same rule; `echarts` (M5) will too. Whichever package
+  owns the code owns the dependency.
+- **M4 state:** the editor moved into `dashboard-builder`, so `zustand` and
+  `react-grid-layout` are builder runtime dependencies and `apps/web` no longer
+  owns editor state. `apps/web` links `builder`, `dashboard-types` and
+  `api-client`; `apps/api` runs on `fastify`, `@fastify/cookie`,
+  `@node-rs/argon2`, `zod` and `dashboard-types`.
 - React and React DOM are **peer dependencies** of every React package to avoid
   duplicate React copies.
 - No package imports from `apps/web` or `apps/api`.
 - The API may depend on `dashboard-types` for shared request/response shapes, but
   never on React packages.
-- `zustand` will be an internal implementation detail of the editor; it is not
-  re-exported as public API.
+- `zustand` is an internal implementation detail of the editor; it is not
+  re-exported as public API. Hooks and components are the supported surface.
 
 ## Target-only packages (not created in M1)
 
@@ -53,8 +53,8 @@ Rules:
 ```mermaid
 graph TD
   types["@nama/dashboard-types\n(types + zod)"]
-  core["@nama/dashboard-core\n(runtime, editor, layout, data,\nrealtime, built-in widgets)"]
-  builder["@nama/dashboard-builder\n(public React API + UI)"]
+  core["@nama/dashboard-core\n(runtime, registry, layout, i18n,\ntheme, query keys)"]
+  builder["@nama/dashboard-builder\n(provider, viewer, editor, canvas,\nrenderer, hooks, widgets)"]
   client["@nama/api-client\n(OpenAPI typed client)"]
   web["apps/web (Next.js)"]
   api["apps/api (Fastify)"]

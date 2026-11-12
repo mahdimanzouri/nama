@@ -6,15 +6,12 @@ import {
 } from "@nama/dashboard-core";
 import type { DashboardWidget } from "@nama/dashboard-types";
 
+import { joinClassNames } from "./classnames";
 import { useDashboardRuntime } from "./context";
 import { WidgetErrorBoundary } from "./error-boundary";
 import { useWidgetQuery } from "./widget-query";
 
 const EMPTY_FILTERS: ResolvedFilters = Object.freeze({});
-
-function joinClassNames(...values: Array<string | undefined>): string {
-  return values.filter(Boolean).join(" ");
-}
 
 function useElementSize(): [
   (element: HTMLDivElement | null) => void,

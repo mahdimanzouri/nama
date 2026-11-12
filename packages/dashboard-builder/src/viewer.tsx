@@ -1,11 +1,8 @@
 import type { ReactNode } from "react";
 
 import { DashboardCanvas } from "./canvas";
+import { joinClassNames } from "./classnames";
 import { useDashboardRuntime } from "./context";
-
-function joinClassNames(...values: Array<string | undefined>): string {
-  return values.filter(Boolean).join(" ");
-}
 
 export interface DashboardViewerProps {
   className?: string;

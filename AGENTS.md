@@ -62,14 +62,14 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M3.5 (walking skeleton) is complete and accepted (2026-11-12); M4 (editor) is the
-next milestone and has not started. The workspace contains `apps/web`, `apps/api`,
-`examples/standalone-consumer` and exactly four packages:
-`@nama/dashboard-types` (contracts), `@nama/dashboard-core` (host-agnostic
-runtime: plugin contract, registry, query keys, i18n, layout, theme),
-`@nama/dashboard-builder` (React provider, viewer, canvas, renderer, hooks) and
-`@nama/api-client` (hand-written typed transport until M6 codegen). Do not create
-the target-only packages listed in
+M4 (visual editor) is complete and awaiting acceptance (2026-11-12); M5
+(visualization system) is the next milestone and has not started. The workspace
+contains `apps/web`, `apps/api`, `examples/standalone-consumer` and exactly four
+packages: `@nama/dashboard-types` (contracts), `@nama/dashboard-core`
+(host-agnostic runtime: plugin contract, registry, query keys, i18n, layout,
+theme), `@nama/dashboard-builder` (React provider, viewer, editor, canvas,
+renderer, hooks) and `@nama/api-client` (hand-written typed transport until M6
+codegen). Do not create the target-only packages listed in
 `docs/architecture/package-dependencies.md`.
 
 The API keeps all state in memory and reseeds on restart. Demo accounts come from
@@ -78,7 +78,7 @@ The API keeps all state in memory and reseeds on restart. Demo accounts come fro
 (`viewer@nama.local` / `nama-viewer-123`). The web app proxies `/api/*` to
 `NAMA_API_URL` (default `http://localhost:3001`).
 
-Working rules for M4 and later:
+Working rules for M5 and later:
 
 1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
    `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`,
@@ -94,8 +94,11 @@ Working rules for M4 and later:
 6. Built output must keep `"use client"`; `pnpm verify:consumer` must stay green.
 7. Keep viewer responses free of draft data: `GET /v1/dashboards/:id` returns
    `publishedConfig` and `publishedRevision` only.
-8. Preserve `If-Match` conflict handling and the 409 `REVISION_CONFLICT` payload
-   when moving draft ownership into the SDK.
-9. Do not implement M4 SDK editor APIs while closing M3.5.
+8. Preserve `If-Match` conflict handling and the 409 `REVISION_CONFLICT` payload;
+   draft ownership and `onSave`/`onPublish`/`onConflict` live in the SDK editor.
+9. Keep the editor draft inside `dashboard-builder`; hosts must not reimplement
+   editor state. React Grid Layout child components must forward injected props,
+   refs, styles and children.
+10. Do not implement M5 widget or chart work while closing M4.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

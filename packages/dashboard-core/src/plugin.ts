@@ -3,6 +3,7 @@ import {
   ISSUE_CODES,
   issuesFromZod,
   type DashboardWidget,
+  type QueryDefinition,
   type QueryResult,
   type ValidationIssue,
   type WidgetCapabilities,
@@ -102,6 +103,9 @@ export interface WidgetPlugin<TConfig = unknown> {
   configVersion: number;
   configSchema: ZodType<TConfig>;
   defaultConfig: TConfig;
+  /** Host-agnostic default data binding used when the editor adds the widget. */
+  defaultQuery?: QueryDefinition;
+  defaultDataSourceId?: string;
   migrate?: (config: unknown, fromVersion: number) => TConfig;
   defaultSize: WidgetSize;
   component: WidgetComponent<TConfig>;
@@ -118,6 +122,8 @@ export interface ErasedWidgetPlugin {
   configVersion: number;
   configSchema: ZodType<unknown>;
   defaultConfig: unknown;
+  defaultQuery?: QueryDefinition;
+  defaultDataSourceId?: string;
   migrate?: (config: unknown, fromVersion: number) => unknown;
   defaultSize: WidgetSize;
   component: WidgetComponent<never>;

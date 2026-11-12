@@ -1,7 +1,8 @@
 # SDK Public API Proposal
 
 **Status:** Proposed (M0). The M3 subset is implemented and validated by a
-standalone consumer; see [Implementation status](#m3-implementation-status).
+standalone consumer; M4 added the editor, save/publish/conflict callbacks and
+the React Grid Layout canvas. See [implementation status](#implementation-status).
 
 ## Goals and constraints
 
@@ -24,14 +25,15 @@ declarations and an explicit CSS entry point.
 ```ts
 // @nama/dashboard-builder
 export { DashboardProvider } from "./provider";
-export { Dashboard } from "./dashboard";
+export { Dashboard } from "./dashboard";            // target (M9)
 export { DashboardEditor } from "./editor";
 export { DashboardViewer } from "./viewer";
 export { DashboardCanvas } from "./canvas";
 export { WidgetRenderer } from "./widget-renderer";
 export { WidgetSettings } from "./widget-settings";
+export { WidgetPalette } from "./widget-palette";
 export { DashboardToolbar } from "./toolbar";
-export { DashboardFilters } from "./filters";
+export { DashboardFilters } from "./filters";       // target (M9)
 
 export {
   useDashboard,
@@ -67,12 +69,13 @@ import "@nama/dashboard-builder/styles.css";
 | --- | --- |
 | `DashboardProvider` | Injects config, adapters, locale, direction, theme, messages and save callbacks |
 | `Dashboard` | Composed experience; `editable` selects editor or viewer |
-| `DashboardEditor` | Full editing experience |
+| `DashboardEditor` | Full editing experience; accepts a host `children` slot |
 | `DashboardViewer` | Read-only experience against the published config |
 | `DashboardCanvas` | Grid and widget composition (LTR canvas) |
 | `WidgetRenderer` | Renders one widget by ID or definition |
 | `WidgetSettings` | Renders the selected widget's settings panel |
-| `DashboardToolbar` | Save, undo/redo, preview and controls |
+| `WidgetPalette` | Registered widget types; adding one places it on the active breakpoint |
+| `DashboardToolbar` | Save, publish, undo/redo, preview and breakpoint controls |
 | `DashboardFilters` | Global filters and variables |
 
 ## Provider contract
@@ -84,6 +87,10 @@ interface DashboardProviderProps {
 
   /** Last known server revision for optimistic concurrency. */
   revision?: number;
+
+  /** Published revision metadata; the editor shows it, the viewer ignores it. */
+  publishedAt?: string | null;
+  publishedRevision?: number | null;
 
   /** Stable dashboard id passed to data adapters. */
   dashboardId?: string;
@@ -108,7 +115,17 @@ interface DashboardProviderProps {
   onSave?: (
     config: DashboardConfig,
     context: { revision: number; signal?: AbortSignal },
-  ) => Promise<{ revision: number }>;
+  ) => Promise<{ revision: number; updatedAt?: string }>;
+
+  /** Publishes the saved draft. The host calls the publish endpoint. */
+  onPublish?: (context: {
+    revision: number;
+    signal?: AbortSignal;
+  }) => Promise<{
+    revision: number;
+    publishedRevision?: number;
+    publishedAt?: string;
+  }>;
 
   /** Called when a save is rejected because the server has a newer revision. */
   onConflict?: (error: RevisionConflictError) => void;
@@ -135,9 +152,9 @@ interface RevisionConflictError extends Error {
 
 | Hook | Returns | Notes |
 | --- | --- | --- |
-| `useDashboard()` | Runtime context | Editing state, config access, selected widget |
-| `useDashboardEditor()` | Editor actions | Add, remove, move, resize, undo, redo, save, publish |
-| `useDashboardConfig()` | `{ config, revision }` | Read-only snapshot; `dirty` arrives with the editor |
+| `useDashboard()` | Runtime context | Config access, registry, i18n, theme, adapters |
+| `useDashboardEditor()` | Draft state plus actions | Editor-only; throws outside `DashboardEditor`. Adds `dirty`, `canUndo`, `canRedo`, `canSave`, `canPublish`, `readOnly`, `save()`, `publish()` |
+| `useDashboardConfig()` | `{ config, revision }` | Runtime snapshot; inside the editor use `useDashboardEditor().config` for the draft |
 | `useDashboardLayout()` | `{ breakpoint, columns, rowHeight, gap, items }` | Resolved items inherit from wider breakpoints |
 | `useWidgetRegistry()` | Registry API | Resolve, register, list widget types |
 | `useDataSource()` | Data adapter facade | Execute/subscribe with dashboard variables resolved |
@@ -147,33 +164,52 @@ interface RevisionConflictError extends Error {
 Hooks are stable API. The internal Zustand store is **not** exported; consumers
 must not rely on store shape or action names.
 
-## Controlled and uncontrolled modes
+## Draft, save and conflict semantics
 
-**Controlled**
+The implementation always gives `DashboardEditor` a local draft for its mount:
+the host passes the persisted config and `revision` to the provider, and the
+editor keeps every edit in an internal Zustand store until the host saves or
+publishes it. `revision` defaults to `0` and is used as the `If-Match` value in
+`SaveContext`/`PublishContext`.
 
-- The host owns `config` and `revision`.
-- Editor actions call `onChange` with a new immutable config.
-- The host decides when to persist; the SDK never writes server state in this mode.
-- If the host supplies a new `config` while local edits are pending, the SDK
-  surfaces a conflict instead of silently overwriting. The host resolves it by
-  replacing the config or by asking the user to discard local changes.
+**Callbacks**
 
-**Uncontrolled**
+- `onChange` runs after every committed edit with the complete next config. A
+  drag or resize gesture commits once, so history and change notifications are
+  not emitted per pointer move.
+- `onSave` receives the draft and `{ revision }`; the host sends the revision as
+  `If-Match`. A successful result updates the local revision and clears the
+  dirty flag. Omitting `onSave` hides/disabled save.
+- `onPublish` receives `{ revision }` and publishes the saved draft. The editor
+  saves first when there are unsaved edits. Omitting `onPublish` hides the
+  publish action.
+- `onConflict` runs after a save or publish is rejected with a
+  `RevisionConflictError`; the SDK also records the conflict locally.
 
-- The SDK owns the draft in local state and calls `onSave` on save.
-- `revision` is updated from the resolved save result.
-- `onSave` must reject with `RevisionConflictError` on HTTP 409. The SDK never
-  force-overwrites a newer revision and never clears unsaved edits.
-- Publishing is a separate host callback (via `onSave` metadata or a dedicated
-  toolbar action wired by the host) that calls the publish endpoint.
+**Conflict handling**
 
-In both modes:
+- `onSave`/`onPublish` must reject with `RevisionConflictError` (`code:
+  "REVISION_CONFLICT"`, `currentRevision`) on HTTP 409. The SDK never
+  force-overwrites and never clears unsaved edits on conflict.
+- The editor shows a conflict banner with the expected and current revisions.
+  "Dismiss" keeps editing; "Discard local changes" reverts the draft to the last
+  locally saved config. Neither action talks to the server.
+- Recovery that fetches the server draft is host-owned: the web app passes a
+  `children` element to `DashboardEditor` and calls the draft endpoint itself.
+  A host can also re-render the provider with fresh `config`/`revision`; when
+  local edits are clean the editor adopts the new baseline, and when edits are
+  dirty it records a conflict instead of discarding them.
 
-- Viewers never see draft edits.
+**History and preview**
+
 - Undo/redo history is bounded to 50 entries, scoped to the draft, and cleared
-  on publish or version restore.
-- A drag or resize gesture is one history entry.
-- History entries record the edited breakpoint, not all breakpoints.
+  on publish, version restore and draft replacement.
+- A drag or resize gesture is one history entry, recorded with the edited
+  breakpoint.
+- Preview hides the palette and settings and disables direct manipulation
+  without changing the draft.
+- Viewers never see draft edits; `DashboardViewer` renders the published config
+  the host passes it.
 
 ## Data and realtime injection
 
@@ -204,15 +240,16 @@ A single shared realtime connection serves all subscriptions.
 
 import {
   DashboardProvider,
-  Dashboard,
+  DashboardEditor,
 } from "@nama/dashboard-builder";
 import "@nama/dashboard-builder/styles.css";
 
-export function DashboardPage() {
+export function DashboardPage({ dashboard }: { dashboard: DashboardDraft }) {
   return (
     <DashboardProvider
-      config={dashboardConfig}
+      config={dashboard.config}
       revision={dashboard.revision}
+      publishedRevision={dashboard.publishedRevision}
       locale="fa"
       direction="rtl"
       theme="dark"
@@ -220,11 +257,14 @@ export function DashboardPage() {
       realtimeAdapter={realtimeAdapter}
       onSave={async (config, { revision }) => {
         const res = await api.saveDraft(dashboard.id, config, revision);
-        return { revision: res.revision };
+        return { revision: res.revision, updatedAt: res.updatedAt };
       }}
+      onPublish={async ({ revision }) =>
+        api.publishDashboard(dashboard.id, revision)
+      }
       onConflict={(error) => showConflictDialog(error)}
     >
-      <Dashboard editable dashboardId={dashboard.id} />
+      <DashboardEditor>{/* host-owned conflict recovery */}</DashboardEditor>
     </DashboardProvider>
   );
 }
@@ -256,7 +296,9 @@ export function DashboardPage() {
 - [dashboard-schema.md](dashboard-schema.md)
 - [decisions/ADR-005-i18n-theme.md](decisions/ADR-005-i18n-theme.md)
 
-## M3 implementation status
+## Implementation status
+
+### M3 (SDK foundation)
 
 Implemented in `@nama/dashboard-builder`:
 
@@ -268,12 +310,23 @@ Implemented in `@nama/dashboard-builder`:
   from `@nama/dashboard-core`
 - `@nama/dashboard-builder/styles.css`
 
-Not yet exported, because the code does not exist:
+### M4 (visual editor)
 
-- `Dashboard`, `DashboardEditor`, `WidgetSettings`, `DashboardToolbar`,
-  `DashboardFilters`, `useDashboardEditor` — M4
-- `onChange`, `onSave`, `onConflict` behavior; the provider is read-only until the
-  editor owns a draft
+- `DashboardEditor` (with a host `children` slot), `DashboardToolbar`,
+  `WidgetPalette`, `WidgetSettings`, `useDashboardEditor`
+- Draft store with add/remove/select, keyboard and pointer move/resize,
+  per-breakpoint materialize-on-edit, 50-entry undo/redo, preview mode,
+  dirty tracking and save/publish phases
+- `onChange`, `onSave`, `onPublish` and `onConflict` wiring against the provider
+- `RevisionConflictError` mapping to an in-editor conflict banner
+- React Grid Layout 2.3.0 canvas (`GridLayout`, `useContainerWidth`,
+  `noCompactor`) with the generated grid CSS in `styles.css`
+- Widget plugins may declare `defaultQuery` and `defaultDataSourceId`, applied
+  when a widget is created
+
+Not yet exported or implemented, because the code does not exist:
+
+- `Dashboard` composed entry point and `DashboardFilters` — M9
 - Built-in widgets — M5
 
 Deliberate differences from the proposal above:
@@ -281,9 +334,14 @@ Deliberate differences from the proposal above:
 - Widget components are **function components** (including `memo`/`forwardRef`
   results). `WidgetSettingsProps` is invariant in its config, so an erased
   `ComponentType` cannot accept concrete plugins without `any`.
-- The canvas positions widgets with a CSS grid. Drag, resize and container-width
-  math arrive with React Grid Layout in M4.
-- `timezone`, `dashboardId` and `queryClient` are optional provider props added
-  during implementation; none is required, so existing hosts are unaffected.
-- `useDashboardConfig` omits `dirty`; controlled writes do not exist yet.
+- The editor canvas uses React Grid Layout; the read-only `DashboardCanvas`
+  (viewer) still uses CSS grid. Both derive from the same `LayoutItem`s, but a
+  pixel-parity test between the two is not yet written.
+- `timezone`, `dashboardId`, `queryClient`, `publishedAt` and
+  `publishedRevision` are optional provider props; none is required.
+- `useDashboardConfig` reflects the runtime config and has no `dirty` field;
+  draft state is read through `useDashboardEditor()`.
+- The conflict banner's discard is local. Fetching the server draft and
+  rebasing the editor is a host responsibility in M4 (the web app renders a
+  reload control through the editor's `children` slot).
 

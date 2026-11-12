@@ -194,6 +194,31 @@ describe("api client", () => {
     expect(calls[0]?.init.method).toBe("POST");
   });
 
+  it("lists versions and restores one with If-Match", async () => {
+    const { calls, fetchImpl } = stubFetch((call) =>
+      call.url.includes("/versions")
+        ? Response.json({
+            items: [{ id: "v1", revision: 3, title: "Ops", createdAt: "now" }],
+            pagination: { page: 1, pageSize: 25, total: 1 },
+          })
+        : Response.json({ config: {}, revision: 5, updatedAt: "later" }),
+    );
+    const client = createApiClient({ fetch: fetchImpl, csrfToken: () => "token" });
+
+    const versions = await client.listDashboardVersions("d1");
+    expect(versions.items[0]?.revision).toBe(3);
+    expect(calls[0]?.url).toBe("/api/v1/dashboards/d1/versions");
+
+    const draft = await client.restoreDashboardVersion("d1", "v1", 4);
+    expect(draft.revision).toBe(5);
+    expect(calls[1]?.url).toBe("/api/v1/dashboards/d1/restore");
+    expect(calls[1]?.init.method).toBe("POST");
+    expect(calls[1]?.init.body).toBe(JSON.stringify({ versionId: "v1" }));
+    const headers = calls[1]?.init.headers as Record<string, string>;
+    expect(headers["if-match"]).toBe('"4"');
+    expect(headers["x-csrf-token"]).toBe("token");
+  });
+
   it("falls back to a generic error when the body is not JSON", async () => {
     const { fetchImpl } = stubFetch(() => new Response("gateway error", { status: 502 }));
     const client = createApiClient({ fetch: fetchImpl });

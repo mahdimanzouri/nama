@@ -18,7 +18,14 @@ import {
 } from "../../infrastructure/errors.ts";
 import type { DashboardRecord, Store } from "../../infrastructure/store.ts";
 import type { AuthHooks } from "../../http/auth.ts";
-import { findDashboard, parseIfMatch, toDraft, toSummary, toView } from "./service.ts";
+import {
+  findDashboard,
+  parseIfMatch,
+  toDraft,
+  toSummary,
+  toVersionSummary,
+  toView,
+} from "./service.ts";
 
 const createSchema = z
   .object({
@@ -39,6 +46,8 @@ const listQuerySchema = z
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict();
+
+const restoreSchema = z.object({ versionId: z.uuid() }).strict();
 
 export interface DashboardRouteDeps {
   store: Store;
@@ -244,6 +253,71 @@ export function registerDashboardRoutes(
       }
 
       return toView(record, auth.permissions);
+    },
+  );
+
+  app.get(
+    "/v1/dashboards/:id/versions",
+    {
+      preHandler: [hooks.authenticate, hooks.requirePermission("dashboard.read")],
+    },
+    async (request) => {
+      const auth = requireAuth(request);
+      const { id } = request.params as { id: string };
+      const record = findDashboard(store, auth.session, id);
+      if (!record) throw notFound("Dashboard not found");
+
+      const query = listQuerySchema.safeParse(request.query);
+      if (!query.success) throw validationFailed(issuesFromZod(query.error));
+
+      const { page, pageSize } = query.data;
+      const versions = store.versions
+        .filter((version) => version.dashboardId === record.id)
+        .sort((left, right) => right.revision - left.revision);
+      const start = (page - 1) * pageSize;
+
+      return {
+        items: versions.slice(start, start + pageSize).map(toVersionSummary),
+        pagination: { page, pageSize, total: versions.length },
+      };
+    },
+  );
+
+  app.post(
+    "/v1/dashboards/:id/restore",
+    {
+      preHandler: [
+        hooks.authenticate,
+        hooks.requireCsrf,
+        hooks.requirePermission("dashboard.update"),
+      ],
+    },
+    async (request) => {
+      const auth = requireAuth(request);
+      const { id } = request.params as { id: string };
+      const record = findDashboard(store, auth.session, id);
+      if (!record) throw notFound("Dashboard not found");
+
+      const expectedRevision = parseIfMatch(request.headers["if-match"]);
+      if (record.revision !== expectedRevision) {
+        throw revisionConflict(record.revision);
+      }
+
+      const parsed = restoreSchema.safeParse(request.body);
+      if (!parsed.success) throw validationFailed(issuesFromZod(parsed.error));
+
+      const version = store.versions.find(
+        (entry) => entry.id === parsed.data.versionId && entry.dashboardId === record.id,
+      );
+      if (!version) throw notFound("Version not found");
+
+      const timestamp = now().toISOString();
+      record.draftConfig = version.config;
+      record.name = version.config.metadata.title;
+      record.revision += 1;
+      record.updatedAt = timestamp;
+
+      return toDraft(record);
     },
   );
 }

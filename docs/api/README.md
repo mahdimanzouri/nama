@@ -1,10 +1,10 @@
 # API Conventions
 
-**Status:** M3.5 implemented slice (2026-11-12). [`openapi.yaml`](openapi.yaml)
+**Status:** M4 implemented slice (2026-11-12). [`openapi.yaml`](openapi.yaml)
 describes the contract; operations marked `x-m0-status: implemented` are served
 by `apps/api` today. Code generation remains M6 work.
 
-## Implemented endpoints (M3.5)
+## Implemented endpoints (M4)
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -17,10 +17,12 @@ by `apps/api` today. Code generation remains M6 work.
 | `GET` | `/v1/dashboards/{id}/draft` | Editor-only draft |
 | `PUT` | `/v1/dashboards/{id}/draft` | `If-Match` required; validates the full config |
 | `POST` | `/v1/dashboards/{id}/publish` | Copies draft, increments revision, records version |
+| `GET` | `/v1/dashboards/{id}/versions` | Paginated version summaries, newest first, retained to 50 |
+| `POST` | `/v1/dashboards/{id}/restore` | `If-Match` required; copies a version into the draft and increments revision |
 | `POST` | `/v1/queries/execute` | Demo query engine; 15 s / 10,000 rows / 5 MiB limits |
 
-State is in memory in M3.5 and resets when the API restarts; M6 replaces the
-store with Postgres behind the same service layer.
+State is in memory in M4 and resets when the API restarts; M6 replaces the store
+with Postgres behind the same service layer.
 
 ## Versioning and scope
 

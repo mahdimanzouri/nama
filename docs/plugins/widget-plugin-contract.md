@@ -3,8 +3,9 @@
 **Status:** Manifest and capability schemas implemented in M2
 (`widgetManifestSchema`, `widgetCapabilitiesSchema` in `@nama/dashboard-types`).
 Runtime `WidgetPlugin`, render-prop and settings interfaces implemented in M3
-(`@nama/dashboard-core`). This file is the normative source for the widget
-contract; other documents link here instead of restating it.
+(`@nama/dashboard-core`). M4 added the optional `defaultQuery` and
+`defaultDataSourceId` creation defaults. This file is the normative source for
+the widget contract; other documents link here instead of restating it.
 
 ## Manifest
 
@@ -47,6 +48,18 @@ interface WidgetPlugin<TConfig = unknown> {
 
   defaultSize: { w: number; h: number };
 
+  /**
+   * Query used when the editor creates this widget without an explicit query.
+   * The dashboard or widget may override it afterwards.
+   */
+  defaultQuery?: QueryDefinition;
+
+  /**
+   * Data source used when the editor creates this widget. The widget-level id
+   * wins over the dashboard default, which wins over this value.
+   */
+  defaultDataSourceId?: string;
+
   component: (props: WidgetRenderProps<TConfig>) => ReactNode;
 
   settings?: (props: WidgetSettingsProps<TConfig>) => ReactNode;
@@ -63,6 +76,18 @@ Components are function components; `memo` and `forwardRef` results are accepted
 because they remain callable with the same props. Class components are outside
 the v1 contract: the erased registry form relies on a contravariant props
 signature, and class `defaultProps` makes that impossible to type safely.
+
+Creation defaults resolve in this order when `addWidget` runs:
+
+1. an explicit data source or query passed by the caller;
+2. for the data source only, the source already used by the dashboard (taken
+   from the first existing widget);
+3. the plugin's `defaultDataSourceId` and `defaultQuery`.
+
+`defaultQuery` must be a complete `QueryDefinition`; it is persisted on the new
+widget like any other query, so later plugin releases cannot retroactively change
+an existing dashboard. Omitted defaults leave the widget without a query, and the
+widget renders its empty state until the user configures one.
 
 ## Render props
 

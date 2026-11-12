@@ -1,12 +1,9 @@
 import type { CSSProperties } from "react";
 
+import { joinClassNames } from "./classnames";
 import { useDashboardRuntime } from "./context";
 import { useDashboardLayout } from "./hooks";
 import { WidgetRenderer } from "./widget-renderer";
-
-function joinClassNames(...values: Array<string | undefined>): string {
-  return values.filter(Boolean).join(" ");
-}
 
 type CanvasVariables = CSSProperties & {
   "--nama-columns": number;

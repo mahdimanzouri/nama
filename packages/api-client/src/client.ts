@@ -6,6 +6,7 @@ import type {
   CreateDashboardRequest,
   DashboardDraft,
   DashboardList,
+  DashboardVersionList,
   DashboardView,
   LoginRequest,
   RevisionResponse,
@@ -51,6 +52,16 @@ export interface ApiClient {
     revision: number,
     options?: RequestOptions,
   ): Promise<DashboardView>;
+  listDashboardVersions(
+    id: string,
+    options?: ListDashboardsOptions,
+  ): Promise<DashboardVersionList>;
+  restoreDashboardVersion(
+    id: string,
+    versionId: string,
+    revision: number,
+    options?: RequestOptions,
+  ): Promise<DashboardDraft>;
   executeQuery(request: QueryRequest, options?: RequestOptions): Promise<QueryResult>;
 }
 
@@ -189,6 +200,28 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     publishDashboard(id, revision, requestOptions) {
       return request<DashboardView>(dashboardPath(id, "/publish"), {
         method: "POST",
+        revision,
+        ...requestOptions,
+      });
+    },
+
+    listDashboardVersions(id, listOptions = {}) {
+      const params = new URLSearchParams();
+      if (listOptions.page !== undefined) params.set("page", String(listOptions.page));
+      if (listOptions.pageSize !== undefined) {
+        params.set("pageSize", String(listOptions.pageSize));
+      }
+      const query = params.size > 0 ? `?${params.toString()}` : "";
+
+      return request<DashboardVersionList>(dashboardPath(id, `/versions${query}`), {
+        ...(listOptions.signal ? { signal: listOptions.signal } : {}),
+      });
+    },
+
+    restoreDashboardVersion(id, versionId, revision, requestOptions) {
+      return request<DashboardDraft>(dashboardPath(id, "/restore"), {
+        method: "POST",
+        body: { versionId },
         revision,
         ...requestOptions,
       });

@@ -25,7 +25,9 @@
   "dependencies": {
     "@nama/dashboard-core": "workspace:*",
     "@nama/dashboard-types": "workspace:*",
-    "@tanstack/react-query": "5.107.1"
+    "@tanstack/react-query": "5.107.1",
+    "react-grid-layout": "2.3.0",
+    "zustand": "5.1.0"
   },
   "peerDependencies": {
     "react": "^19.0.0",

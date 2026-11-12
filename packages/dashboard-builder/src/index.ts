@@ -1,5 +1,18 @@
 export { DashboardProvider, type DashboardProviderProps } from "./provider";
 export { DashboardViewer, type DashboardViewerProps } from "./viewer";
+export { DashboardEditor, type DashboardEditorProps } from "./editor/editor";
+export { DashboardToolbar } from "./editor/toolbar";
+export { WidgetSettings, type WidgetSettingsPropsPanel } from "./editor/settings";
+export { WidgetPalette } from "./editor/palette";
+export { useDashboardEditor, type DashboardEditorApi } from "./editor/context";
+export type {
+  DashboardPublishHandler,
+  DashboardSaveHandler,
+  PublishContext,
+  PublishResult,
+  SaveContext,
+  SaveResult,
+} from "./editor/types";
 export { DashboardCanvas, type DashboardCanvasProps } from "./canvas";
 export { WidgetRenderer, type WidgetRendererProps } from "./widget-renderer";
 export { useDataSource, type DashboardDataSource } from "./data-source";

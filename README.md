@@ -7,8 +7,8 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M3.5 (walking skeleton) is complete (2026-11-12).** M4 (editor) is
-next.
+**Milestone M4 (visual editor) is complete and awaiting acceptance (2026-11-12).**
+M5 (visualization system) is next.
 
 The workspace contains:
 
@@ -20,16 +20,19 @@ apps/api                  Fastify 5 service: auth, dashboards, draft/publish,
 packages/dashboard-types  public contracts: constants plus Zod schemas (M2)
 packages/dashboard-core   host-agnostic runtime: plugin contract, registry,
                           query keys, i18n, layout, theme (M3)
-packages/dashboard-builder React provider, viewer, canvas, renderer, hooks (M3)
+packages/dashboard-builder React provider, viewer, editor, grid canvas, hooks
+                          and stylesheet (M3, editor in M4)
 packages/api-client       hand-written typed transport and errors (M3.5)
 examples/standalone-consumer  React app that renders a dashboard via packed
                               tarballs (M3)
 ```
 
-The walking skeleton runs end to end: a user logs in, creates a dashboard with a
-KPI and a line widget, saves and publishes it, and a viewer account sees the
-published configuration only. State is in memory and reseeds on restart; drag and
-resize, realtime and persistence land in M4–M8 — see the
+The walking skeleton runs end to end, and the M4 editor adds direct manipulation:
+a user logs in, creates a dashboard, adds and configures widgets, drags and
+resizes them per breakpoint, saves a draft, publishes it, restores a retained
+version, and a viewer account sees the published configuration only. Stale writes
+are rejected with a visible 409 conflict. State is in memory and reseeds on
+restart; realtime and persistence land in M6–M8 — see the
 [roadmap](docs/implementation/roadmap.md).
 
 ## Architecture documentation

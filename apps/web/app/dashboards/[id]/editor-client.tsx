@@ -2,20 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useStore } from "zustand";
-import {
-  RevisionConflictError,
-  type DashboardDraft,
-  type DashboardView,
-  type SessionPayload,
+import type {
+  DashboardDraft,
+  DashboardVersionSummary,
+  DashboardView,
+  SessionPayload,
 } from "@nama/api-client";
-import { DashboardCanvas, DashboardProvider } from "@nama/dashboard-builder";
-import { PLATFORM_LIMITS, parseDashboardConfig } from "@nama/dashboard-types";
+import {
+  DashboardEditor,
+  DashboardProvider,
+  useDashboardEditor,
+} from "@nama/dashboard-builder";
 
 import { WorkspaceGate } from "@/components/workspace-gate";
 import { apiClient, dataAdapter } from "@/lib/api";
-import { desktopItemFor } from "@/lib/dashboard-config";
-import { createEditorStore, isDirty, type EditorStoreApi } from "@/lib/editor-store";
 import { errorMessage } from "@/lib/error-message";
 import { directionFor } from "@/lib/locale";
 import { WEB_WIDGETS } from "@/lib/widgets";
@@ -110,183 +110,21 @@ function EditorWorkspace({
   initialDraft: DashboardDraft;
   initialView: DashboardView;
 }) {
-  const [store] = useState(() =>
-    createEditorStore({
-      config: initialDraft.config,
-      revision: initialDraft.revision,
-      updatedAt: initialDraft.updatedAt,
-      publishedAt: initialView.publishedAt,
-      publishedConfig: initialView.publishedConfig,
-    }),
-  );
-  const state = useStore(store);
-  const dirty = isDirty(state);
-  const pending = state.phase !== "idle";
-  const canPublish = session.permissions.includes("dashboard.publish");
   const canEdit = session.permissions.includes("dashboard.update");
-
-  async function handleSave(): Promise<{ revision: number; updatedAt: string } | null> {
-    const snapshot = store.getState();
-    if (snapshot.phase !== "idle" || !isDirty(snapshot)) return null;
-
-    const validation = parseDashboardConfig(snapshot.config);
-    if (!validation.ok) {
-      store
-        .getState()
-        .failed(
-          validation.issues
-            .map((issue) => `${issue.path.join(".") || "config"}: ${issue.message}`)
-            .join("; "),
-        );
-      return null;
-    }
-
-    store.getState().beginWork("saving");
-
-    try {
-      const result = await apiClient.saveDashboardDraft(
-        dashboardId,
-        snapshot.config,
-        snapshot.revision,
-      );
-      store.getState().saved(snapshot.config, result.revision, result.updatedAt);
-      return result;
-    } catch (failure) {
-      if (failure instanceof RevisionConflictError) {
-        store.getState().conflicted(failure.currentRevision);
-      } else {
-        store.getState().failed(errorMessage(failure));
-      }
-      return null;
-    }
-  }
-
-  async function handlePublish(): Promise<void> {
-    const snapshot = store.getState();
-    if (snapshot.phase !== "idle") return;
-
-    let revision = snapshot.revision;
-
-    if (isDirty(snapshot)) {
-      const saved = await handleSave();
-      if (!saved) return;
-      revision = saved.revision;
-    }
-
-    store.getState().beginWork("publishing");
-
-    try {
-      const view = await apiClient.publishDashboard(dashboardId, revision);
-      store.getState().published(view);
-    } catch (failure) {
-      if (failure instanceof RevisionConflictError) {
-        store.getState().conflicted(failure.currentRevision);
-      } else {
-        store.getState().failed(errorMessage(failure));
-      }
-    }
-  }
-
-  async function handleReload(): Promise<void> {
-    try {
-      const [draft, view] = await Promise.all([
-        apiClient.getDashboardDraft(dashboardId),
-        apiClient.getDashboard(dashboardId),
-      ]);
-      store.getState().reloaded({
-        config: draft.config,
-        revision: draft.revision,
-        updatedAt: draft.updatedAt,
-        publishedAt: view.publishedAt,
-        publishedConfig: view.publishedConfig,
-      });
-    } catch (failure) {
-      store.getState().failed(errorMessage(failure));
-    }
-  }
+  const canPublish = session.permissions.includes("dashboard.publish");
 
   return (
     <div className="app-stack">
       <header className="app-row app-row--between">
-        <div>
-          <h1 className="app-title">{state.config.metadata.title}</h1>
-          <p className="app-subtitle">
-            Revision {state.revision} ·{" "}
-            {dirty
-              ? "unsaved changes"
-              : `saved ${new Date(state.updatedAt).toLocaleString()}`}{" "}
-            ·{" "}
-            {state.publishedAt
-              ? `published ${new Date(state.publishedAt).toLocaleString()}`
-              : "never published"}
-          </p>
-        </div>
-        <div className="app-row">
-          <Link href="/dashboards" className="app-button">
-            Back
+        <Link href="/dashboards" className="app-button">
+          Back to dashboards
+        </Link>
+        {initialView.publishedAt ? (
+          <Link href={`/dashboards/${dashboardId}/view`} className="app-button">
+            Open published view
           </Link>
-          <button
-            type="button"
-            className="app-button"
-            disabled={!dirty || pending}
-            onClick={() => void handleSave()}
-          >
-            {state.phase === "saving" ? "Saving…" : "Save draft"}
-          </button>
-          <button
-            type="button"
-            className="app-button app-button--primary"
-            disabled={pending || !canPublish}
-            onClick={() => void handlePublish()}
-          >
-            {state.phase === "publishing" ? "Publishing…" : "Publish"}
-          </button>
-          {state.publishedAt ? (
-            <Link href={`/dashboards/${dashboardId}/view`} className="app-button">
-              Open published view
-            </Link>
-          ) : null}
-        </div>
+        ) : null}
       </header>
-
-      {state.conflictRevision !== null ? (
-        <div className="app-notice" role="alert">
-          <p>
-            <strong>This dashboard changed elsewhere.</strong> The server is at revision{" "}
-            {state.conflictRevision}, while this editor is based on revision{" "}
-            {state.revision}. Reload the latest draft before saving again; local changes
-            are not saved.
-          </p>
-          <div className="app-row">
-            <button
-              type="button"
-              className="app-button app-button--primary"
-              onClick={() => void handleReload()}
-            >
-              Reload latest draft
-            </button>
-            <button
-              type="button"
-              className="app-button"
-              onClick={() => store.getState().dismissConflict()}
-            >
-              Keep editing
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {state.error ? (
-        <div className="app-notice app-notice--error" role="alert">
-          {state.error}
-        </div>
-      ) : null}
-
-      {state.notice && state.error === null && state.conflictRevision === null ? (
-        <p className="app-muted" role="status">
-          {state.notice}
-        </p>
-      ) : null}
 
       {!canEdit ? (
         <div className="app-notice" role="status">
@@ -294,173 +132,217 @@ function EditorWorkspace({
         </div>
       ) : null}
 
-      <div className="app-editor">
-        <aside className="app-card app-stack">
-          <div>
-            <h2 className="app-section-title">Widgets</h2>
-            <p className="app-muted">
-              Drag and drop arrives in M4; use these controls for now. Positions are
-              stored on the desktop layout, and narrower breakpoints inherit them.
-            </p>
-          </div>
-          <div className="app-row">
-            <button
-              type="button"
-              className="app-button"
-              disabled={
-                !canEdit || state.config.widgets.length >= PLATFORM_LIMITS.maxWidgets
-              }
-              onClick={() => store.getState().addWidget("kpi")}
-            >
-              Add KPI
-            </button>
-            <button
-              type="button"
-              className="app-button"
-              disabled={
-                !canEdit || state.config.widgets.length >= PLATFORM_LIMITS.maxWidgets
-              }
-              onClick={() => store.getState().addWidget("line")}
-            >
-              Add line chart
-            </button>
-          </div>
-          {state.config.widgets.length === 0 ? (
-            <p className="app-muted">No widgets yet.</p>
-          ) : (
-            <ul className="app-list">
-              {state.config.widgets.map((widget) => {
-                const item = desktopItemFor(state.config, widget.id);
-
-                return (
-                  <li key={widget.id} className="app-widget-card">
-                    <span className="app-widget-card__title">{widget.title}</span>
-                    <span className="app-widget-card__meta">
-                      {widget.type} ·{" "}
-                      {item
-                        ? `x ${item.x} · y ${item.y} · ${item.w}×${item.h}`
-                        : "not placed"}
-                    </span>
-                    <WidgetControls
-                      store={store}
-                      widgetId={widget.id}
-                      title={widget.title}
-                    />
-                  </li>
+      <DashboardProvider
+        config={initialDraft.config}
+        revision={initialDraft.revision}
+        publishedAt={initialView.publishedAt}
+        publishedRevision={initialView.publishedRevision}
+        dashboardId={dashboardId}
+        locale={session.user.locale}
+        direction={directionFor(session.user.locale)}
+        theme={session.user.theme}
+        timezone={session.user.timezone}
+        dataAdapter={dataAdapter}
+        widgets={WEB_WIDGETS}
+        onSave={
+          canEdit
+            ? async (config, { revision }) => {
+                const result = await apiClient.saveDashboardDraft(
+                  dashboardId,
+                  config,
+                  revision,
                 );
-              })}
-            </ul>
-          )}
-        </aside>
-
-        <section className="app-card app-stack" aria-label="Draft preview">
-          <h2 className="app-section-title">Draft preview</h2>
-          {state.config.widgets.length === 0 ? (
-            <p className="app-muted">Add a widget to see it here.</p>
-          ) : (
-            <DashboardProvider
-              config={state.config}
-              revision={state.revision}
-              dashboardId={dashboardId}
-              locale={session.user.locale}
-              direction={directionFor(session.user.locale)}
-              theme={session.user.theme}
-              timezone={session.user.timezone}
-              dataAdapter={dataAdapter}
-              widgets={WEB_WIDGETS}
-            >
-              <DashboardCanvas />
-            </DashboardProvider>
-          )}
-        </section>
-      </div>
+                return { revision: result.revision, updatedAt: result.updatedAt };
+              }
+            : undefined
+        }
+        onPublish={
+          canPublish
+            ? async ({ revision }) => {
+                const view = await apiClient.publishDashboard(dashboardId, revision);
+                return {
+                  revision: view.revision,
+                  publishedRevision: view.publishedRevision ?? view.revision,
+                  ...(view.publishedAt ? { publishedAt: view.publishedAt } : {}),
+                };
+              }
+            : undefined
+        }
+      >
+        <DashboardEditor readOnly={!canEdit}>
+          <ConflictRecovery dashboardId={dashboardId} />
+          <VersionHistory dashboardId={dashboardId} canEdit={canEdit} />
+        </DashboardEditor>
+      </DashboardProvider>
     </div>
   );
 }
 
-function WidgetControls({
-  store,
-  widgetId,
-  title,
-}: {
-  store: EditorStoreApi;
-  widgetId: string;
-  title: string;
-}) {
+function ConflictRecovery({ dashboardId }: { dashboardId: string }) {
+  const editor = useDashboardEditor();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!editor.conflict) return null;
+
+  async function reload(): Promise<void> {
+    setBusy(true);
+    setError(null);
+
+    try {
+      const [draft, view] = await Promise.all([
+        apiClient.getDashboardDraft(dashboardId),
+        apiClient.getDashboard(dashboardId),
+      ]);
+      editor.replaceDraft({
+        config: draft.config,
+        revision: draft.revision,
+        updatedAt: draft.updatedAt,
+        publishedAt: view.publishedAt,
+        publishedRevision: view.publishedRevision,
+      });
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="app-widget-card__controls">
-      <button
-        type="button"
-        className="app-button"
-        aria-label={`Move ${title} left`}
-        onClick={() => store.getState().moveWidget(widgetId, -1, 0)}
-      >
-        ←
-      </button>
-      <button
-        type="button"
-        className="app-button"
-        aria-label={`Move ${title} right`}
-        onClick={() => store.getState().moveWidget(widgetId, 1, 0)}
-      >
-        →
-      </button>
-      <button
-        type="button"
-        className="app-button"
-        aria-label={`Move ${title} up`}
-        onClick={() => store.getState().moveWidget(widgetId, 0, -1)}
-      >
-        ↑
-      </button>
-      <button
-        type="button"
-        className="app-button"
-        aria-label={`Move ${title} down`}
-        onClick={() => store.getState().moveWidget(widgetId, 0, 1)}
-      >
-        ↓
-      </button>
-      <button
-        type="button"
-        className="app-button"
-        aria-label={`Make ${title} narrower`}
-        onClick={() => store.getState().resizeWidget(widgetId, -1, 0)}
-      >
-        −
-      </button>
-      <button
-        type="button"
-        className="app-button"
-        aria-label={`Make ${title} wider`}
-        onClick={() => store.getState().resizeWidget(widgetId, 1, 0)}
-      >
-        +
-      </button>
-      <button
-        type="button"
-        className="app-button"
-        aria-label={`Make ${title} shorter`}
-        onClick={() => store.getState().resizeWidget(widgetId, 0, -1)}
-      >
-        ↕−
-      </button>
-      <button
-        type="button"
-        className="app-button"
-        aria-label={`Make ${title} taller`}
-        onClick={() => store.getState().resizeWidget(widgetId, 0, 1)}
-      >
-        ↕+
-      </button>
-      <button
-        type="button"
-        className="app-button app-button--danger"
-        aria-label={`Remove ${title}`}
-        onClick={() => store.getState().removeWidget(widgetId)}
-      >
-        Remove
-      </button>
+    <div className="app-notice" role="status">
+      <p>
+        The server is at revision {editor.conflict.currentRevision}. Reloading fetches
+        that draft and replaces the local changes in this tab.
+      </p>
+      <div className="app-row">
+        <button
+          type="button"
+          className="app-button"
+          disabled={busy}
+          onClick={() => void reload()}
+        >
+          {busy ? "Reloading…" : "Reload latest draft"}
+        </button>
+      </div>
+      {error ? (
+        <p className="app-notice app-notice--error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+function VersionHistory({
+  dashboardId,
+  canEdit,
+}: {
+  dashboardId: string;
+  canEdit: boolean;
+}) {
+  const editor = useDashboardEditor();
+  const [open, setOpen] = useState(false);
+  const [versions, setVersions] = useState<DashboardVersionSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+
+    apiClient.listDashboardVersions(dashboardId, { pageSize: 20 }).then(
+      (result) => {
+        if (!controller.signal.aborted) setVersions(result.items);
+      },
+      (failure: unknown) => {
+        if (!controller.signal.aborted) setError(errorMessage(failure));
+      },
+    );
+
+    return () => controller.abort();
+  }, [dashboardId, open]);
+
+  async function restore(version: DashboardVersionSummary): Promise<void> {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const draft = await apiClient.restoreDashboardVersion(
+        dashboardId,
+        version.id,
+        editor.revision,
+      );
+      editor.replaceDraft({
+        config: draft.config,
+        revision: draft.revision,
+        updatedAt: draft.updatedAt,
+        publishedAt: editor.publishedAt,
+        publishedRevision: editor.publishedRevision,
+      });
+      setNotice(`Restored revision ${version.revision} into the draft.`);
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="app-card app-stack" aria-label="Version history">
+      <div className="app-row app-row--between">
+        <h2 className="app-section-title">Version history</h2>
+        <button
+          type="button"
+          className="app-button"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          {open ? "Hide versions" : "Show versions"}
+        </button>
+      </div>
+
+      {open ? (
+        versions === null ? (
+          <p className="app-muted">Loading versions…</p>
+        ) : versions.length === 0 ? (
+          <p className="app-muted">This dashboard has not been published yet.</p>
+        ) : (
+          <ul className="app-list">
+            {versions.map((version) => (
+              <li key={version.id} className="app-widget-card">
+                <span className="app-widget-card__title">
+                  Revision {version.revision} · {version.title}
+                </span>
+                <span className="app-widget-card__meta">
+                  {new Date(version.createdAt).toLocaleString()}
+                </span>
+                <button
+                  type="button"
+                  className="app-button"
+                  disabled={!canEdit || busy}
+                  onClick={() => void restore(version)}
+                >
+                  Restore into draft
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+
+      {notice ? (
+        <p className="app-muted" role="status">
+          {notice}
+        </p>
+      ) : null}
+
+      {error ? (
+        <div className="app-notice app-notice--error" role="alert">
+          {error}
+        </div>
+      ) : null}
+    </section>
   );
 }

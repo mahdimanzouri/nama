@@ -163,6 +163,73 @@ describe("dashboard lifecycle", () => {
     expect(stale.json().error.currentRevision).toBe(3);
   });
 
+  it("lists published versions and restores one into the draft", async () => {
+    const created = await createDashboard(app, editor, "Version one");
+    await saveDraft(app, editor, created.id, 1, demoConfig("Version one"));
+    const first = await app.inject({
+      method: "POST",
+      url: `/v1/dashboards/${created.id}/publish`,
+      headers: mutationHeaders(editor, 2),
+    });
+    expect(first.statusCode).toBe(200);
+
+    await saveDraft(app, editor, created.id, 3, demoConfig("Version two"));
+    const second = await app.inject({
+      method: "POST",
+      url: `/v1/dashboards/${created.id}/publish`,
+      headers: mutationHeaders(editor, 4),
+    });
+    expect(second.statusCode).toBe(200);
+
+    const versions = await app.inject({
+      method: "GET",
+      url: `/v1/dashboards/${created.id}/versions`,
+      headers: readHeaders(editor),
+    });
+    expect(versions.statusCode).toBe(200);
+    expect(versions.json().items).toHaveLength(2);
+    expect(versions.json().items[0].revision).toBe(5);
+    expect(versions.json().items[0].title).toBe("Version two");
+    expect(versions.json().items[0].config).toBeUndefined();
+
+    const oldest = versions.json().items[1] as { id: string };
+    const restored = await app.inject({
+      method: "POST",
+      url: `/v1/dashboards/${created.id}/restore`,
+      headers: mutationHeaders(editor, 5),
+      payload: { versionId: oldest.id },
+    });
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json().revision).toBe(6);
+    expect(restored.json().config.metadata.title).toBe("Version one");
+
+    const staleRestore = await app.inject({
+      method: "POST",
+      url: `/v1/dashboards/${created.id}/restore`,
+      headers: mutationHeaders(editor, 5),
+      payload: { versionId: oldest.id },
+    });
+    expect(staleRestore.statusCode).toBe(409);
+    expect(staleRestore.json().error.currentRevision).toBe(6);
+
+    const viewer = await login(app, "viewer@nama.local", "nama-viewer-123");
+    const viewerRestore = await app.inject({
+      method: "POST",
+      url: `/v1/dashboards/${created.id}/restore`,
+      headers: mutationHeaders(viewer, 6),
+      payload: { versionId: oldest.id },
+    });
+    expect(viewerRestore.statusCode).toBe(403);
+
+    const missing = await app.inject({
+      method: "POST",
+      url: `/v1/dashboards/${created.id}/restore`,
+      headers: mutationHeaders(editor, 6),
+      payload: { versionId: "00000000-0000-7000-8000-000000000000" },
+    });
+    expect(missing.statusCode).toBe(404);
+  });
+
   it("keeps viewers on the published configuration and blocks the draft", async () => {
     const created = await createDashboard(app, editor, "Viewer isolation");
     await saveDraft(app, editor, created.id, 1);

@@ -11,7 +11,8 @@ dashboards, production/quality KPIs, business intelligence, administrative
 dashboards, real-time telemetry and embedded dashboards.
 
 The first vertical slice is **monitoring-first**: KPI and line widgets, HTTP
-polling, one organization, a viewer and a minimal editor, save/load and publish.
+polling, one organization, a viewer and a visual editor with drag/resize,
+draft/publish and version restore.
 
 Supported presentation: English and Persian, RTL and LTR chrome, light, dark and
 system themes. The dashboard canvas is LTR-only in v1 (ADR-005).
@@ -26,24 +27,26 @@ system themes. The dashboard canvas is LTR-only in v1 (ADR-005).
 3. **Backend API** — Fastify modular monolith: persistence, authorization,
    data-source management, query execution, realtime gateway, audit.
 
-## Current repository state (after M1)
+## Current repository state (after M4)
 
-The monorepo now matches the target structure below:
+The monorepo matches the target structure below:
 
 ```text
 nama/
 ├── apps/
-│   ├── web/             # Next.js 16.4.6, cacheComponents, Tailwind Turbopack loader
-│   └── api/             # Fastify 5, zod-validated env, GET /healthz
-├── packages/            # four @nama/* packages, tsdown ESM + declarations
-├── scripts/             # workspace boundary verification
+│   ├── web/             # Next.js 16.4.6, cacheComponents, login, editor, viewer
+│   └── api/             # Fastify 5, auth, dashboards, versions, queries, /healthz
+├── packages/            # four @nama/* packages with implemented SDK and editor
+├── scripts/             # workspace boundary and consumer verification
 ├── turbo.json           # build, dev, typecheck, test, clean
 ├── tsconfig.base.json   # strict shared compiler options
 └── pnpm-workspace.yaml  # apps/*, packages/*
 ```
 
-The SDK packages (`dashboard-core`, `dashboard-builder`, `api-client`) build and
-link but export nothing until M3/M6. Target-only packages are still absent.
+All four initial packages export working code: `dashboard-types` contracts,
+`dashboard-core` runtime, `dashboard-builder` provider/viewer/editor and the
+hand-written `api-client`. Target-only packages are still absent, the API store
+is in memory, and realtime remains a contract.
 
 ## Target monorepo structure
 

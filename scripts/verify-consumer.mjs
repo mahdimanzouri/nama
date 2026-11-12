@@ -33,7 +33,8 @@ import { gzipSync } from "node:zlib";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const keep = process.argv.includes("--keep");
 const PACKAGES = ["dashboard-types", "dashboard-core", "dashboard-builder"];
-const BUNDLE_BUDGET_BYTES = 10 * 1024;
+// M4 adds the editor (React Grid Layout integration, toolbar and settings).
+const BUNDLE_BUDGET_BYTES = 16 * 1024;
 
 const failures = [];
 
@@ -125,9 +126,9 @@ try {
 
   const gzipped = gzipSync(entry).length;
   if (gzipped <= BUNDLE_BUDGET_BYTES) {
-    pass(`bundle budget: ${(gzipped / 1024).toFixed(1)} KiB gzipped (limit 10 KiB)`);
+    pass(`bundle budget: ${(gzipped / 1024).toFixed(1)} KiB gzipped (limit 16 KiB)`);
   } else {
-    fail(`builder entry is ${gzipped} bytes gzipped, over the 10 KiB budget`);
+    fail(`builder entry is ${gzipped} bytes gzipped, over the 16 KiB budget`);
   }
 
   const appRequire = createRequire(join(appDirectory, "package.json"));

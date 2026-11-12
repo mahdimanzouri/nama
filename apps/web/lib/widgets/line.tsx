@@ -1,7 +1,13 @@
 "use client";
 
 import { z } from "zod";
-import { defineWidget, type WidgetRenderProps } from "@nama/dashboard-builder";
+import {
+  defineWidget,
+  type WidgetRenderProps,
+  type WidgetSettingsProps,
+} from "@nama/dashboard-builder";
+
+import { TextSetting } from "./settings-controls";
 
 const lineConfigSchema = z
   .object({
@@ -104,12 +110,39 @@ function LineWidget({
   );
 }
 
+function LineSettings({ config, onChange, disabled }: WidgetSettingsProps<LineConfig>) {
+  return (
+    <TextSetting
+      label="Series label"
+      value={config.seriesLabel}
+      maxLength={120}
+      disabled={disabled}
+      onCommit={(seriesLabel) =>
+        onChange({ ...config, seriesLabel: seriesLabel || config.seriesLabel })
+      }
+    />
+  );
+}
+
+/** Matches the seeded data source served by the API walking skeleton. */
+const DEMO_DATA_SOURCE_ID = "demo-source";
+
 export const lineWidget = defineWidget({
   manifest: { id: "line", version: "0.1.0", name: "Line chart" },
   configVersion: 1,
   configSchema: lineConfigSchema,
   defaultConfig: { seriesLabel: "Series" },
+  defaultDataSourceId: DEMO_DATA_SOURCE_ID,
+  defaultQuery: {
+    queryId: "line-trend",
+    dataset: "metrics",
+    fields: ["timestamp", "value"],
+    orderBy: [{ field: "timestamp", direction: "asc" }],
+    limit: 240,
+    timeRange: { mode: "relative", last: "24h" },
+  },
   defaultSize: { w: 9, h: 5 },
   capabilities: { filters: true },
   component: LineWidget,
+  settings: LineSettings,
 });

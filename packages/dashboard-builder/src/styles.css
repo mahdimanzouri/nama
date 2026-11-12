@@ -129,3 +129,342 @@
   font-size: 13px;
   text-align: center;
 }
+
+/* Editor chrome */
+
+.nama-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.nama-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--nama-border);
+  border-radius: 8px;
+  background: var(--nama-surface);
+}
+
+.nama-toolbar__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.nama-toolbar__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.nama-toolbar__status {
+  margin: 0;
+  color: var(--nama-muted);
+  font-size: 12px;
+}
+
+.nama-toolbar__actions,
+.nama-toolbar__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nama-input {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--nama-border);
+  border-radius: 6px;
+  background: var(--nama-bg);
+  color: var(--nama-text);
+  font: inherit;
+}
+
+.nama-button {
+  padding: 6px 10px;
+  border: 1px solid var(--nama-border);
+  border-radius: 6px;
+  background: var(--nama-bg);
+  color: var(--nama-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nama-button:hover:not(:disabled) {
+  border-color: var(--nama-accent);
+}
+
+.nama-button:focus-visible,
+.nama-input:focus-visible,
+.nama-editor-canvas__surface:focus-visible {
+  outline: 2px solid var(--nama-accent);
+  outline-offset: 1px;
+}
+
+.nama-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nama-button[aria-pressed="true"] {
+  border-color: var(--nama-accent);
+  background: color-mix(in srgb, var(--nama-accent) 14%, transparent);
+}
+
+.nama-button--primary {
+  border-color: var(--nama-accent);
+  background: var(--nama-accent);
+  color: var(--nama-bg);
+}
+
+.nama-button--danger {
+  border-color: var(--nama-danger);
+  color: var(--nama-danger);
+}
+
+.nama-editor__body {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 260px;
+  gap: 12px;
+  align-items: start;
+}
+
+.nama-editor__body--preview {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.nama-editor__main {
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .nama-editor__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.nama-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--nama-border);
+  border-radius: 8px;
+  background: var(--nama-surface);
+}
+
+.nama-panel__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nama-panel__hint {
+  margin: 0;
+  color: var(--nama-muted);
+  font-size: 12px;
+}
+
+.nama-palette__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nama-palette__button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  width: 100%;
+  text-align: start;
+}
+
+.nama-palette__type {
+  color: var(--nama-muted);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.nama-settings__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nama-settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.nama-settings__meta {
+  margin: 0;
+  color: var(--nama-muted);
+  font-size: 12px;
+}
+
+.nama-settings__nudge {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.nama-editor__messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nama-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--nama-border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.nama-notice p {
+  margin: 0 0 8px;
+}
+
+.nama-notice--warning {
+  border-color: var(--nama-warning);
+  background: color-mix(in srgb, var(--nama-warning) 12%, transparent);
+}
+
+.nama-notice--error {
+  border-color: var(--nama-danger);
+  color: var(--nama-danger);
+}
+
+.nama-notice--status {
+  color: var(--nama-muted);
+}
+
+.nama-notice__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.nama-editor-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nama-editor-canvas__surface {
+  min-height: 120px;
+}
+
+.nama-editor-canvas__pending {
+  min-height: 240px;
+  border: 1px dashed var(--nama-border);
+  border-radius: 8px;
+}
+
+.nama-editor-canvas__warning {
+  margin: 0;
+  color: var(--nama-warning);
+  font-size: 12px;
+}
+
+.nama-editor-item {
+  height: 100%;
+}
+
+.nama-editor-item--selected {
+  outline: 2px solid var(--nama-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.nama-editor-item--hidden {
+  opacity: 0.55;
+}
+
+.nama-editor .nama-widget__header {
+  cursor: grab;
+  user-select: none;
+}
+
+.nama-editor-unplaced {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.nama-editor-unplaced__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 160px;
+}
+
+/* React Grid Layout base styles (MIT, Copyright (c) 2016 Samuel Reed).
+ * Adapted to the SDK tokens; only the parts the editor uses are included. */
+
+.react-grid-layout {
+  position: relative;
+  transition: height 200ms ease;
+}
+
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top, width, height;
+}
+
+.react-grid-item.cssTransforms {
+  transition-property: transform, width, height;
+}
+
+.react-grid-item.resizing {
+  z-index: 1;
+  transition: none;
+  will-change: width, height;
+}
+
+.react-grid-item.react-draggable-dragging {
+  z-index: 3;
+  transition: none;
+  will-change: transform;
+}
+
+.react-grid-item.react-grid-placeholder {
+  z-index: 2;
+  border-radius: 8px;
+  background: var(--nama-accent);
+  opacity: 0.2;
+  transition-duration: 100ms;
+  user-select: none;
+}
+
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: se-resize;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border-right: 2px solid var(--nama-muted);
+  border-bottom: 2px solid var(--nama-muted);
+}

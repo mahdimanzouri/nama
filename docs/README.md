@@ -1,6 +1,6 @@
 # Nama Dashboard Platform — Architecture Package
 
-**Status:** M0 approved; M1, M2, M3 and M3.5 complete ([current phase](implementation/current-phase.md))
+**Status:** M0 approved; M1, M2, M3, M3.5 and M4 complete ([current phase](implementation/current-phase.md))
 **Date:** 2026-11-12
 **Scope:** Architecture and decisions, plus the implemented walking skeleton.
 **Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)
@@ -26,9 +26,12 @@ runtime in `dashboard-core`, the React provider/viewer/hooks in
 `dashboard-builder`, a stylesheet export, and the standalone consumer verified by
 `pnpm verify:consumer`. M3.5 wired the web app to `api-client` and the SDK:
 login, dashboard list/create, editor save/publish with `If-Match`, KPI and line
-widgets over HTTP, and a published-only viewer. `api-client` is a hand-written
-typed transport until codegen lands in M6. Documents describing target-only
-packages list them as such.
+widgets over HTTP, and a published-only viewer. M4 moved the editor into
+`dashboard-builder`: a React Grid Layout canvas with drag/resize, undo/redo,
+per-breakpoint editing, save/publish callbacks and visible 409 conflict handling,
+plus version listing and restore. `api-client` is a hand-written typed transport
+until codegen lands in M6. Documents describing target-only packages list them as
+such.
 
 ## Status legend
 
