@@ -4,6 +4,8 @@ import type { WidgetRegistry } from "@nama/dashboard-core";
 import type {
   Breakpoint,
   DashboardConfig,
+  DashboardFilter,
+  DashboardVariable,
   DashboardWidget,
   LayoutItem,
 } from "@nama/dashboard-types";
@@ -83,9 +85,21 @@ export interface EditorStoreActions {
   commitLayout(items: readonly LayoutItem[]): void;
   updateWidget(
     widgetId: string,
-    patch: { title?: string; config?: unknown; query?: DashboardWidget["query"] },
+    patch: {
+      title?: string;
+      config?: unknown;
+      query?: DashboardWidget["query"];
+      visibility?: DashboardWidget["visibility"];
+      interaction?: DashboardWidget["interaction"];
+    },
   ): void;
   updateMetadata(patch: { title?: string }): void;
+  setVariables(variables: readonly DashboardVariable[]): void;
+  setFilters(filters: readonly DashboardFilter[]): void;
+  /** Renaming a variable rewrites widget interactions that referenced it. */
+  upsertVariable(variable: DashboardVariable, previousName?: string): void;
+  /** Removes the variable and any widget interaction that targeted it. */
+  removeVariable(variableId: string): void;
   setBreakpoint(breakpoint: Breakpoint): void;
   setPreview(preview: boolean): void;
   undo(): void;
@@ -294,6 +308,56 @@ export function createEditorStore(options: CreateEditorStoreOptions): EditorStor
       updateMetadata(patch) {
         const state = get();
         commit(updateMetadataInConfig(state.config, patch));
+      },
+
+      setVariables(variables) {
+        const state = get();
+        commit({ ...state.config, variables: variables.map((entry) => ({ ...entry })) });
+      },
+
+      setFilters(filters) {
+        const state = get();
+        commit({ ...state.config, filters: filters.map((entry) => ({ ...entry })) });
+      },
+
+      upsertVariable(variable, previousName) {
+        const state = get();
+        const exists = state.config.variables.some((entry) => entry.id === variable.id);
+        const variables = exists
+          ? state.config.variables.map((entry) =>
+              entry.id === variable.id ? variable : entry,
+            )
+          : [...state.config.variables, variable];
+        const renamed =
+          previousName !== undefined && previousName !== variable.name
+            ? previousName
+            : undefined;
+        const widgets =
+          renamed === undefined
+            ? state.config.widgets
+            : state.config.widgets.map((widget) =>
+                widget.interaction?.variable === renamed
+                  ? { ...widget, interaction: { variable: variable.name } }
+                  : widget,
+              );
+
+        commit({ ...state.config, variables, widgets });
+      },
+
+      removeVariable(variableId) {
+        const state = get();
+        const variable = state.config.variables.find((entry) => entry.id === variableId);
+        if (!variable) return;
+
+        commit({
+          ...state.config,
+          variables: state.config.variables.filter((entry) => entry.id !== variableId),
+          widgets: state.config.widgets.map((widget) =>
+            widget.interaction?.variable === variable.name
+              ? { ...widget, interaction: undefined }
+              : widget,
+          ),
+        });
       },
 
       setBreakpoint(breakpoint) {

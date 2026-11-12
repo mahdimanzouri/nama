@@ -496,6 +496,76 @@
   gap: 4px;
 }
 
+.nama-settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--nama-border);
+  border-radius: 8px;
+}
+
+.nama-settings__group-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.nama-settings__field--range {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.nama-dashboard-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--nama-border);
+}
+
+.nama-dashboard-settings__head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nama-dashboard-settings__head .nama-panel__title {
+  margin: 0;
+}
+
+.nama-dashboard-settings__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nama-dashboard-settings__row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--nama-border);
+  border-radius: 8px;
+  background: var(--nama-surface);
+}
+
+.nama-dashboard-settings__grid {
+  display: grid;
+  gap: 6px;
+}
+
+.nama-dashboard-settings__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .nama-editor__messages {
   display: flex;
   flex-direction: column;

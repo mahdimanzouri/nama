@@ -7,13 +7,18 @@ import {
 } from "@nama/dashboard-core";
 import {
   issuesFromZod,
+  type DashboardVariable,
   type DashboardWidget,
   type ValidationIssue,
+  type WidgetInteraction,
+  type WidgetVisibility,
 } from "@nama/dashboard-types";
 
 import { joinClassNames } from "../classnames";
 import { useDashboardRuntime } from "../context";
+import { TextField, ToggleField } from "../widgets/settings-controls";
 import { useEditorContext } from "./context";
+import { DashboardSettings } from "./dashboard-settings";
 
 export interface WidgetSettingsPropsPanel {
   className?: string;
@@ -40,6 +45,7 @@ export function WidgetSettings({
 
   return (
     <aside className={joinClassNames("nama-panel", "nama-settings", className)}>
+      <DashboardSettings disabled={disabled} />
       <h2 className="nama-panel__title">{translate("builder.settings.title")}</h2>
       {!widget ? (
         <p className="nama-panel__hint">{translate("builder.settings.none")}</p>
@@ -49,9 +55,16 @@ export function WidgetSettings({
           widget={widget}
           disabled={disabled}
           dataSources={dataSources}
+          variables={state.config.variables}
           onChangeTitle={(title) => store.getState().updateWidget(widget.id, { title })}
           onChangeConfig={(config) =>
             store.getState().updateWidget(widget.id, { config })
+          }
+          onChangeVisibility={(visibility) =>
+            store.getState().updateWidget(widget.id, { visibility })
+          }
+          onChangeInteraction={(interaction) =>
+            store.getState().updateWidget(widget.id, { interaction })
           }
           onRemove={() => store.getState().removeWidget(widget.id)}
           onMove={(dx, dy) => store.getState().moveWidget(widget.id, dx, dy)}
@@ -66,8 +79,11 @@ interface WidgetSettingsBodyProps {
   widget: DashboardWidget;
   disabled: boolean;
   dataSources: readonly DataSourceSummary[];
+  variables: readonly DashboardVariable[];
   onChangeTitle: (title: string) => void;
   onChangeConfig: (config: unknown) => void;
+  onChangeVisibility: (visibility: WidgetVisibility | undefined) => void;
+  onChangeInteraction: (interaction: WidgetInteraction | undefined) => void;
   onRemove: () => void;
   onMove: (dx: number, dy: number) => void;
   onResize: (dw: number, dh: number) => void;
@@ -77,8 +93,11 @@ function WidgetSettingsBody({
   widget,
   disabled,
   dataSources,
+  variables,
   onChangeTitle,
   onChangeConfig,
+  onChangeVisibility,
+  onChangeInteraction,
   onRemove,
   onMove,
   onResize,
@@ -172,6 +191,58 @@ function WidgetSettingsBody({
         </div>
       ) : null}
 
+      <div className="nama-settings__group">
+        <p className="nama-settings__group-title">
+          {translate("builder.settings.visibility")}
+        </p>
+        <ToggleField
+          label={translate("builder.settings.visibilityEnabled")}
+          checked={widget.visibility?.enabled !== false}
+          disabled={disabled}
+          onCommit={(visible) => {
+            const condition = widget.visibility?.condition;
+            onChangeVisibility(buildVisibility(visible, condition ?? undefined));
+          }}
+        />
+        <TextField
+          label={translate("builder.settings.visibilityCondition")}
+          value={widget.visibility?.condition ?? ""}
+          placeholder={translate("builder.settings.visibilityHint")}
+          maxLength={500}
+          disabled={disabled}
+          onCommit={(condition) =>
+            onChangeVisibility(
+              buildVisibility(
+                widget.visibility?.enabled !== false,
+                condition || undefined,
+              ),
+            )
+          }
+        />
+        <p className="nama-panel__hint">{translate("builder.settings.visibilityHint")}</p>
+      </div>
+
+      <label className="nama-settings__field">
+        <span>{translate("builder.settings.interaction")}</span>
+        <select
+          className="nama-input"
+          value={widget.interaction?.variable ?? ""}
+          disabled={disabled}
+          onChange={(event) => {
+            const variable = event.currentTarget.value;
+            onChangeInteraction(variable ? { variable } : undefined);
+          }}
+        >
+          <option value="">{translate("builder.settings.interactionNone")}</option>
+          {variables.map((variable) => (
+            <option key={variable.id} value={variable.name}>
+              {variable.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="nama-panel__hint">{translate("builder.settings.interactionHint")}</p>
+
       <div className="nama-settings__nudge" role="group">
         <NudgeButton
           label="builder.settings.moveLeft"
@@ -233,6 +304,14 @@ function WidgetSettingsBody({
       </button>
     </div>
   );
+}
+
+function buildVisibility(
+  enabled: boolean,
+  condition: string | undefined,
+): WidgetVisibility | undefined {
+  if (enabled && !condition) return undefined;
+  return { enabled, ...(condition ? { condition } : {}) };
 }
 
 function NudgeButton({
