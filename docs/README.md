@@ -54,6 +54,11 @@ and the control-authoring UI; JSON import/export and host templates; and
 `POST /v1/dashboards` accepting a validated starting `config`. The editor moved
 to the `@nama/dashboard-builder/editor` entry so viewer-only hosts do not load
 authoring code.
+M10 completed English/Persian messaging: Jalali display through ICU, Persian and
+Arabic-Indic digit input in controls and settings, a typed `web.*` chrome catalog
+on every page, header language and theme selectors with persisted preferences,
+RTL chrome around the disclosed LTR canvas, and a Playwright suite covering the
+Persian editor→publish→viewer flow, theme persistence and screenshot baselines.
 Documents describing target-only packages list them as such.
 
 ## Status legend

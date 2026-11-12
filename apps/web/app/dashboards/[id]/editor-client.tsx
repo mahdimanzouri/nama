@@ -15,6 +15,7 @@ import { WorkspaceGate } from "@/components/workspace-gate";
 import { apiClient, dataAdapter, realtimeAdapter } from "@/lib/api";
 import { errorMessage } from "@/lib/error-message";
 import { directionFor } from "@/lib/locale";
+import { useWebI18n } from "@/lib/web-preferences";
 import { WEB_WIDGETS } from "@/lib/widgets";
 
 export function EditorPageClient({ dashboardId }: { dashboardId: string }) {
@@ -39,6 +40,7 @@ function EditorLoader({
   );
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const t = useWebI18n();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -51,12 +53,14 @@ function EditorLoader({
         if (!controller.signal.aborted) setData({ draft, view });
       },
       (failure: unknown) => {
-        if (!controller.signal.aborted) setError(errorMessage(failure));
+        if (!controller.signal.aborted) {
+          setError(errorMessage(failure, t.translate("web.common.errorFallback")));
+        }
       },
     );
 
     return () => controller.abort();
-  }, [dashboardId, attempt]);
+  }, [dashboardId, attempt, t]);
 
   if (error) {
     return (
@@ -74,17 +78,19 @@ function EditorLoader({
               setAttempt((value) => value + 1);
             }}
           >
-            Try again
+            {t.translate("web.common.tryAgain")}
           </button>
           <Link href="/dashboards" className="app-button">
-            Back to dashboards
+            {t.translate("web.common.backToDashboards")}
           </Link>
         </div>
       </div>
     );
   }
 
-  if (!data) return <p className="app-muted">Loading the draft…</p>;
+  if (!data) {
+    return <p className="app-muted">{t.translate("web.editor.loading")}</p>;
+  }
 
   return (
     <EditorWorkspace
@@ -109,23 +115,24 @@ function EditorWorkspace({
 }) {
   const canEdit = session.permissions.includes("dashboard.update");
   const canPublish = session.permissions.includes("dashboard.publish");
+  const t = useWebI18n();
 
   return (
     <div className="app-stack">
       <header className="app-row app-row--between">
         <Link href="/dashboards" className="app-button">
-          Back to dashboards
+          {t.translate("web.common.backToDashboards")}
         </Link>
         {initialView.publishedAt ? (
           <Link href={`/dashboards/${dashboardId}/view`} className="app-button">
-            Open published view
+            {t.translate("web.editor.openPublished")}
           </Link>
         ) : null}
       </header>
 
       {!canEdit ? (
         <div className="app-notice" role="status">
-          Your role can read this dashboard but cannot save edits.
+          {t.translate("web.editor.readOnly")}
         </div>
       ) : null}
 
@@ -178,6 +185,7 @@ function EditorWorkspace({
 
 function ConflictRecovery({ dashboardId }: { dashboardId: string }) {
   const editor = useDashboardEditor();
+  const t = useWebI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -200,7 +208,7 @@ function ConflictRecovery({ dashboardId }: { dashboardId: string }) {
         publishedRevision: view.publishedRevision,
       });
     } catch (failure) {
-      setError(errorMessage(failure));
+      setError(errorMessage(failure, t.translate("web.common.errorFallback")));
     } finally {
       setBusy(false);
     }
@@ -209,8 +217,9 @@ function ConflictRecovery({ dashboardId }: { dashboardId: string }) {
   return (
     <div className="app-notice" role="status">
       <p>
-        The server is at revision {editor.conflict.currentRevision}. Reloading fetches
-        that draft and replaces the local changes in this tab.
+        {t.translate("web.editor.conflict.body", {
+          current: t.formatNumber(editor.conflict.currentRevision),
+        })}
       </p>
       <div className="app-row">
         <button
@@ -219,7 +228,9 @@ function ConflictRecovery({ dashboardId }: { dashboardId: string }) {
           disabled={busy}
           onClick={() => void reload()}
         >
-          {busy ? "Reloading…" : "Reload latest draft"}
+          {busy
+            ? t.translate("web.editor.conflict.reloading")
+            : t.translate("web.editor.conflict.reload")}
         </button>
       </div>
       {error ? (
@@ -239,6 +250,7 @@ function VersionHistory({
   canEdit: boolean;
 }) {
   const editor = useDashboardEditor();
+  const t = useWebI18n();
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<DashboardVersionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -254,12 +266,14 @@ function VersionHistory({
         if (!controller.signal.aborted) setVersions(result.items);
       },
       (failure: unknown) => {
-        if (!controller.signal.aborted) setError(errorMessage(failure));
+        if (!controller.signal.aborted) {
+          setError(errorMessage(failure, t.translate("web.common.errorFallback")));
+        }
       },
     );
 
     return () => controller.abort();
-  }, [dashboardId, open]);
+  }, [dashboardId, open, t]);
 
   async function restore(version: DashboardVersionSummary): Promise<void> {
     setBusy(true);
@@ -279,42 +293,57 @@ function VersionHistory({
         publishedAt: editor.publishedAt,
         publishedRevision: editor.publishedRevision,
       });
-      setNotice(`Restored revision ${version.revision} into the draft.`);
+      setNotice(
+        t.translate("web.editor.versions.restored", {
+          revision: t.formatNumber(version.revision),
+        }),
+      );
     } catch (failure) {
-      setError(errorMessage(failure));
+      setError(errorMessage(failure, t.translate("web.common.errorFallback")));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section className="app-card app-stack" aria-label="Version history">
+    <section
+      className="app-card app-stack"
+      aria-label={t.translate("web.editor.versions.aria")}
+    >
       <div className="app-row app-row--between">
-        <h2 className="app-section-title">Version history</h2>
+        <h2 className="app-section-title">{t.translate("web.editor.versions.title")}</h2>
         <button
           type="button"
           className="app-button"
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
         >
-          {open ? "Hide versions" : "Show versions"}
+          {open
+            ? t.translate("web.editor.versions.hide")
+            : t.translate("web.editor.versions.show")}
         </button>
       </div>
 
       {open ? (
         versions === null ? (
-          <p className="app-muted">Loading versions…</p>
+          <p className="app-muted">{t.translate("web.editor.versions.loading")}</p>
         ) : versions.length === 0 ? (
-          <p className="app-muted">This dashboard has not been published yet.</p>
+          <p className="app-muted">{t.translate("web.editor.versions.empty")}</p>
         ) : (
           <ul className="app-list">
             {versions.map((version) => (
               <li key={version.id} className="app-widget-card">
                 <span className="app-widget-card__title">
-                  Revision {version.revision} · {version.title}
+                  {t.translate("web.editor.versions.entry", {
+                    revision: t.formatNumber(version.revision),
+                    title: version.title,
+                  })}
                 </span>
                 <span className="app-widget-card__meta">
-                  {new Date(version.createdAt).toLocaleString()}
+                  {t.formatDate(version.createdAt, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
                 </span>
                 <button
                   type="button"
@@ -322,7 +351,7 @@ function VersionHistory({
                   disabled={!canEdit || busy}
                   onClick={() => void restore(version)}
                 >
-                  Restore into draft
+                  {t.translate("web.editor.versions.restore")}
                 </button>
               </li>
             ))}

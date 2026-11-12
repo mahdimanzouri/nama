@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { DashboardLayouts } from "@nama/dashboard-types";
 
-import { createDashboardI18n, normalizeDigits } from "../i18n";
+import {
+  createDashboardI18n,
+  dateLocale,
+  normalizeDigits,
+  parseLocalizedNumber,
+} from "../i18n";
 import { breakpointForWidth, resolveLayoutItems } from "../layout";
 import { createThemeTokens, resolveTheme, THEME_TOKEN_VARS } from "../theme";
 
@@ -56,6 +61,17 @@ describe("i18n", () => {
     expect(normalizeDigits("2026-11-12")).toBe("2026-11-12");
   });
 
+  it("parses localized numbers and rejects junk", () => {
+    expect(parseLocalizedNumber("۱۲۳")).toBe(123);
+    expect(parseLocalizedNumber(" ۱۲٫۵ ")).toBe(12.5);
+    expect(parseLocalizedNumber("۱٬۲۳۴٫۵")).toBe(1234.5);
+    expect(parseLocalizedNumber("1,234.5")).toBe(1234.5);
+    expect(parseLocalizedNumber("42")).toBe(42);
+    expect(parseLocalizedNumber("")).toBeUndefined();
+    expect(parseLocalizedNumber("   ")).toBeUndefined();
+    expect(parseLocalizedNumber("abc")).toBeUndefined();
+  });
+
   it("formats dates in the injected time zone", () => {
     const i18n = createDashboardI18n({ locale: "en", timezone: "UTC" });
 
@@ -66,6 +82,27 @@ describe("i18n", () => {
         day: "2-digit",
       }),
     ).toBe("01/01/2026");
+  });
+
+  it("formats Persian dates in the Solar Hijri calendar", () => {
+    const i18n = createDashboardI18n({ locale: "fa", timezone: "UTC" });
+
+    const formatted = i18n.formatDate("2026-01-01T00:00:00.000Z", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+
+    expect(formatted).toBe("۱۴۰۴/۱۰/۱۱");
+    expect(dateLocale("fa")).toBe("fa-IR-u-ca-persian");
+    expect(dateLocale("fa-IR")).toBe("fa-IR-u-ca-persian");
+    expect(dateLocale("en")).toBe("en");
+  });
+
+  it("formats Persian numbers with Persian digits", () => {
+    const i18n = createDashboardI18n({ locale: "fa" });
+
+    expect(i18n.formatNumber(1234.5, { maximumFractionDigits: 1 })).toBe("۱٬۲۳۴٫۵");
   });
 });
 

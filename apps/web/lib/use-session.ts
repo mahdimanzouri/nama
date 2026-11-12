@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, type SessionPayload } from "@nama/api-client";
+import { ApiError, type SessionPayload, type SessionUser } from "@nama/api-client";
 
 import { apiClient } from "./api";
 import { errorMessage } from "./error-message";
@@ -12,9 +12,15 @@ export type SessionState =
   | { status: "error"; message: string }
   | { status: "authenticated"; session: SessionPayload };
 
+export type SessionPreferences = Partial<
+  Pick<SessionUser, "locale" | "theme" | "timezone">
+>;
+
 export interface UseSessionResult {
   state: SessionState;
   reload: () => void;
+  /** Merges a committed preference so the tree re-renders without a reload. */
+  applyPreferences: (patch: SessionPreferences) => void;
 }
 
 /** Reads the current session from cookies; nothing is cached across calls. */
@@ -53,5 +59,19 @@ export function useSession(): UseSessionResult {
     setAttempt((value) => value + 1);
   }, []);
 
-  return { state, reload };
+  const applyPreferences = useCallback((patch: SessionPreferences) => {
+    setState((previous) =>
+      previous.status === "authenticated"
+        ? {
+            ...previous,
+            session: {
+              ...previous.session,
+              user: { ...previous.session.user, ...patch },
+            },
+          }
+        : previous,
+    );
+  }, []);
+
+  return { state, reload, applyPreferences };
 }

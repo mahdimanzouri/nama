@@ -31,6 +31,7 @@ export function DashboardToolbar({ className }: { className?: string }) {
   const runtime = useDashboardRuntime();
   const translate = runtime.i18n.translate;
   const formatDate = runtime.i18n.formatDate;
+  const formatNumber = runtime.i18n.formatNumber;
   const dirty = isDirty(state);
   const pending = state.phase !== "idle";
   const interactive = !readOnly && !state.preview;
@@ -75,6 +76,20 @@ export function DashboardToolbar({ className }: { className?: string }) {
     store.getState().importConfig(result.value);
   };
 
+  const statusParts = [
+    translate("builder.status.revision", {
+      revision: formatNumber(state.revision),
+    }),
+    dirty
+      ? translate("builder.status.unsaved")
+      : state.updatedAt
+        ? translate("builder.status.savedAt", { time: formatDate(state.updatedAt) })
+        : null,
+    state.publishedAt
+      ? translate("builder.status.publishedAt", { time: formatDate(state.publishedAt) })
+      : translate("builder.status.neverPublished"),
+  ].filter((part): part is string => part !== null);
+
   return (
     <header className={joinClassNames("nama-toolbar", className)}>
       <div className="nama-toolbar__meta">
@@ -85,27 +100,12 @@ export function DashboardToolbar({ className }: { className?: string }) {
           onCommit={(title) => store.getState().updateMetadata({ title })}
         />
         <p className="nama-toolbar__status">
-          <span>
-            {translate("builder.status.revision", { revision: state.revision })}
-          </span>
-          {" · "}
-          <span>
-            {dirty
-              ? translate("builder.status.unsaved")
-              : state.updatedAt
-                ? translate("builder.status.savedAt", {
-                    time: formatDate(state.updatedAt),
-                  })
-                : null}
-          </span>
-          {" · "}
-          <span>
-            {state.publishedAt
-              ? translate("builder.status.publishedAt", {
-                  time: formatDate(state.publishedAt),
-                })
-              : translate("builder.status.neverPublished")}
-          </span>
+          {statusParts.map((part, index) => (
+            <span key={part}>
+              {index > 0 ? " · " : null}
+              {part}
+            </span>
+          ))}
         </p>
       </div>
 

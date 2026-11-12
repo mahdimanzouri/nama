@@ -31,7 +31,7 @@ truth for what ships.
 | `tsdown` | 0.23.7 | MIT | Package build | Must preserve `"use client"` |
 | `react-grid-layout` | 2.3.0 | MIT | Canvas grid | v2 requires `width` via container-width hook; no RTL; 1.5.x fallback |
 | `echarts` | 6.1.0 | Apache-2.0 | Charts | Pin v6 major; import only used modules; bundle budget |
-| `next-intl` | 4.15.0 | MIT | Web app i18n | Web only; never in SDK; verify Next 16 compatibility at M1 |
+| `next-intl` | 4.15.0 | MIT | Web app i18n (planned, not adopted) | Not installed: M10 uses the SDK `DashboardI18n` factory with a typed `web.*` catalog and no locale route segments |
 | `zod` | 4.6.7 | MIT | Validation | Shared schema version across packages |
 | `zustand` | 5.1.0 | MIT | Editor draft state (inside `dashboard-builder`) | Internal implementation detail; not re-exported by the SDK |
 | `@tanstack/react-query` | 5.107.1 | MIT | Server state | Snapshot queries in the builder |

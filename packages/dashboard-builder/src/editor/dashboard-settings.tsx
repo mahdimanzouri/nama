@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "zustand";
+import { normalizeDigits, parseLocalizedNumber } from "@nama/dashboard-core";
 import {
   FILTER_OPERATORS,
   VARIABLE_BINDING_TARGETS,
@@ -425,13 +426,9 @@ function DefaultValueField({
       <span>{translate("builder.controls.defaultValue")}</span>
       <input
         key={`default:${String(value)}`}
-        type={
-          variable.type === "number"
-            ? "number"
-            : variable.type === "date"
-              ? "date"
-              : "text"
-        }
+        type={variable.type === "date" ? "date" : "text"}
+        inputMode={variable.type === "number" ? "decimal" : undefined}
+        dir={variable.type === "number" ? "ltr" : undefined}
         className="nama-input"
         defaultValue={
           variable.type === "date" && typeof value === "string"
@@ -443,7 +440,7 @@ function DefaultValueField({
         onBlur={(event) => {
           const raw = event.currentTarget.value;
           const next =
-            variable.type === "number" ? event.currentTarget.valueAsNumber : raw;
+            variable.type === "number" ? (parseLocalizedNumber(raw) ?? Number.NaN) : raw;
           if (!onCommit(next)) event.currentTarget.value = String(value ?? "");
         }}
         onKeyDown={(event) => {
@@ -591,7 +588,7 @@ function parseFilterValue(operator: FilterOperator, raw: string): unknown {
   if (raw === "") return "";
   if (raw === "true" || raw === "false") return raw === "true";
 
-  const text = raw.trim();
+  const text = normalizeDigits(raw).trim();
   const numeric = Number(text);
   return text !== "" && Number.isFinite(numeric) && String(numeric) === text
     ? numeric

@@ -19,6 +19,20 @@
   }
 }
 
+/* The shell owns the resolved theme, so the page surface follows the switcher
+   instead of only the system preference. */
+html[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #171717;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -64,6 +78,19 @@ body {
   color: var(--nama-muted);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.app-header__select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--nama-muted);
+  font-size: 12px;
+}
+
+.app-header__select .app-input {
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 .app-main {

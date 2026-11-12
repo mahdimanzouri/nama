@@ -11,6 +11,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:e2e": "playwright test",
     "clean": "turbo run clean",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -20,6 +21,7 @@
     "verify:openapi": "pnpm --filter @nama/api verify:openapi"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
     "@types/node": "^24",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.6",

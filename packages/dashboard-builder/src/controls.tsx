@@ -1,5 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { resolveControlValues, type DashboardI18n } from "@nama/dashboard-core";
+import {
+  normalizeDigits,
+  parseLocalizedNumber,
+  resolveControlValues,
+  type DashboardI18n,
+} from "@nama/dashboard-core";
 import {
   isVariableValue,
   type DashboardConfig,
@@ -210,15 +215,7 @@ function VariableField({
     return (
       <label className="nama-controls__field">
         <span className="nama-controls__label">{label}</span>
-        <input
-          type="number"
-          className="nama-input"
-          value={typeof value === "number" ? value : ""}
-          onChange={(event) => {
-            const next = event.currentTarget.valueAsNumber;
-            if (Number.isFinite(next)) onChange(next);
-          }}
-        />
+        <NumberControl value={value} onChange={onChange} />
       </label>
     );
   }
@@ -279,6 +276,38 @@ function VariableField({
         onChange={(event) => onChange(event.currentTarget.value)}
       />
     </label>
+  );
+}
+
+/**
+ * Persian and Arabic-Indic digits are normalized on input, and an incomplete
+ * entry such as "" stays editable without discarding the committed value.
+ */
+function NumberControl({
+  value,
+  onChange,
+}: {
+  value: unknown;
+  onChange: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | undefined>(undefined);
+  const committed = typeof value === "number" ? String(value) : "";
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      dir="ltr"
+      className="nama-input"
+      value={draft ?? committed}
+      onChange={(event) => {
+        const text = normalizeDigits(event.currentTarget.value);
+        setDraft(text);
+        const next = parseLocalizedNumber(text);
+        if (next !== undefined) onChange(next);
+      }}
+      onBlur={() => setDraft(undefined)}
+    />
   );
 }
 

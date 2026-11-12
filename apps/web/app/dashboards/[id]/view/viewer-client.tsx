@@ -13,6 +13,7 @@ import { WorkspaceGate } from "@/components/workspace-gate";
 import { apiClient, dataAdapter, realtimeAdapter } from "@/lib/api";
 import { errorMessage } from "@/lib/error-message";
 import { directionFor } from "@/lib/locale";
+import { useWebI18n } from "@/lib/web-preferences";
 import { WEB_WIDGETS } from "@/lib/widgets";
 
 export function ViewerPageClient({ dashboardId }: { dashboardId: string }) {
@@ -35,6 +36,7 @@ function ViewerLoader({
   const [view, setView] = useState<DashboardView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const t = useWebI18n();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -44,12 +46,14 @@ function ViewerLoader({
         if (!controller.signal.aborted) setView(result);
       },
       (failure: unknown) => {
-        if (!controller.signal.aborted) setError(errorMessage(failure));
+        if (!controller.signal.aborted) {
+          setError(errorMessage(failure, t.translate("web.common.errorFallback")));
+        }
       },
     );
 
     return () => controller.abort();
-  }, [dashboardId, attempt]);
+  }, [dashboardId, attempt, t]);
 
   if (error) {
     return (
@@ -67,17 +71,19 @@ function ViewerLoader({
               setAttempt((value) => value + 1);
             }}
           >
-            Try again
+            {t.translate("web.common.tryAgain")}
           </button>
           <Link href="/dashboards" className="app-button">
-            Back to dashboards
+            {t.translate("web.common.backToDashboards")}
           </Link>
         </div>
       </div>
     );
   }
 
-  if (!view) return <p className="app-muted">Loading the published dashboard…</p>;
+  if (!view) {
+    return <p className="app-muted">{t.translate("web.viewer.loading")}</p>;
+  }
 
   const config = view.publishedConfig;
   const publishedRevision = view.publishedRevision ?? view.revision;
@@ -88,11 +94,11 @@ function ViewerLoader({
         <header className="app-row app-row--between">
           <h1 className="app-title">{view.name}</h1>
           <Link href="/dashboards" className="app-button">
-            Back
+            {t.translate("web.common.back")}
           </Link>
         </header>
         <div className="app-notice" role="status">
-          This dashboard has not been published yet. Drafts stay private to its editors.
+          {t.translate("web.viewer.notPublished")}
         </div>
       </div>
     );
@@ -104,14 +110,21 @@ function ViewerLoader({
         <div>
           <h1 className="app-title">{config.metadata.title}</h1>
           <p className="app-subtitle">
-            revision {publishedRevision} ·{" "}
             {view.publishedAt
-              ? `published ${new Date(view.publishedAt).toLocaleString()}`
-              : "published"}
+              ? t.translate("web.viewer.meta", {
+                  revision: t.formatNumber(publishedRevision),
+                  time: t.formatDate(view.publishedAt, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }),
+                })
+              : t.translate("web.viewer.meta.published", {
+                  revision: t.formatNumber(publishedRevision),
+                })}
           </p>
         </div>
         <Link href="/dashboards" className="app-button">
-          Back
+          {t.translate("web.common.back")}
         </Link>
       </header>
 

@@ -135,7 +135,7 @@ describe("dashboard controls", () => {
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain("Variable region");
     expect(html).toContain('value="all"');
-    expect(html).toContain('type="number"');
+    expect(html).toContain('inputMode="decimal"');
     expect(html).toContain('value="5"');
     expect(html).toContain('type="checkbox"');
     expect(html).toContain('type="date"');

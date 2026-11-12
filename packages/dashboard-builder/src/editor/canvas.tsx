@@ -192,7 +192,7 @@ export function EditorCanvas({ className }: { className?: string }) {
       {state.config.widgets.length > PLATFORM_LIMITS.widgetWarningThreshold ? (
         <p className="nama-editor-canvas__warning" role="note">
           {translate("builder.canvas.manyWidgets", {
-            count: state.config.widgets.length,
+            count: runtime.i18n.formatNumber(state.config.widgets.length),
           })}
         </p>
       ) : null}

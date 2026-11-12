@@ -7,8 +7,8 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M8 (realtime infrastructure) is complete and awaiting acceptance
-(2026-11-12).** M9 (dashboard features) is next.
+**Milestone M10 (internationalization and themes) is complete and awaiting
+acceptance (2026-11-12).** M11 (plugin ecosystem) is next.
 
 The workspace contains:
 
@@ -50,9 +50,15 @@ gateway and an SSE fallback with pre-upgrade authentication, per-subscription
 authorization, one shared connection per adapter, snapshot-then-stream delivery,
 sequences with gap detection and 60-second replay, bounded buffers, heartbeats
 and reconnect with backoff. The web app defaults to SSE behind the `/api` proxy
-and switches to WebSocket when `NEXT_PUBLIC_NAMA_WS_URL` is set. An in-memory
-persistence adapter remains for tests — see the
-[roadmap](docs/implementation/roadmap.md).
+and switches to WebSocket when `NEXT_PUBLIC_NAMA_WS_URL` is set. M9 adds
+variables, global filters, time-range controls, conditional visibility and
+cross-widget selections resolved in the SDK, with template-seeded dashboards and
+JSON import/export. M10 completes English/Persian support: every page and state
+is translated, dates display in the Solar Hijri calendar, Persian digits are
+accepted in controls, and the header switches language and light/dark/system
+themes with persisted preferences. The canvas stays LTR-only inside RTL chrome
+and the editor says so. An in-memory persistence adapter remains for tests — see
+the [roadmap](docs/implementation/roadmap.md).
 
 ## Architecture documentation
 
@@ -83,8 +89,15 @@ pnpm format            # Prettier
 pnpm verify:workspace  # package boundaries and single React version
 pnpm verify:consumer   # packs the SDK and renders it in examples/standalone-consumer
 pnpm verify:openapi    # Fastify routes vs docs/api/openapi.yaml
+pnpm test:e2e          # Playwright locale/theme/screenshot suite (dev servers)
 pnpm clean
 ```
+
+The browser suite starts or reuses the dev servers with
+`NEXT_PUBLIC_NAMA_WS_URL` so realtime uses one WebSocket; six SSE streams would
+exhaust the browser's HTTP/1.1 connections (TD-060). If the Playwright browser
+download is unavailable, point `PLAYWRIGHT_CHROMIUM_EXECUTABLE` at a local
+Chromium build. The suite is not wired into CI yet (TD-036).
 
 The API reads `HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL`, `APP_DATABASE_URL`,
 `CREDENTIAL_ENCRYPTION_KEY`, `REALTIME_POLL_INTERVAL_MS` and the demo-account

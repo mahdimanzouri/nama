@@ -8,7 +8,9 @@ import type { DashboardList, DashboardSummary, SessionPayload } from "@nama/api-
 import { WorkspaceGate } from "@/components/workspace-gate";
 import { apiClient } from "@/lib/api";
 import { errorMessage } from "@/lib/error-message";
-import { DASHBOARD_TEMPLATES, findTemplate } from "@/lib/templates";
+import { templateLabels } from "@/lib/i18n";
+import { findTemplate } from "@/lib/templates";
+import { useWebI18n } from "@/lib/web-preferences";
 
 export default function DashboardsPage() {
   return (
@@ -18,6 +20,7 @@ export default function DashboardsPage() {
 
 function DashboardListPage({ session }: { session: SessionPayload }) {
   const router = useRouter();
+  const t = useWebI18n();
   const [list, setList] = useState<DashboardList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -26,9 +29,8 @@ function DashboardListPage({ session }: { session: SessionPayload }) {
 
   const canCreate = session.permissions.includes("dashboard.create");
   const canEdit = session.permissions.includes("dashboard.update");
-  const templateDescription = templateId
-    ? findTemplate(templateId)?.description
-    : undefined;
+  const templates = templateLabels(t);
+  const selectedTemplate = templates.find((template) => template.id === templateId);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -38,12 +40,14 @@ function DashboardListPage({ session }: { session: SessionPayload }) {
         if (!controller.signal.aborted) setList(result);
       },
       (failure: unknown) => {
-        if (!controller.signal.aborted) setError(errorMessage(failure));
+        if (!controller.signal.aborted) {
+          setError(errorMessage(failure, t.translate("web.common.errorFallback")));
+        }
       },
     );
 
     return () => controller.abort();
-  }, []);
+  }, [t]);
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,7 +65,7 @@ function DashboardListPage({ session }: { session: SessionPayload }) {
       );
       router.push(`/dashboards/${view.id}`);
     } catch (failure) {
-      setError(errorMessage(failure));
+      setError(errorMessage(failure, t.translate("web.common.errorFallback")));
       setCreating(false);
     }
   }
@@ -69,10 +73,13 @@ function DashboardListPage({ session }: { session: SessionPayload }) {
   return (
     <div className="app-stack">
       <header>
-        <h1 className="app-title">Dashboards</h1>
+        <h1 className="app-title">{t.translate("web.dashboards.title")}</h1>
         <p className="app-subtitle">
-          {session.organization.name} · signed in as {session.user.displayName} (
-          {session.role})
+          {session.organization.name} ·{" "}
+          {t.translate("web.dashboards.signedInAs", {
+            name: session.user.displayName,
+            role: session.role,
+          })}
         </p>
       </header>
 
@@ -85,52 +92,52 @@ function DashboardListPage({ session }: { session: SessionPayload }) {
       {canCreate ? (
         <form className="app-card app-row app-create" onSubmit={handleCreate}>
           <label className="app-field">
-            <span>New dashboard name</span>
+            <span>{t.translate("web.dashboards.newName")}</span>
             <input
               className="app-input"
               value={name}
               onChange={(event) => setName(event.target.value)}
               maxLength={200}
               required
-              placeholder="Operations overview"
+              placeholder={t.translate("web.dashboards.namePlaceholder")}
             />
           </label>
           <label className="app-field">
-            <span>Template</span>
+            <span>{t.translate("web.dashboards.template")}</span>
             <select
               className="app-input"
               value={templateId}
               onChange={(event) => setTemplateId(event.target.value)}
             >
-              <option value="">Blank dashboard</option>
-              {DASHBOARD_TEMPLATES.map((template) => (
+              <option value="">{t.translate("web.dashboards.blankTemplate")}</option>
+              {templates.map((template) => (
                 <option key={template.id} value={template.id}>
                   {template.name}
                 </option>
               ))}
             </select>
-            {templateDescription ? <span>{templateDescription}</span> : null}
+            {selectedTemplate ? <span>{selectedTemplate.description}</span> : null}
           </label>
           <button
             type="submit"
             className="app-button app-button--primary"
             disabled={creating}
           >
-            {creating ? "Creating…" : "Create dashboard"}
+            {creating
+              ? t.translate("web.dashboards.creating")
+              : t.translate("web.dashboards.create")}
           </button>
         </form>
       ) : (
-        <p className="app-muted">
-          Your role can view published dashboards but cannot create new ones.
-        </p>
+        <p className="app-muted">{t.translate("web.dashboards.cannotCreate")}</p>
       )}
 
       {list === null && error === null ? (
-        <p className="app-muted">Loading dashboards…</p>
+        <p className="app-muted">{t.translate("web.dashboards.loading")}</p>
       ) : null}
 
       {list && list.items.length === 0 ? (
-        <p className="app-muted">No dashboards in this organization yet.</p>
+        <p className="app-muted">{t.translate("web.dashboards.empty")}</p>
       ) : null}
 
       {list && list.items.length > 0 ? (
@@ -145,15 +152,25 @@ function DashboardListPage({ session }: { session: SessionPayload }) {
 }
 
 function DashboardRow({ item, canEdit }: { item: DashboardSummary; canEdit: boolean }) {
+  const t = useWebI18n();
+  const timeFormat = { dateStyle: "medium", timeStyle: "short" } as const;
+
   const meta = canEdit
-    ? `Revision ${item.revision} · updated ${new Date(item.updatedAt).toLocaleString()} · ${
-        item.publishedAt ? "published" : "draft only"
-      }`
+    ? t.translate("web.dashboards.meta.editor", {
+        revision: t.formatNumber(item.revision),
+        time: t.formatDate(item.updatedAt, timeFormat),
+        state: t.translate(
+          item.publishedAt
+            ? "web.dashboards.state.published"
+            : "web.dashboards.state.draftOnly",
+        ),
+      })
     : item.publishedAt
-      ? `Published revision ${item.publishedRevision ?? "—"} · ${new Date(
-          item.publishedAt,
-        ).toLocaleString()}`
-      : "Not published yet";
+      ? t.translate("web.dashboards.meta.viewer", {
+          revision: t.formatNumber(item.publishedRevision ?? item.revision),
+          time: t.formatDate(item.publishedAt, timeFormat),
+        })
+      : t.translate("web.dashboards.meta.unpublished");
 
   return (
     <li className="app-list-item">
@@ -166,15 +183,19 @@ function DashboardRow({ item, canEdit }: { item: DashboardSummary; canEdit: bool
           item.publishedAt ? "app-badge app-badge--ok" : "app-badge app-badge--warn"
         }
       >
-        {item.publishedAt ? "Published" : "Draft"}
+        {t.translate(
+          item.publishedAt
+            ? "web.dashboards.badge.published"
+            : "web.dashboards.badge.draft",
+        )}
       </span>
       <div className="app-row">
         <Link className="app-button" href={`/dashboards/${item.id}/view`}>
-          View
+          {t.translate("web.dashboards.view")}
         </Link>
         {canEdit ? (
           <Link className="app-button" href={`/dashboards/${item.id}`}>
-            Edit
+            {t.translate("web.dashboards.edit")}
           </Link>
         ) : null}
       </div>

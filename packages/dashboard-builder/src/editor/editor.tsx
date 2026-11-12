@@ -79,6 +79,7 @@ function EditorMessages() {
   const state = useStore(store);
   const runtime = useDashboardRuntime();
   const translate = runtime.i18n.translate;
+  const formatNumber = runtime.i18n.formatNumber;
 
   return (
     <div className="nama-editor__messages">
@@ -87,8 +88,8 @@ function EditorMessages() {
           <p>
             <strong>{translate("builder.conflict.title")}</strong>{" "}
             {translate("builder.conflict.body", {
-              expected: state.conflict.expectedRevision,
-              current: state.conflict.currentRevision,
+              expected: formatNumber(state.conflict.expectedRevision),
+              current: formatNumber(state.conflict.currentRevision),
             })}
           </p>
           <div className="nama-notice__actions">

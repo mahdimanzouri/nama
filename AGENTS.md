@@ -62,8 +62,8 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M9 (advanced dashboard capabilities) is complete and awaiting acceptance
-(2026-11-12); M10 (internationalization and themes) is next and has not started.
+M10 (internationalization and themes) is complete and awaiting acceptance
+(2026-11-12); M11 (plugin ecosystem) is next and has not started.
 ADR-011 is accepted as a self-hosted Docker topology. The workspace contains
 `apps/web`, `apps/api`,
 `examples/standalone-consumer` and exactly four packages:
@@ -89,10 +89,10 @@ role. Demo accounts are seeded from `DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD`
 upgrades are not proxied by Next.js rewrites, so live sockets use
 `NEXT_PUBLIC_NAMA_WS_URL` pointing at the API.
 
-Working rules for M9 and later:
+Working rules for M11 and later:
 
 1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
-   `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`,
+   `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm verify:workspace`,
    `pnpm verify:consumer`, `pnpm verify:openapi`).
 2. Package entry points resolve to `dist`; build before typechecking or running
    a dependent app.
@@ -167,5 +167,24 @@ Working rules for M9 and later:
 27. Import through `importDashboardConfig` so ids are regenerated and the shared
     schema validates; never hand-roll an import or create a dashboard from
     unvalidated configuration.
+28. Web chrome strings live in `apps/web/lib/i18n.ts` (`web.*` keys) and reach
+    components through `createWebI18n`/`useWebI18n`; do not hard-code user-facing
+    English, and do not translate authored content (dashboard titles, saved
+    widget labels, widget configs).
+29. Read locale, theme and direction from `WebPreferencesProvider`; persist
+    changes through the app shell's optimistic preference write (server
+    preference for signed-in users, `nama.locale` in `localStorage` otherwise)
+    and merge them into session state instead of reloading the editor.
+30. Format every number and date embedded in translated copy with
+    `i18n.formatNumber`/`i18n.formatDate`; keep storage in UTC ISO, keep Jalali
+    display-only (`fa-IR-u-ca-persian`), and normalize Persian/Arabic-Indic
+    digits with `normalizeDigits`/`parseLocalizedNumber` at input boundaries.
+31. Keep the editor and viewer canvases `dir="ltr"` under RTL chrome and render
+    `builder.canvas.ltrNotice`; never mirror the grid or chart axes (TD-001).
+32. `pnpm test:e2e` runs Playwright from the root against the dev servers with
+    `NEXT_PUBLIC_NAMA_WS_URL` set. Next keeps inactive route segments mounted,
+    so scope chrome locators with `:visible`; regenerate screenshot baselines
+    deliberately and keep `test-results/` out of commits. The suite is not wired
+    into CI yet (TD-036).
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

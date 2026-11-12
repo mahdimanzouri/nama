@@ -1,7 +1,7 @@
 # Current Phase
 
-**Current milestone:** M10 — Internationalization and themes (next)
-**Status:** M9 complete, awaiting acceptance (2026-11-12)
+**Current milestone:** M11 — Plugin platform (next)
+**Status:** M10 complete, awaiting acceptance (2026-11-12)
 **Date:** 2026-11-12
 
 ## What the repository looks like now
@@ -10,8 +10,13 @@
 nama/
 ├── apps/
 │   ├── web/                    # Next.js 16 app: login, dashboard list, editor, viewer
+│   │   ├── e2e/                # Playwright locale, theme and screenshot coverage (M10)
+│   │   ├── components/
+│   │   │   └── app-shell.tsx   # chrome, locale/theme selectors, preferences (M10)
 │   │   └── lib/
 │   │       ├── data-adapter.ts # SDK HTTP adapter pointed at the /api proxy
+│   │       ├── i18n.ts         # en/fa web chrome catalog (M10)
+│   │       ├── web-preferences.tsx # locale/theme/i18n context (M10)
 │   │       ├── realtime-adapter.ts # SSE over /api, or WS via NEXT_PUBLIC_NAMA_WS_URL
 │   │       └── templates.ts    # host templates bound to the demo connector
 │   └── api/                    # Fastify 5 service with PostgreSQL persistence
@@ -46,77 +51,63 @@ nama/
 └── pnpm-workspace.yaml
 ```
 
-## Delivered in M9
+## Delivered in M10
 
-### Contracts and resolution
-
-| Area | Contents |
-| --- | --- |
-| Schema | `variables` and `filters` on `DashboardConfig`; `interaction` and `visibility` on `DashboardWidget`; `DashboardControlValues`; all validated by `parseDashboardConfig` |
-| Transfer | `exportDashboardConfig`/`importDashboardConfig` regenerate widget IDs, rewrite layout references and reject unknown schema versions |
-| Variables | `resolveControlValues` merges typed choices over declared defaults; `defaultVariables` produces the initial set |
-| Filters | `resolveDashboardFilters` resolves each filter through its `variable` or `value` binding, falling back to the filter's own value |
-| Binding | `buildControlledQueryRequest` injects variables, dashboard time range and filters into the outgoing `QueryRequest` |
-| Time range | Precedence is dashboard control, then the widget query's `timeRangeVariable` binding, then the persisted `query.timeRange` |
-| Visibility | `evaluateVisibilityCondition`/`isWidgetVisible` support `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains` and `and`/`or`/`not`; comparisons and `and` bind tighter, and malformed expressions fail open |
-| Interactions | A chart selection writes its raw category value into the named variable, which every bound widget re-resolves |
-
-### SDK runtime
+### SDK i18n and formatting
 
 | Area | Contents |
 | --- | --- |
-| Control state | `useDashboardControlsState` holds choices (not resolved values) per provider mount; `initialControls` seeds and `onControlsChange` reports resolved values |
-| Controls UI | `DashboardControls` renders time-range presets, one field per variable type, and reset; `hideTimeRange`/`hideReset` trim it; nothing is persisted |
-| Filters in queries | Dashboard filters apply only to widgets whose query `fields` name the filtered field, so a filter cannot blank an unrelated widget |
-| Visibility | Hidden widgets perform no query at all; the editor passes `ignoreVisibility` so hidden widgets stay on the board while authoring |
-| Selection | `WidgetRenderer` turns a plugin `onSelect` into `setVariable(widget.interaction.variable, value)` |
-| Entries | The editor moved to `@nama/dashboard-builder/editor`; the root entry no longer loads React Grid Layout, the store or the authoring panels |
+| Jalali display | `dateLocale` maps `fa` to `fa-IR-u-ca-persian`; `formatDate` combines it with the resolved timezone while storage stays UTC ISO. No calendar library (TD-008 closed) |
+| Digit normalization | `normalizeDigits` plus `parseLocalizedNumber` handle Persian/Arabic-Indic digits, `٬`/`,` grouping and the `٫` decimal separator; applied in dashboard controls, editor variable/filter settings and number widget settings (TD-062 closed) |
+| Localized SDK chrome | Toolbar revision and conflict counts format through `i18n.formatNumber`; optional status segments collapse so an empty slot leaves no ` · ` separator; the many-widgets warning localizes its count |
+| Formatter tests | Runtime tests cover normalization, localized parsing, fa-Jalali formatting with a fixed UTC timezone and missing-key fallback |
 
-### Editor authoring
+### Web chrome and preferences
 
 | Area | Contents |
 | --- | --- |
-| Dashboard settings | Variable and filter authoring validated against the schema before commit; adding, editing and removing entries is one undoable step each |
-| Widget settings | Per-widget visibility expression and interaction variable |
-| Store | `setVariables`, `setFilters`, `upsertVariable`, `removeVariable`, `updateWidget` and `importConfig`; renaming a variable rewrites bindings and interactions, removing one clears dependent interactions |
-| Import/export | Toolbar downloads the config as JSON and imports a file after confirmation, replacing the draft as a single undoable commit |
+| Catalog | `apps/web/lib/i18n.ts` holds en/fa `WEB_MESSAGES` and `createWebI18n`, which delegates to `createDashboardI18n` so chrome and SDK text share the host → SDK → English → key order; template names and descriptions are keyed by template id |
+| Context | `WebPreferencesProvider`/`useWebI18n` expose locale, theme, direction and the facade; page content renders inside the shell so client components reach the context |
+| Translated surfaces | Home, login (fields, buttons, demo accounts), dashboard list, create form, editor loader/back links/read-only notice/conflict recovery/version history, viewer loading/not-published/meta, and the session pending/error states |
+| Switching | The header always shows a language selector and, once signed in, a theme selector. A signed-out choice is stored under `nama.locale` and read with `useSyncExternalStore`; a signed-in choice persists through `PATCH /v1/me/preferences` and is merged into session state so the editor keeps its draft |
+| Precedence | Local override → signed-in user preference → stored locale → `en`; a failed write reverts the optimistic override |
+| Themes | `data-theme` is set on `<html>` and the shell; `light`, `dark` and `system` map to CSS variables, and switching never remounts widgets or restarts queries |
+| RTL | The shell uses `dir="rtl"` and logical CSS properties; the editor and viewer canvases stay `dir="ltr"` and render the visible `builder.canvas.ltrNotice` disclosure in Persian |
 
-### Web and API
-
-| Area | Contents |
-| --- | --- |
-| Templates | Two host templates (`operations`, `trend-analysis`) bound to the always-available `demo-source` connector, with desktop/tablet/mobile placements |
-| Create | The dashboard list creates a blank dashboard or one seeded from a template |
-| API | `POST /v1/dashboards` accepts a full `config` (name now optional), validates it and applies the supplied name/description; OpenAPI and `api-client` updated |
-| Viewer | The published viewer renders `DashboardControls` for the dashboard's variables |
-
-## Delivered in M8 (unchanged summary)
+### Browser coverage
 
 | Area | Contents |
 | --- | --- |
-| Gateway | `/ws/v1` pre-upgrade auth, `GET /v1/stream` SSE fallback, per-subscription `datasource.execute` checks |
-| Hub | Channels shared per query, 60 s replay threads, send-time sequences, `snapshot-then-stream` and 250 ms throttled `stream` |
-| SDK | Shared-socket WebSocket adapter, per-subscription SSE adapter, `useWidgetQuery` snapshot writes into TanStack Query |
-| Web | SSE through `/api` by default; `NEXT_PUBLIC_NAMA_WS_URL` selects direct WebSocket |
+| Runner | Root `playwright.config.ts`; tests in `apps/web/e2e`; one worker; API and web dev servers started or reused; traces on failure; screenshots allow a 2% pixel ratio |
+| Persian flow | Login in fa → create a dashboard from the `operations` template → editor asserts RTL shell, LTR canvas and the Persian disclosure → publish → viewer asserts RTL shell, LTR canvas and the Persian revision/date line → reload keeps fa/rtl |
+| Theme flow | Dark and light selections are checked against computed body colours and survive a reload; `system` clears the explicit mode |
+| Screenshots | Header in English, login in English and login in Persian |
+| Transport | The test web server sets `NEXT_PUBLIC_NAMA_WS_URL` so realtime uses one WebSocket: the SSE adapter's per-subscription streams would exhaust the browser's HTTP/1.1 pool and stall publish (TD-060). Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` when the browser download is unavailable |
 
-Earlier milestones: M7 connector plugins and query limits; M6 PostgreSQL, RLS,
-authentication, drafts/publish/versions, sharing and embed tokens; M5 built-in
-widgets; M4 editor; M3.5 web slice; M3 SDK foundation; M2 contracts; M1 workspace.
+## Delivered in M9 (summary)
 
-## Decisions taken during M9
+| Area | Contents |
+| --- | --- |
+| Controls | Variables, filters, dashboard time range, visibility and interactions resolve in `dashboard-core`; `DashboardControls` renders them; a chart click writes a variable |
+| Editor | Variable/filter/visibility/interaction authoring, whole-draft import/export, per-breakpoint layout, version restore |
+| Web/API | Host templates, create-with-config, sharing; the editor moved to `@nama/dashboard-builder/editor` with its own budget |
+
+Earlier milestones: M8 realtime gateway, hub, replay and adapters; M7 connector
+plugins and query limits; M6 PostgreSQL, RLS, authentication, drafts/publish/
+versions, sharing and embed tokens; M5 built-in widgets; M4 editor; M3.5 web
+slice; M3 SDK foundation; M2 contracts; M1 workspace.
+
+## Decisions taken during M10
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| Where controls resolve | SDK, in `dashboard-core` | The same resolution serves any host and keeps the request contract; the server still validates the resolved request (TD-066) |
-| Control storage | Choices, resolved on read | A retyped variable falls back to its default without discarding surviving choices |
-| Filter scope | Only widgets whose query `fields` include the field | A global filter cannot blank widgets that never selected the field |
-| Time-range precedence | Control → query binding → persisted range | Explicit user choice wins without rewriting widget configs |
-| Visibility failure mode | Fail open | A typo shows a widget rather than silently hiding data |
-| Interactions | Write the selected value into a variable | Reuses one binding model; no event bus |
-| Templates' starting filter | `contains` with an empty value | Matches every timestamp, so a dashboard stays populated until the first chart click |
-| Import semantics | Whole-draft replace after confirmation | Merge semantics would need conflict rules no host has asked for (TD-065) |
-| Editor entry | `@nama/dashboard-builder/editor` | Viewer-only hosts stop paying for the authoring UI; root entry fell from 18.8 to 7.8 KiB gzipped |
-| Consumer budget | Measured over entry + chunk closure | Multi-entry builds move shared code into chunks a host still loads |
+| Web i18n mechanism | Typed `web.*` catalog through the SDK `DashboardI18n` factory | Shares one fallback chain with SDK text and avoids a runtime dependency (next-intl not adopted) |
+| Locale persistence | Server preference for signed-in users; `localStorage` only while signed out | A user's profile should win across devices, while the login page still honors the last choice before a session exists |
+| Preference application | Merge into session state instead of reloading it | The editor keeps its draft and never remounts on a language or theme change |
+| Jalali strategy | ICU `fa-IR-u-ca-persian` in `formatDate`; storage stays UTC ISO | No calendar library to license or upgrade; native date inputs stay Gregorian |
+| Number input | Normalize digits and separators at the control boundary, keep canonical numbers | Persian input works end to end without changing the query contract |
+| Number display | Format every number embedded in translated copy with `i18n.formatNumber` | Persian chrome must not mix ASCII digits into otherwise Persian copy |
+| E2E realtime transport | Pin `NEXT_PUBLIC_NAMA_WS_URL` in the Playwright web server | Six SSE streams saturate the HTTP/1.1 pool and block publish; WebSocket is the documented fallback-free path (TD-060) |
 
 ## Open decisions
 
@@ -128,19 +119,18 @@ widgets; M4 editor; M3.5 web slice; M3 SDK foundation; M2 contracts; M1 workspac
 | Viewer/editor layout parity | Open | — | Editor uses React Grid Layout, viewer CSS grid (TD-038) |
 | Source push / CDC | Open | — | Realtime polls connectors |
 | Cross-process realtime fan-out | Open | — | Channels, replay threads and limits are per process |
-| SSE multiplexing | Open | — | One stream per subscription |
+| SSE multiplexing | Open | — | One stream per subscription; default dev transport exhausts HTTP/1.1 connections with many live widgets (TD-060) |
 | Widget stream rendering | Open | — | Built-ins render snapshots; `stream.latest` is unused (TD-058) |
 | SQL/MQTT connectors | Open | — | Kinds are declared but return `501` |
 | DNS pinning / egress proxy | Open | — | Guard resolves once (TD-052) |
 | Query rate limiting | Open | — | Only per-source concurrency is bounded |
-| Persian calendar library | Open | M10 | Display-only strategy decided; library selection deferred |
-| Persian digit normalization | Open | M10 | `normalizeDigits` exists but is not applied to control input (TD-062) |
+| E2E in CI | Open | — | The Playwright suite runs locally; CI wiring and browser provisioning remain (TD-036) |
 | API code generation | Deferred to M12 | — | `api-client` remains hand-written |
 | Public/anonymous sharing | Deferred | — | Organization-scoped sharing only |
 | External time-series store | Deferred | — | Telemetry stays out of Postgres |
 | Plugin sandbox/marketplace | Deferred | — | Trusted install only (ADR-006) |
 
-## What M10 must not assume
+## What M11 must not assume
 
 - That control values persist. They are provider-mount state seeded from
   `initialControls`; a reload returns every control to its default.
@@ -150,23 +140,26 @@ widgets; M4 editor; M3.5 web slice; M3 SDK foundation; M2 contracts; M1 workspac
   malformed expressions make widgets visible.
 - That hidden widgets stop existing. The editor renders them with
   `ignoreVisibility`; the viewer does not mount them.
-- That interactions are an event bus. They write a value into a variable; there
-  is no cross-dashboard or host-level selection channel.
-- That number and date controls accept Persian digits. They take ASCII input;
-  `normalizeDigits` is not wired into control values yet (TD-062).
-- That the SDK ships a locale or theme switcher. Locale, direction and theme are
-  host props; M10 adds in-product switching.
-- That the root entry can import editor modules. Editor surfaces live behind
-  `@nama/dashboard-builder/editor`, and both entries have separate budgets.
+- That locale or theme changes remount the editor. Preferences merge into
+  session state; the draft survives a switch.
+- That a locale URL segment exists. Routes are locale-free and the language comes
+  from preferences; there is no `/en` or `/fa` prefix.
+- That authored content is translated. Dashboard titles, saved widget labels and
+  widget configs stay as written; only chrome and template names come from the
+  catalog.
+- That Persian dates are stored differently. Storage stays UTC ISO; Jalali is a
+  display format through ICU, and native date inputs stay Gregorian.
+- That the dashboard canvas or charts mirror in RTL. The canvas is LTR-only with
+  a visible disclosure, and chart axes are not mirrored (TD-001, TD-041).
+- That the E2E suite gates changes. It runs locally with `pnpm test:e2e`, is not
+  wired into CI yet, and runs the WebSocket realtime transport (TD-036, TD-060).
 - That template dashboards work against a real source. They bind the virtual
   `demo-source` connector.
 - That the editor offers a data-source picker; it does not (TD-043).
 - That editor and viewer lay widgets out identically; the engines differ
   (TD-038).
-- That there is an end-to-end browser test; M9 behaviour is covered by SSR,
-  store, API and template tests (TD-036, TD-064).
 
-## Verification (M9)
+## Verification (M10)
 
 All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2.
 
@@ -174,25 +167,24 @@ All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2
 | --- | --- | --- |
 | Boundaries | `pnpm verify:workspace` | Passes: approved graph, no host imports, single React version |
 | Lint | `pnpm lint` | Clean |
-| Format | `pnpm format:check` | All files match (generated Prisma output ignored) |
+| Format | `pnpm format:check` | All files match |
 | Typecheck | `pnpm typecheck` | 10 tasks successful |
-| Test | `pnpm test` | 274 passed, 6 skipped in 29 files: types 80, core 64, builder 56, api-client 14, api 53 (+6 Postgres skipped), web 7 |
+| Test | `pnpm test` | 281 passed, 6 skipped in 30 files: types 80, core 67, builder 56, api-client 14, api 53 (+6 Postgres skipped), web 11 |
 | Build | `pnpm build` | 6 tasks successful, 8 routes |
-| Consumer | `pnpm verify:consumer` | `"use client"` on all three entries; 7.8 / 17.3 / 8.1 KiB gzipped under 16 / 20 / 16 KiB; SSR render; single React copy |
+| Consumer | `pnpm verify:consumer` | `"use client"` on all three entries; 7.9 / 17.6 / 8.1 KiB gzipped under 16 / 20 / 16 KiB; SSR render; single React copy |
 | OpenAPI drift | `pnpm verify:openapi` | In sync: 39 served operations, 39 documented |
+| Browser E2E | `pnpm test:e2e` | 4 passed: Persian editor→publish→viewer with RTL chrome and LTR canvas, theme persistence, Persian dark chrome and screenshot baselines |
 
-The M9 suites cover control resolution and time-range precedence, filter
-binding through `fields`, visibility comparisons and malformed expressions,
-interaction-driven variable writes, hidden widgets skipping queries, the
-controls markup and reset, editor variable/filter authoring with rename and
-removal rewrites, import replacing the draft as one undoable commit, template
-validation against `parseDashboardConfig`, and `POST /v1/dashboards` accepting,
-renaming and rejecting configs. The 6 Postgres tests skip without
-`NAMA_TEST_DATABASE_URL` and always run in CI.
+The M10 suites cover digit normalization and localized parsing (including
+grouping separators), Jalali formatting with a fixed UTC timezone, missing-key
+fallback, web catalog interpolation and Persian template labels, plus the four
+browser scenarios. The 6 Postgres tests skip without `NAMA_TEST_DATABASE_URL` and
+always run in CI. The Playwright run needed `PLAYWRIGHT_CHROMIUM_EXECUTABLE`
+because the browser download was unreachable in this environment.
 
 ## Next action
 
-M9 is complete and awaiting acceptance. The next milestone is M10
-(internationalization and themes): English and Persian messages, RTL chrome with
-the disclosed LTR canvas, light/dark/system themes, locale-aware numbers and
-dates, the Jalali display strategy, theme-aware ECharts, and visual/E2E coverage.
+M10 is complete and awaiting acceptance. The next milestone is M11 (plugin
+platform): package and manifest lifecycle for widget and data-source plugins,
+registry hardening, configuration migration and the plugin authoring path
+against the normative contracts in `docs/plugins/`.

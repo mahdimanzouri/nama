@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { parseLocalizedNumber } from "@nama/dashboard-core";
 
 export interface TextFieldProps {
   label: string;
@@ -53,7 +54,6 @@ export interface NumberFieldProps {
   value: number;
   min: number;
   max: number;
-  step?: number;
   disabled?: boolean;
   onCommit: (value: number) => void;
 }
@@ -63,7 +63,6 @@ export function NumberField({
   value,
   min,
   max,
-  step = 1,
   disabled,
   onCommit,
 }: NumberFieldProps) {
@@ -72,17 +71,15 @@ export function NumberField({
       <span>{label}</span>
       <input
         key={value}
-        type="number"
+        type="text"
         inputMode="decimal"
+        dir="ltr"
         className="nama-input"
         defaultValue={value}
-        min={min}
-        max={max}
-        step={step}
         disabled={disabled}
         onBlur={(event) => {
-          const parsed = Number(event.currentTarget.value);
-          if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+          const parsed = parseLocalizedNumber(event.currentTarget.value);
+          if (parsed === undefined || parsed < min || parsed > max) {
             event.currentTarget.value = String(value);
             return;
           }

@@ -1,6 +1,6 @@
 # Technical Debt
 
-**Status:** Updated at M9 (2026-11-12)
+**Status:** Updated at M10 (2026-11-12)
 
 Debt is recorded honestly with impact, owner and target milestone. Items are
 removed only when the fix is merged and verified; closed items are listed at the
@@ -13,7 +13,6 @@ end so IDs stay stable.
 | TD-003 | 11 target packages are not created; code lives in four initial packages | Some modules are larger than ideal; boundaries unproven | Architecture | Split on evidence (ADR-001) |
 | TD-004 | Architecture documentation is English-only while the product ships Persian | Persian-speaking stakeholders rely on translations | Docs | When a Persian docs owner exists |
 | TD-007 | No plugin sandbox, marketplace or remote loading | Third-party plugins are trusted code | Security | Future ADR |
-| TD-008 | No Jalali calendar library selected | Persian date input/display implementation deferred | Frontend | M10 |
 | TD-009 | `docs/guides/` absent despite the planning tree | No step-by-step operator/developer guides yet | Docs | M12 |
 | TD-013 | Raw SQL remains available to `datasource.admin` | High-impact capability; relies on audit and read-only credentials | Security | Review each release |
 | TD-014 | No performance or accessibility measurements yet | Budgets are documented but unproven | QA | M12 / M10.5 |
@@ -31,7 +30,7 @@ end so IDs stay stable.
 | TD-032 | `verify:consumer` installs with `--offline` and needs React, TanStack Query and zod in the local pnpm store | A clean CI runner must prime the store first (lockfile install) | Tooling | M12 CI hardening |
 | TD-033 | Changing the `widgets` array identity rebuilds the registry; dynamic register/unregister after mount is unsupported | Hosts must pass a stable array; live plugin registration waits for M11 | SDK | M11 |
 | TD-035 | The API has no request rate limiting or connection-pool sizing; RLS and audit logging now exist | A burst can exhaust the pool or the database; login has no throttling | Backend/Security | M12 |
-| TD-036 | No browser end-to-end test in CI; M4 and M8 were verified with suites and manual checks | Regressions in the editor/viewer UI and realtime wiring are caught manually, not on every change | QA | M12 |
+| TD-036 | The Playwright suite exists (`pnpm test:e2e`) but is not wired into CI, and browser provisioning is manual | UI regressions are caught locally, not on every change; CI still relies on suites and manual checks | QA | M12 CI wiring |
 | TD-038 | Editor and viewer use different layout engines: React Grid Layout for editing, CSS grid for viewing | Widgets can differ by a pixel or two between modes; no parity test exists | Frontend | M12, with visual/E2E coverage |
 | TD-039 | The grid and resize rules from React Grid Layout are reproduced in the SDK stylesheet instead of importing the package CSS | RGL upgrades can silently break drag/resize styling | SDK | Every RGL upgrade |
 | TD-040 | Every built-in chart renders a single series; there is no groupBy, multi-series, stacked or combo chart support | Users cannot compare categories on one chart; the demo dataset has no grouping | Product/Frontend | When a grouped dataset exists |
@@ -52,14 +51,16 @@ end so IDs stay stable.
 | TD-057 | Realtime re-executes each subscribed query on a timer (`REALTIME_POLL_INTERVAL_MS`, default 5 s); connectors have no push, webhook or CDC path | Live data lags by up to one poll interval and each subscription costs a query per tick | Backend | When a connector gains push support |
 | TD-058 | Built-in widgets render `snapshot-then-stream` snapshots; none consume `data.stream.latest` | Raw `stream` mode is only useful to custom widgets, and the 500-sample client buffer is currently write-only for built-ins | SDK | M9 or when a high-frequency widget is requested |
 | TD-059 | Realtime channels, replay threads and connection limits live in one API process; fan-out to other replicas needs Redis or sticky routing | A second replica would not share subscriptions, exceed per-process limits, and lose the 60 s resume window on failover | Backend | When a second instance exists |
-| TD-060 | SSE opens one HTTP stream per subscription and the web app uses SSE by default behind the Next proxy | Many live widgets exhaust browser per-origin HTTP/1.1 connections; WebSocket requires exposing the API origin via `NEXT_PUBLIC_NAMA_WS_URL` | Frontend/Platform | Revisit with deployment or HTTP/2 |
+| TD-060 | SSE opens one HTTP stream per subscription and the web app uses SSE by default behind the Next proxy; the Playwright web server sets `NEXT_PUBLIC_NAMA_WS_URL` to avoid the stall | Many live widgets exhaust browser per-origin HTTP/1.1 connections and block save/publish; WebSocket requires exposing the API origin via `NEXT_PUBLIC_NAMA_WS_URL` | Frontend/Platform | Revisit with deployment or HTTP/2 |
 | TD-061 | Per-connection limits exist (50 subscriptions, 120 messages per 10 s), but there is no global connection cap or socket backpressure signal | A client fleet can exhaust file descriptors; slow sockets are only bounded by the replay buffer | Backend | M12 hardening |
-| TD-062 | `normalizeDigits` exists in `dashboard-core` but is not applied to control values or query parameters | Persian/Arabic-Indic digits typed into a number or date control can fail validation or reach a connector unnormalized | SDK | M10, with Persian input |
 | TD-063 | The visibility grammar has no parentheses and `and`/`or` precedence is fixed (comparisons and `and`, then `or`); malformed expressions fail open | Complex conditions need grouping through separate variables; a typo makes a widget visible rather than hiding it | SDK | When operators request grouped conditions |
 | TD-064 | Controls, visibility and cross-widget selections are covered by SSR and store tests, not a browser test; the chart click path is only asserted through `onSelect` wiring | Real pointer interaction and refetch behaviour are verified manually | QA | M12 browser suite |
 | TD-065 | Editor import replaces the whole draft after a confirm dialog; there is no merge, diff or partial import | An accidental import loses the current draft from the working tree unless the user undoes it | Frontend | Revisit if host needs merge workflows |
 | TD-066 | Variable and filter resolution happens in the SDK; the server validates the resolved request but cannot re-derive control state | A custom client can choose different filters/parameters within the request contract (subject to authorization and connector validation) | Architecture | Accepted; revisit with server-side control state |
 | TD-067 | `verify:consumer` totals an entry's budget by following static relative imports only; a dynamically imported chunk would be excluded from the measurement | A future lazy-loaded feature could exceed the budget without the check noticing | Tooling | When the SDK introduces a dynamic import |
+| TD-068 | The web chrome catalog is a plain `Record<Locale, Record<string, string>>` with no key-parity check between locales | A new `web.*` key added to only one locale silently falls back to English (or renders the key) | Frontend | When the catalog grows or a third locale is requested |
+| TD-069 | Only the locale is stored locally while signed out; the theme selector requires a session | The login page always follows `system` until a user signs in | Frontend | If signed-out theme control is requested |
+| TD-070 | Screenshot baselines are Chromium-on-Linux only and the suite needs a locally available Chromium build | Baselines do not protect the Safari/Firefox rendering path; a clean machine cannot run the suite without a browser download or `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | QA/Tooling | M12 CI wiring |
 
 ## Closed
 
@@ -79,6 +80,8 @@ end so IDs stay stable.
 | TD-012 | `pnpm verify:openapi` compares every served Fastify route with `docs/api/openapi.yaml` and fails on drift; code generation remains tracked as TD-045 | M6 |
 | TD-034 | PostgreSQL persistence behind the `Persistence` facade; migrations, seed and restart-surviving state verified by the Postgres integration suite | M6 |
 | TD-047 | Connector registry and `QueryService` execute/validate/discover/test; the connectivity endpoint runs the connector test, audits it and maps failures to the query error codes | M7 |
+| TD-008 | Persian dates use ICU `fa-IR-u-ca-persian` through `dateLocale` in `dashboard-core`; no calendar library is installed and storage stays UTC ISO | M10 |
+| TD-062 | Dashboard controls, editor variable/filter fields and number widget settings normalize Persian/Arabic-Indic digits and separators through `normalizeDigits`/`parseLocalizedNumber`; covered by core tests | M10 |
 
 ## Process
 

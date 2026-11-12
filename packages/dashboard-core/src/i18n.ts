@@ -284,6 +284,24 @@ export function normalizeDigits(value: string): string {
   return result;
 }
 
+/**
+ * Parses user-entered numbers after normalizing Persian and Arabic-Indic
+ * digits. Group separators (including the Persian `٬` and the thin spaces
+ * `Intl` emits) are dropped and the Arabic decimal separator `٫` becomes `.`.
+ * Returns `undefined` for empty or non-numeric input so callers keep the
+ * previous value instead of committing a junk number.
+ */
+export function parseLocalizedNumber(text: string): number | undefined {
+  const normalized = normalizeDigits(text)
+    .replace(/[\s\u00a0\u202f,\u066c]/gu, "")
+    .replace(/\u066b/gu, ".");
+
+  if (normalized === "") return undefined;
+
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : undefined;
+}
+
 function defaultDirection(locale: string): Direction {
   return locale.startsWith("fa") || locale.startsWith("ar") ? "rtl" : "ltr";
 }
@@ -308,6 +326,15 @@ function isDevelopment(): boolean {
     typeof process.env !== "undefined" &&
     process.env.NODE_ENV !== "production"
   );
+}
+
+/**
+ * Persian dates display in the Solar Hijri calendar through ICU. The tag is
+ * explicit so the result does not depend on a runtime's default calendar; the
+ * stored value and the native date input stay Gregorian ISO.
+ */
+export function dateLocale(locale: string): string {
+  return locale.startsWith("fa") ? "fa-IR-u-ca-persian" : locale;
 }
 
 export interface DashboardI18nOptions {
@@ -358,7 +385,7 @@ export function createDashboardI18n(options: DashboardI18nOptions): DashboardI18
       const date = value instanceof Date ? value : new Date(value);
       const timeZone = dateOptions.timeZone ?? timezone;
       return new Intl.DateTimeFormat(
-        locale,
+        dateLocale(locale),
         timeZone ? { ...dateOptions, timeZone } : dateOptions,
       ).format(date);
     },

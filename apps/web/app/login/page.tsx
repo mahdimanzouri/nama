@@ -6,26 +6,38 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { apiClient } from "@/lib/api";
 import { errorMessage } from "@/lib/error-message";
+import { useWebI18n } from "@/lib/web-preferences";
 
 const DEMO_ACCOUNTS = [
   {
-    role: "Editor",
+    roleKey: "web.login.role.editor",
     email: "demo@nama.local",
     password: "nama-demo-123",
-    hint: "create, edit and publish",
+    hintKey: "web.login.hint.editor",
   },
   {
-    role: "Viewer",
+    roleKey: "web.login.role.viewer",
     email: "viewer@nama.local",
     password: "nama-viewer-123",
-    hint: "read published dashboards only",
+    hintKey: "web.login.hint.viewer",
   },
 ] as const;
 
+const [EDITOR_ACCOUNT] = DEMO_ACCOUNTS;
+
 export default function LoginPage() {
+  return (
+    <AppShell>
+      <LoginForm />
+    </AppShell>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState<string>(DEMO_ACCOUNTS[0].email);
-  const [password, setPassword] = useState<string>(DEMO_ACCOUNTS[0].password);
+  const t = useWebI18n();
+  const [email, setEmail] = useState<string>(EDITOR_ACCOUNT.email);
+  const [password, setPassword] = useState<string>(EDITOR_ACCOUNT.password);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +62,7 @@ export default function LoginPage() {
       await apiClient.login({ email, password });
       router.replace("/dashboards");
     } catch (failure) {
-      setError(errorMessage(failure));
+      setError(errorMessage(failure, t.translate("web.common.errorFallback")));
       setPending(false);
     }
   }
@@ -64,68 +76,63 @@ export default function LoginPage() {
   }
 
   return (
-    <AppShell>
-      <section className="app-card app-login">
-        <h1 className="app-title">Sign in</h1>
-        <p className="app-subtitle">
-          The walking skeleton seeds two accounts in the Nama Demo organization. Data
-          resets when the API restarts.
-        </p>
+    <section className="app-card app-login">
+      <h1 className="app-title">{t.translate("web.login.title")}</h1>
+      <p className="app-subtitle">{t.translate("web.login.description")}</p>
 
-        <form className="app-form" onSubmit={handleSubmit}>
-          <label className="app-field">
-            <span>Email</span>
-            <input
-              className="app-input"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="username"
-              required
-            />
-          </label>
-          <label className="app-field">
-            <span>Password</span>
-            <input
-              className="app-input"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          {error ? (
-            <p className="app-notice app-notice--error" role="alert">
-              {error}
-            </p>
-          ) : null}
+      <form className="app-form" onSubmit={handleSubmit}>
+        <label className="app-field">
+          <span>{t.translate("web.login.email")}</span>
+          <input
+            className="app-input"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="username"
+            required
+          />
+        </label>
+        <label className="app-field">
+          <span>{t.translate("web.login.password")}</span>
+          <input
+            className="app-input"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+            required
+          />
+        </label>
+        {error ? (
+          <p className="app-notice app-notice--error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <button
+          type="submit"
+          className="app-button app-button--primary"
+          disabled={pending}
+        >
+          {pending ? t.translate("web.login.pending") : t.translate("web.common.signIn")}
+        </button>
+      </form>
+
+      <div className="app-stack app-login__accounts">
+        <h2 className="app-section-title">{t.translate("web.login.demoAccounts")}</h2>
+        {DEMO_ACCOUNTS.map((account, index) => (
           <button
-            type="submit"
-            className="app-button app-button--primary"
-            disabled={pending}
+            key={account.email}
+            type="button"
+            className="app-button app-demo-account"
+            onClick={() => fillDemoAccount(index)}
           >
-            {pending ? "Signing in…" : "Sign in"}
+            <span>{t.translate(account.roleKey)}</span>
+            <span className="app-muted">
+              {account.email} · {t.translate(account.hintKey)}
+            </span>
           </button>
-        </form>
-
-        <div className="app-stack app-login__accounts">
-          <h2 className="app-section-title">Demo accounts</h2>
-          {DEMO_ACCOUNTS.map((account, index) => (
-            <button
-              key={account.email}
-              type="button"
-              className="app-button app-demo-account"
-              onClick={() => fillDemoAccount(index)}
-            >
-              <span>{account.role}</span>
-              <span className="app-muted">
-                {account.email} · {account.hint}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-    </AppShell>
+        ))}
+      </div>
+    </section>
   );
 }

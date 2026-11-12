@@ -340,6 +340,8 @@ web app still binds built-in widgets to `demo-source`.
 
 ## M10 — Internationalization and themes
 
+**Status:** Delivered (2026-11-12).
+
 **Tasks:** English and Persian messages; RTL chrome with LTR canvas disclosure;
 light/dark/system themes; locale-aware numbers, dates and times; Jalali display
 and input strategy; theme-aware ECharts; visual regression and E2E coverage.
@@ -347,6 +349,22 @@ and input strategy; theme-aware ECharts; visual regression and E2E coverage.
 **Acceptance:** the same dashboard works in English and Persian, in all three
 theme modes. Chrome mirrors correctly; the canvas stays LTR by design and the
 limitation is visible to users.
+
+**Delivered:** en/fa SDK catalog completion with Jalali display
+(`fa-IR-u-ca-persian`) and Persian digit input in controls and settings; a typed
+`web.*` chrome catalog applied to every page, form and state; an app-shell
+language selector and theme selector with server-persisted preferences that
+merge into session state without remounting the editor; RTL chrome with the
+LTR-only canvas disclosure in both editor and viewer; and a Playwright suite
+(`pnpm test:e2e`) covering the Persian editor→publish→viewer flow, theme
+persistence across reloads and screenshot baselines.
+
+**Verified by:** `dashboard-core` i18n tests, `apps/web` catalog tests, the three
+Playwright tests and the workspace checks recorded in
+[current-phase.md](current-phase.md).
+
+**Deferred:** E2E is not wired into CI yet (TD-036); the default dev realtime
+transport remains SSE, so the browser suite pins the WebSocket transport (TD-060).
 
 ## M10.5 — Accessibility
 
