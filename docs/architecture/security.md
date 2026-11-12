@@ -1,9 +1,11 @@
 # Security
 
-**Status:** Implemented in part (M7): authentication, RBAC, tenant isolation,
-credential encryption, SSRF range blocking and per-source query limits are live.
-Rate limiting, DNS pinning, audit read access and the production review remain
-open (see technical debt). Reviewed again before production.
+**Status:** Implemented in part (M7, extended at M12): authentication, RBAC,
+tenant isolation, credential encryption, SSRF range blocking, per-source query
+limits, login/query rate limiting, the realtime connection cap, readiness and
+metrics endpoints, request IDs and log redaction are live. DNS pinning, audit
+read access and the production review remain open (see technical debt). Reviewed
+again before production.
 
 ## Trust boundaries
 
@@ -41,10 +43,10 @@ the query/realtime path.
 | 4 | Cross-tenant IDOR | Guessed IDs or missing filter | Tenant data exposure | Service scoping + RLS + membership resolution + cross-tenant CI tests (ADR-008) |
 | 5 | Embed-token escalation | Token scope or issuer permissions | Access to other dashboards or sources | Intersection with issuer's current permissions, expiry, revocation, per-subscription re-check (ADR-009) |
 | 6 | Plugin code execution | Malicious third-party widget | Application compromise | Trusted install only, no remote loading, error boundaries, review checklist; sandbox deferred (ADR-006) |
-| 7 | Unbounded query | Expensive SQL or huge result | Resource exhaustion, cost | 15 s timeout, 10,000 rows / 5 MiB cap, concurrency limits, read-only credentials, statement timeout |
+| 7 | Unbounded query | Expensive SQL or huge result | Resource exhaustion, cost | 15 s timeout, 10,000 rows / 5 MiB cap, per-user query rate limit, in-flight query cap, read-only credentials, statement timeout |
 | 8 | Session theft / fixation | XSS, token exposure, session fixation | Account takeover | httpOnly/Secure/SameSite cookie, hashed session IDs, rotation on login/privilege change, revocation (ADR-007) |
 | 9 | CSRF | Cross-site mutation | Unauthorized changes | Double-submit CSRF token on mutations; SameSite=Lax cookies |
-| 10 | Password brute force | Login/reset endpoints | Account takeover | Argon2id, rate limiting per IP and account, generic error messages |
+| 10 | Password brute force | Login/reset endpoints | Account takeover | Argon2id, fixed-window login rate limit per IP and account, generic error messages |
 | 11 | SQL injection | Raw SQL or structured query compile | Data disclosure/modification | Parameterized compilation, server-owned dataset allowlist, raw SQL admin-only, read-only credentials, audit |
 | 12 | Stored XSS via config/data | Widget titles, labels, data strings | Session compromise | React escaping by default; no untrusted `dangerouslySetInnerHTML`; plugin review |
 | 13 | Token in logs/referrers | URLs, error payloads | Token replay | Tokens in headers/first message, never URL; redaction; audit references token ID only |
@@ -59,19 +61,21 @@ the query/realtime path.
 | Organization tenant isolation | ADR-008, RLS policies |
 | Resource-level authorization | RBAC in module services |
 | Server-side validation | Zod route + domain schemas |
-| Rate limiting | API middleware, per route and principal |
+| Rate limiting | In-process fixed-window limiter on login (per IP + account) and query execution (per user); `429 RATE_LIMITED` with `Retry-After` |
 | Audit logs for sensitive actions | `modules/audit` |
 | Encrypted credentials with rotation | `data_source_credentials`, key store |
 | No secrets in dashboard config | Schema rules + validation |
 | Embed tokens narrowed and checked per subscription | ADR-009, realtime gateway |
 | Publish authorized separately from edit | `dashboard.publish` permission |
 | Per-query timeouts and limits | Query service + plugin context |
-| Connection pooling and limits | Infrastructure config |
+| Connection pooling and limits | Infrastructure config; global realtime connection cap (`REALTIME_MAX_CONNECTIONS`) shared by WebSocket and SSE |
 | Read-only DB credentials where possible | Data-source configuration |
 | Realtime per-subscription authorization | Realtime gateway |
 | Revocation handling | Session, token and subscription stores |
 | Import/export validation | Schema caps and migrations |
 | Plugin capability restrictions | Plugin contract + registry |
+| Operational visibility | `GET /healthz` (liveness), `GET /readyz` (persistence probe), `GET /metrics` (Prometheus text, optional `METRICS_TOKEN` bearer), `x-request-id` on every response |
+| Secret redaction | Logger redacts `cookie`, `authorization`, `x-csrf-token` and `set-cookie` |
 
 ## Authorization model
 
@@ -112,6 +116,8 @@ include a query hash and row count.
 ## Residual risks (accepted in v1)
 
 - Trusted plugins can execute arbitrary code in the application context.
+- Rate limits and the realtime connection cap are per process; a multi-instance
+  deployment needs a shared store (TD-054, TD-061).
 - DNS rebinding is not yet prevented: the egress guard resolves once and the
   HTTP client resolves again; redirects are refused but the address is not
   pinned (TD-052).

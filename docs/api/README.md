@@ -1,6 +1,6 @@
 # API Conventions
 
-**Status:** M7 implemented (2026-11-12). [`openapi.yaml`](openapi.yaml) describes
+**Status:** M12 hardening (2026-11-12). [`openapi.yaml`](openapi.yaml) describes
 the contract; operations marked `x-m0-status: implemented` are served by
 `apps/api` today and verified by `pnpm verify:openapi`.
 
@@ -50,6 +50,16 @@ With `APP_DATABASE_URL` set the API uses Postgres and enforces tenant isolation
 with row-level security; without it the seeded in-memory adapter is used for
 tests and demos (`/healthz` reports which adapter is active).
 
+## Operational endpoints
+
+These are served but intentionally **outside** the public OpenAPI contract:
+
+| Path | Purpose |
+| --- | --- |
+| `GET /healthz` | Liveness; reports the active persistence adapter |
+| `GET /readyz` | Readiness; probes persistence and returns `503 SERVICE_UNAVAILABLE` when it fails |
+| `GET /metrics` | Prometheus text exposition; requires `Authorization: Bearer $METRICS_TOKEN` when that variable is set |
+
 ## Drift check
 
 `pnpm verify:openapi` builds the app with the in-memory adapter, records every
@@ -58,7 +68,8 @@ registered Fastify route, and compares it with `openapi.yaml`:
 - A served method+path missing from the spec fails the check.
 - An operation marked `x-m0-status: implemented` that is not served fails.
 - Every operation must declare `x-m0-status: implemented | proposed | stub`.
-- `/healthz` is operational and intentionally absent from the public spec.
+- `/healthz`, `/readyz` and `/metrics` are operational and intentionally absent
+  from the public spec.
 
 Run it after touching routes or the specification. It is not part of `pnpm test`
 because it reads `docs/api/openapi.yaml` outside the package build graph.
@@ -159,7 +170,8 @@ Rules:
 - `issues` carries structured, array-indexed validation detail.
 - `currentRevision` is present on `409 REVISION_CONFLICT` so the client can
   reload the latest draft.
-- `requestId` correlates with server logs and audit records.
+- `requestId` correlates with server logs and audit records; the same identifier
+  is returned in the `x-request-id` response header.
 - `retryAfterMs` is present for rate limits and transient upstream failures.
 - Internal details, credentials, stack traces and query text are never returned.
 
@@ -191,7 +203,18 @@ Common codes:
 - Configuration: 1 MiB → `413 CONFIG_TOO_LARGE`; 100 widgets → `422`.
 - Queries: 15 s → `504 QUERY_TIMEOUT`; 10,000 rows or 5 MiB →
   `RESULT_TOO_LARGE` with truncation metadata where partial results are valid.
-- Rate limits return `429` with `Retry-After` and `retryAfterMs`.
+- Rate limits return `429 RATE_LIMITED` with `Retry-After` and `retryAfterMs`:
+  - `POST /v1/auth/login`: `LOGIN_RATE_LIMIT` attempts per 5 minutes per IP and
+    account (default 30).
+  - `POST /v1/queries/execute`: `QUERY_RATE_LIMIT` requests per minute per user
+    (default 300), applied after the permission check so unauthorized callers
+    never consume quota.
+- Realtime: a global connection cap (`REALTIME_MAX_CONNECTIONS`, default 500)
+  covers WebSocket and SSE together. Upgrades past the cap are rejected with
+  `503` before a socket exists; SSE requests return
+  `503 SERVICE_UNAVAILABLE`.
+- Limiters are in-process fixed windows; a multi-instance deployment needs a
+  shared store (tracked in [technical-debt.md](../implementation/technical-debt.md)).
 
 ## Types and time
 

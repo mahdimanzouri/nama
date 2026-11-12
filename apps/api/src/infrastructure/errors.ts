@@ -64,3 +64,15 @@ export function revisionConflict(currentRevision: number): HttpError {
     currentRevision,
   });
 }
+
+export function rateLimited(retryAfterMs: number): HttpError {
+  return new HttpError(429, {
+    code: "RATE_LIMITED",
+    message: "Too many requests; retry later",
+    retryAfterMs,
+  });
+}
+
+export function serviceUnavailable(message = "Service is not ready"): HttpError {
+  return new HttpError(503, { code: "SERVICE_UNAVAILABLE", message });
+}

@@ -1,13 +1,18 @@
 import type { FastifyInstance } from "fastify";
 import { issuesFromZod, queryRequestSchema } from "@nama/dashboard-types";
 
-import { HttpError } from "../../infrastructure/errors.ts";
+import { HttpError, rateLimited } from "../../infrastructure/errors.ts";
+import type { Metrics } from "../../infrastructure/metrics.ts";
+import type { RateLimiter } from "../../infrastructure/rate-limit.ts";
 import type { AuthContext, AuthHooks } from "../../http/auth.ts";
 import { callerFromAuth, type QueryService } from "./service.ts";
 
 export interface QueryRouteDeps {
   service: QueryService;
   hooks: AuthHooks;
+  limiter: RateLimiter;
+  metrics: Metrics;
+  now: () => Date;
 }
 
 function requireAuth(request: { auth?: AuthContext }): AuthContext {
@@ -22,8 +27,17 @@ function requireAuth(request: { auth?: AuthContext }): AuthContext {
 
 export function registerQueryRoutes(
   app: FastifyInstance,
-  { service, hooks }: QueryRouteDeps,
+  { service, hooks, limiter, metrics, now }: QueryRouteDeps,
 ): void {
+  const enforceRateLimit = async (request: Parameters<typeof requireAuth>[0]) => {
+    const auth = requireAuth(request);
+    const decision = limiter.consume(auth.user.id, now().getTime());
+    if (!decision.allowed) {
+      metrics.recordRateLimited("query");
+      throw rateLimited(decision.retryAfterMs);
+    }
+  };
+
   app.post(
     "/v1/queries/execute",
     {
@@ -31,6 +45,7 @@ export function registerQueryRoutes(
         hooks.authenticate,
         hooks.requireCsrf,
         hooks.requirePermission("datasource.execute"),
+        enforceRateLimit,
       ],
     },
     async (request) => {

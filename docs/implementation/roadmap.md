@@ -364,8 +364,9 @@ persistence across reloads and screenshot baselines.
 Playwright tests and the workspace checks recorded in
 [current-phase.md](current-phase.md).
 
-**Deferred:** E2E is not wired into CI yet (TD-036); the default dev realtime
-transport remains SSE, so the browser suite pins the WebSocket transport (TD-060).
+**Deferred:** the default dev realtime transport remains SSE, so the browser
+suite pins the WebSocket transport (TD-060). CI runs the suite in a dedicated
+browser job from M12.
 
 ## M10.5 — Accessibility
 

@@ -2,8 +2,9 @@
  * Fails when the routes served by apps/api drift from docs/api/openapi.yaml.
  *
  * Every served method+path must be documented, and every documented operation
- * marked `x-m0-status: implemented` must be served. `/healthz` is operational
- * and intentionally absent from the public specification.
+ * marked `x-m0-status: implemented` must be served. Operational probes and
+ * metrics (`/healthz`, `/readyz`, `/metrics`) are intentionally absent from the
+ * public specification and documented in the operations runbook instead.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -17,7 +18,7 @@ import { loadEnv } from "../src/env.ts";
 const here = dirname(fileURLToPath(import.meta.url));
 const specPath = resolve(here, "../../../docs/api/openapi.yaml");
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
-const OPERATIONAL_PATHS = new Set(["/healthz"]);
+const OPERATIONAL_PATHS = new Set(["/healthz", "/readyz", "/metrics"]);
 const STATUSES = new Set(["implemented", "proposed", "stub"]);
 
 interface Operation {

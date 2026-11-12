@@ -356,6 +356,8 @@ export interface Persistence {
   dataSources: DataSourceRepository;
   audit: AuditRepository;
   permissions(): Promise<PermissionRecord[]>;
+  /** Probes the backing store for `/readyz`; throws or resolves false. */
+  ready(): Promise<boolean>;
   /** Runs `fn` with the tenant context applied to the database session. */
   withTenant<T>(scope: TenantScope, fn: () => Promise<T>): Promise<T>;
   close(): Promise<void>;

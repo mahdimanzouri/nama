@@ -13,11 +13,14 @@ import {
 import {
   HttpError,
   forbidden,
+  rateLimited,
   unauthorized,
   validationFailed,
 } from "../../infrastructure/errors.ts";
 import type { AuthDeps, AuthHooks } from "../../http/auth.ts";
+import type { Metrics } from "../../infrastructure/metrics.ts";
 import { verifyPassword } from "../../infrastructure/passwords.ts";
+import type { RateLimiter } from "../../infrastructure/rate-limit.ts";
 import { toSessionPayload } from "./service.ts";
 
 const loginSchema = z
@@ -31,15 +34,35 @@ export interface AuthRouteDeps extends AuthDeps {
   hooks: AuthHooks;
   sessionTtlMs: number;
   isProduction: boolean;
+  loginLimiter: RateLimiter;
+  metrics: Metrics;
 }
 
 export function registerAuthRoutes(
   app: FastifyInstance,
-  { persistence, now, hooks, sessionTtlMs, isProduction }: AuthRouteDeps,
+  {
+    persistence,
+    now,
+    hooks,
+    sessionTtlMs,
+    isProduction,
+    loginLimiter,
+    metrics,
+  }: AuthRouteDeps,
 ): void {
   app.post("/v1/auth/login", async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) throw validationFailed(issuesFromZod(parsed.error));
+
+    const decision = loginLimiter.consume(
+      `${request.ip}|${parsed.data.email.trim().toLowerCase()}`,
+      now().getTime(),
+    );
+    if (!decision.allowed) {
+      metrics.recordRateLimited("login");
+      reply.header("retry-after", Math.ceil(decision.retryAfterMs / 1000));
+      throw rateLimited(decision.retryAfterMs);
+    }
 
     const user = await persistence.users.findByEmail(parsed.data.email);
     const passwordMatches =

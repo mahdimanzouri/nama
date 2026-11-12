@@ -33,6 +33,14 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   /** How often a shared realtime channel re-executes its query. */
   REALTIME_POLL_INTERVAL_MS: z.coerce.number().int().min(250).max(60_000).default(5_000),
+  /** Process-wide cap on WebSocket connections plus SSE streams. */
+  REALTIME_MAX_CONNECTIONS: z.coerce.number().int().min(1).max(100_000).default(500),
+  /** Login attempts per five-minute window and client address/email pair. */
+  LOGIN_RATE_LIMIT: z.coerce.number().int().min(1).max(10_000).default(30),
+  /** Query executions per one-minute window and user. */
+  QUERY_RATE_LIMIT: z.coerce.number().int().min(1).max(100_000).default(300),
+  /** When set, `/metrics` requires `Authorization: Bearer <token>`. */
+  METRICS_TOKEN: z.string().min(16).optional(),
   DEMO_EDITOR_EMAIL: z.email().default("demo@nama.local"),
   DEMO_EDITOR_PASSWORD: z.string().min(8).default("nama-demo-123"),
   DEMO_VIEWER_EMAIL: z.email().default("viewer@nama.local"),

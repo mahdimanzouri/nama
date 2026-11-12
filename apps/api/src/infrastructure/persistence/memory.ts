@@ -714,6 +714,9 @@ export function createMemoryPersistence(env: Env): Persistence {
     ): Promise<T> {
       return fn();
     },
+    async ready() {
+      return true;
+    },
     async close() {},
   } satisfies Persistence;
 }

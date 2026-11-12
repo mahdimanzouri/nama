@@ -122,8 +122,8 @@ contracts; M1 workspace.
 | Widget stream rendering | Open | — | Built-ins render snapshots; `stream.latest` is unused (TD-058) |
 | SQL/MQTT connectors | Open | — | Kinds are declared but return `501` |
 | DNS pinning / egress proxy | Open | — | Guard resolves once (TD-052) |
-| Query rate limiting | Open | — | Only per-source concurrency is bounded |
-| E2E in CI | Open | — | The Playwright suite runs locally; CI wiring and browser provisioning remain (TD-036) |
+| Query and login rate limits | Resolved (M12) | — | In-process fixed windows per IP/account and per user; per-replica until a shared store exists (TD-054) |
+| E2E in CI | Resolved (M12) | — | A `browser` job provisions Chromium and runs `pnpm test:e2e` (TD-036) |
 | Connector hot-loading | Open | — | Connectors are registered in-process at API boot; there is no install or reload path (TD-071) |
 | Generic editor extensions | Open | — | Only widget `settings` panels extend the editor; no control or action registry (TD-072) |
 | API code generation | Deferred to M12 | — | `api-client` remains hand-written |
@@ -156,8 +156,8 @@ contracts; M1 workspace.
   M12 versioning and release work.
 - That the editor can attach a real source. It still has no data-source picker
   (TD-043).
-- That the E2E suite gates changes or runs in CI. It runs locally with the
-  WebSocket transport (TD-036, TD-060).
+- That the E2E suite runs locally only. It now has a CI job, but it still uses
+  the WebSocket transport and Chromium only (TD-036, TD-060, TD-070).
 
 ## Verification (M11)
 

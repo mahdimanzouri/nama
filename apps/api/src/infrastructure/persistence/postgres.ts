@@ -1107,6 +1107,10 @@ export function createPostgresPersistence(connectionString: string): Persistence
         { maxWait: 5_000, timeout: 20_000 },
       );
     },
+    async ready() {
+      await client.$queryRaw`SELECT 1`;
+      return true;
+    },
     async close() {
       await client.$disconnect();
     },

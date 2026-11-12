@@ -106,12 +106,15 @@ The browser suite starts or reuses the dev servers with
 `NEXT_PUBLIC_NAMA_WS_URL` so realtime uses one WebSocket; six SSE streams would
 exhaust the browser's HTTP/1.1 connections (TD-060). If the Playwright browser
 download is unavailable, point `PLAYWRIGHT_CHROMIUM_EXECUTABLE` at a local
-Chromium build. The suite is not wired into CI yet (TD-036).
+Chromium build. CI runs the suite in a dedicated `browser` job.
 
 The API reads `HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL`, `APP_DATABASE_URL`,
-`CREDENTIAL_ENCRYPTION_KEY`, `REALTIME_POLL_INTERVAL_MS` and the demo-account
-variables; see `apps/api/.env.example`. `GET /healthz` returns the service
-status. The web app proxies `/api/*` to `NAMA_API_URL` (default
+`CREDENTIAL_ENCRYPTION_KEY`, `REALTIME_POLL_INTERVAL_MS`,
+`REALTIME_MAX_CONNECTIONS`, `LOGIN_RATE_LIMIT`, `QUERY_RATE_LIMIT`,
+`METRICS_TOKEN` and the demo-account variables; see `apps/api/.env.example`.
+`GET /healthz` reports liveness, `GET /readyz` probes persistence and
+`GET /metrics` exposes Prometheus text (bearer-protected when `METRICS_TOKEN` is
+set). The web app proxies `/api/*` to `NAMA_API_URL` (default
 `http://localhost:3001`), which also carries the SSE fallback at
 `/api/v1/stream`. Next.js rewrites cannot upgrade WebSocket connections, so live
 sockets need `NEXT_PUBLIC_NAMA_WS_URL` (for example `ws://localhost:3001/ws/v1`)

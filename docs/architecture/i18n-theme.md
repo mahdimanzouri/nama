@@ -232,7 +232,7 @@ ECharts theme mapping:
 | Tests | `dashboard-core` runtime tests (digits, grouping separators, Jalali with fixed UTC, fallback), `apps/web/lib/__tests__/i18n.test.ts` (interpolation, Persian digits and date, template labels) |
 | Browser tests | `apps/web/e2e/locale-theme.spec.ts`: Persian editor → publish → viewer with RTL chrome, LTR canvas and disclosure; theme persistence across reload checked against computed background colours; screenshot baselines for the English and Persian login and header |
 | E2E transport | The Playwright web server sets `NEXT_PUBLIC_NAMA_WS_URL` so realtime uses one WebSocket; SSE's per-subscription streams would exhaust the browser's HTTP/1.1 connection pool once six widgets are live (TD-060) |
-| Command | `pnpm test:e2e` from the repository root; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` when the browser download is unavailable. Not wired into CI yet (TD-036) |
+| Command | `pnpm test:e2e` from the repository root; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` when the browser download is unavailable. CI runs the suite in a dedicated Chromium job (TD-070). |
 
 ## Related documents
 

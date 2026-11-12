@@ -50,6 +50,8 @@ paths:
         Verifies Argon2id credentials, creates an opaque 256-bit session stored
         hashed, and sets the httpOnly `nama_session` cookie plus the readable
         `nama_csrf` cookie. Credential failures return `401 INVALID_CREDENTIALS`.
+        Attempts are limited per client address and email; exceeding the window
+        returns `429 RATE_LIMITED` with `Retry-After`.
       x-m0-status: implemented
       security: []
       requestBody:
@@ -73,6 +75,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationError' }
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+          description: Login attempts for this address and email exceeded the window; see `Retry-After`
         '500': { $ref: '#/components/responses/InternalError' }
 
   /v1/auth/session:

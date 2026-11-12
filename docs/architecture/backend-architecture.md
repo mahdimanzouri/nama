@@ -74,6 +74,7 @@ request
   → transaction begins
   → SET LOCAL app.organization_id / app.user_id
   → RBAC permission check (resource-level)
+  → rate limit where configured (login, query execution)
   → business validation (Zod, caps, ownership)
   → handler
   → audit event (for sensitive actions)
@@ -181,15 +182,25 @@ Queue/cache infrastructure is introduced only when measurements justify it.
   rotation support.
 - Required configuration includes database URL, session secret, credential-KEK,
   allowed origins, and rate-limit defaults.
+- M12 knobs: `REALTIME_MAX_CONNECTIONS` (default 500, shared by WebSocket and
+  SSE), `LOGIN_RATE_LIMIT` (default 30 requests per 5 minutes per IP + account)
+  and `QUERY_RATE_LIMIT` (default 300 requests per minute per user).
 
 ## Observability
 
 - Structured JSON logs with request ID, organization ID, user ID, route, latency
-  and outcome. Secrets and tokens are never logged.
-- Health endpoints: liveness and readiness (database reachable, migrations
-  current).
-- Metrics: request latency/error rate, query duration/rows/truncation, active
-  realtime connections/subscriptions, reconnects, auth failures.
+  and outcome. The logger redacts `cookie`, `authorization`, `x-csrf-token` and
+  `set-cookie`; secrets and tokens are never logged.
+- Every response carries `x-request-id` (generated when the client sends none) so
+  logs and client errors can be correlated.
+- `GET /healthz` is liveness only; `GET /readyz` probes persistence (`SELECT 1`)
+  and returns `503 SERVICE_UNAVAILABLE` when it fails.
+- `GET /metrics` renders Prometheus text: HTTP request counts and latency sums,
+  query executions by outcome, rate-limited requests, realtime connections and
+  uptime. When `METRICS_TOKEN` is set the endpoint requires a bearer token;
+  otherwise it is open to the network and must be firewalled at deploy time.
+- These three endpoints are operational and intentionally outside the public
+  OpenAPI contract (they are excluded from the drift check).
 - Error tracking with release identity; no credentials or dashboard contents in
   payloads.
 

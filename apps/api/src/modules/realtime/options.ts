@@ -18,6 +18,8 @@ export interface RealtimeOptions {
   maxSubscriptionsPerConnection: number;
   maxMessagesPerWindow: number;
   messageWindowMs: number;
+  /** Process-wide cap across WebSocket connections and SSE streams. */
+  maxConnections: number;
 }
 
 export const REALTIME_OPTION_DEFAULTS: RealtimeOptions = {
@@ -31,6 +33,7 @@ export const REALTIME_OPTION_DEFAULTS: RealtimeOptions = {
   maxSubscriptionsPerConnection: 50,
   maxMessagesPerWindow: 120,
   messageWindowMs: 10_000,
+  maxConnections: 500,
 };
 
 export type RealtimeSend = (message: RealtimeServerMessage) => void;

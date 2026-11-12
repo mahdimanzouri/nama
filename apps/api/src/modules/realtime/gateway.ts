@@ -9,7 +9,12 @@ import {
   type RealtimeServerMessage,
 } from "@nama/dashboard-types";
 
-import { unauthorized, validationFailed } from "../../infrastructure/errors.ts";
+import {
+  serviceUnavailable,
+  unauthorized,
+  validationFailed,
+} from "../../infrastructure/errors.ts";
+import type { Metrics } from "../../infrastructure/metrics.ts";
 import { SESSION_COOKIE } from "../../infrastructure/sessions.ts";
 import type { RealtimePrincipal, RealtimeAuthorizer } from "./authorizer.ts";
 import { RealtimeConnection } from "./connection.ts";
@@ -21,6 +26,7 @@ export interface RealtimeGatewayDeps {
   hub: RealtimeHub;
   options: RealtimeOptions;
   now: () => number;
+  metrics?: Metrics;
 }
 
 const WS_PATH = "/ws/v1";
@@ -65,7 +71,13 @@ function protocolToken(request: FastifyRequest): string | undefined {
 
 function rejectUpgrade(socket: import("node:stream").Duplex, status: number): void {
   const reason =
-    status === 401 ? "Unauthorized" : status === 403 ? "Forbidden" : "Not Found";
+    status === 401
+      ? "Unauthorized"
+      : status === 403
+        ? "Forbidden"
+        : status === 503
+          ? "Service Unavailable"
+          : "Not Found";
   socket.write(
     `HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`,
   );
@@ -97,7 +109,12 @@ export function registerRealtimeGateway(
   deps: RealtimeGatewayDeps,
 ): void {
   const connections = new Set<RealtimeConnection>();
+  const streams = new Set<symbol>();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
+
+  const publishCount = (): void => {
+    deps.metrics?.setRealtimeConnections(connections.size + streams.size);
+  };
 
   const onUpgrade = (
     request: import("node:http").IncomingMessage,
@@ -110,12 +127,21 @@ export function registerRealtimeGateway(
       return;
     }
 
+    if (connections.size + streams.size >= deps.options.maxConnections) {
+      rejectUpgrade(socket, 503);
+      return;
+    }
+
     void (async () => {
       try {
         const principal = await resolveHandshakePrincipal(
           request as unknown as FastifyRequest,
           deps.authorizer,
         );
+        if (connections.size + streams.size >= deps.options.maxConnections) {
+          rejectUpgrade(socket, 503);
+          return;
+        }
         wss.handleUpgrade(request, socket, head, (ws) => {
           const connection = new RealtimeConnection(
             ws,
@@ -129,8 +155,12 @@ export function registerRealtimeGateway(
             principal,
           );
           connections.add(connection);
-          ws.on("close", () => connections.delete(connection));
-          ws.on("error", () => connections.delete(connection));
+          publishCount();
+          const release = (): void => {
+            if (connections.delete(connection)) publishCount();
+          };
+          ws.on("close", release);
+          ws.on("error", release);
         });
       } catch {
         rejectUpgrade(socket, 401);
@@ -139,6 +169,7 @@ export function registerRealtimeGateway(
   };
 
   app.server.on("upgrade", onUpgrade);
+  publishCount();
 
   app.get("/v1/stream", async (request, reply) => {
     const authorization = headerValue(request, "authorization");
@@ -153,6 +184,9 @@ export function registerRealtimeGateway(
       principal = (await deps.authorizer.fromCookie(cookieToken(request))) ?? undefined;
     }
     if (!principal) throw unauthorized();
+    if (connections.size + streams.size >= deps.options.maxConnections) {
+      throw serviceUnavailable("Realtime connection limit reached");
+    }
 
     const parsed = streamQuerySchema.safeParse(request.query);
     if (!parsed.success) throw validationFailed(issuesFromZod(parsed.error));
@@ -184,6 +218,9 @@ export function registerRealtimeGateway(
       `sse-${createHash("sha256").update(data.queryId).digest("hex").slice(0, 16)}`;
 
     reply.hijack();
+    const streamToken = Symbol("sse-stream");
+    streams.add(streamToken);
+    publishCount();
     const raw = reply.raw;
     raw.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
@@ -233,6 +270,7 @@ export function registerRealtimeGateway(
       stopped = true;
       clearInterval(keepAlive);
       subscription.close(false);
+      if (streams.delete(streamToken)) publishCount();
     };
     request.raw.on("close", cleanup);
     raw.on("close", cleanup);
@@ -243,6 +281,8 @@ export function registerRealtimeGateway(
     app.server.off("upgrade", onUpgrade);
     for (const connection of connections) connection.shutdown();
     connections.clear();
+    streams.clear();
+    publishCount();
     deps.hub.close();
     await new Promise<void>((resolve) => wss.close(() => resolve()));
   });

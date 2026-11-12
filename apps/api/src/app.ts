@@ -4,11 +4,13 @@ import { PLATFORM_LIMITS, createId } from "@nama/dashboard-types";
 
 import type { Env } from "./env.ts";
 import { createCredentialCipher } from "./infrastructure/credentials.ts";
-import { HttpError } from "./infrastructure/errors.ts";
+import { HttpError, unauthorized } from "./infrastructure/errors.ts";
+import { Metrics } from "./infrastructure/metrics.ts";
 import {
   createPersistence,
   type Persistence,
 } from "./infrastructure/persistence/index.ts";
+import { RateLimiter, type RateLimitConfig } from "./infrastructure/rate-limit.ts";
 import { createAuthHooks } from "./http/auth.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerDashboardRoutes } from "./modules/dashboards/routes.ts";
@@ -38,6 +40,8 @@ export interface BuildAppOptions {
   fetch?: typeof globalThis.fetch;
   /** Tightens realtime timings for tests. */
   realtime?: Partial<RealtimeOptions>;
+  /** Tightens the in-process rate limits for tests. */
+  rateLimits?: { login?: RateLimitConfig; query?: RateLimitConfig };
   /** Observes every registered route; used by the OpenAPI drift check. */
   onRoute?: (route: { method: string | string[]; url: string }) => void;
 }
@@ -47,18 +51,61 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
   const ownsPersistence = options.persistence === undefined;
   const now = options.now ?? (() => new Date());
   const credentialCipher = createCredentialCipher(env.CREDENTIAL_ENCRYPTION_KEY);
+  const metrics = new Metrics();
   const queryService = new QueryService({
     persistence,
     plugins: createPluginRegistry(),
     cipher: credentialCipher,
     allowPrivateNetwork: env.ALLOW_PRIVATE_DATA_SOURCES,
     fetch: options.fetch ?? globalThis.fetch,
+    metrics,
   });
 
+  const loginLimiter = new RateLimiter(
+    options.rateLimits?.login ?? {
+      limit: env.LOGIN_RATE_LIMIT,
+      windowMs: 5 * 60_000,
+    },
+  );
+  const queryLimiter = new RateLimiter(
+    options.rateLimits?.query ?? {
+      limit: env.QUERY_RATE_LIMIT,
+      windowMs: 60_000,
+    },
+  );
+
   const app = Fastify({
-    logger: env.LOG_LEVEL === "silent" ? false : { level: env.LOG_LEVEL },
+    logger:
+      env.LOG_LEVEL === "silent"
+        ? false
+        : {
+            level: env.LOG_LEVEL,
+            redact: {
+              paths: [
+                "req.headers.cookie",
+                "req.headers.authorization",
+                "req.headers.x-csrf-token",
+                "res.headers.set-cookie",
+              ],
+              censor: "[redacted]",
+            },
+          },
     genReqId: () => createId(),
     bodyLimit: PLATFORM_LIMITS.configBytes * 2,
+  });
+
+  app.addHook("onSend", async (request, reply, payload) => {
+    reply.header("x-request-id", request.id);
+    return payload;
+  });
+
+  app.addHook("onResponse", async (request, reply) => {
+    metrics.observeHttp(
+      request.method,
+      request.routeOptions.url ?? "unmatched",
+      reply.statusCode,
+      reply.elapsedTime,
+    );
   });
 
   void app.register(cookie);
@@ -84,6 +131,8 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
     hooks,
     sessionTtlMs: env.SESSION_TTL_HOURS * 3_600_000,
     isProduction: env.NODE_ENV === "production",
+    loginLimiter,
+    metrics,
   });
   registerDashboardRoutes(app, { persistence, now, hooks });
   registerShareRoutes(app, { persistence, now, hooks });
@@ -97,11 +146,18 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
   });
   registerOrganizationRoutes(app, { persistence, now, hooks });
   registerPreferenceRoutes(app, { persistence, hooks });
-  registerQueryRoutes(app, { service: queryService, hooks });
+  registerQueryRoutes(app, {
+    service: queryService,
+    hooks,
+    limiter: queryLimiter,
+    metrics,
+    now,
+  });
 
   const realtimeOptions: RealtimeOptions = {
     ...REALTIME_OPTION_DEFAULTS,
     pollIntervalMs: env.REALTIME_POLL_INTERVAL_MS,
+    maxConnections: env.REALTIME_MAX_CONNECTIONS,
     ...options.realtime,
   };
   const realtimeHub = new RealtimeHub({
@@ -115,6 +171,7 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
     hub: realtimeHub,
     options: realtimeOptions,
     now: () => now().getTime(),
+    metrics,
   });
 
   app.get("/healthz", async () => ({
@@ -122,6 +179,32 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
     version: API_VERSION,
     persistence: persistence.kind,
   }));
+
+  app.get("/readyz", async (request, reply) => {
+    try {
+      await persistence.ready();
+      return { status: "ready", persistence: persistence.kind };
+    } catch (error) {
+      request.log.error({ err: error }, "readiness probe failed");
+      return reply.code(503).send({
+        error: {
+          code: "SERVICE_UNAVAILABLE",
+          message: "The persistence layer is not ready",
+        },
+      });
+    }
+  });
+
+  app.get("/metrics", async (request, reply) => {
+    if (env.METRICS_TOKEN) {
+      const header = request.headers.authorization;
+      if (header !== `Bearer ${env.METRICS_TOKEN}`) throw unauthorized();
+    }
+    return reply
+      .code(200)
+      .header("content-type", "text/plain; version=0.0.4; charset=utf-8")
+      .send(metrics.render());
+  });
 
   app.setErrorHandler((error: unknown, request, reply) => {
     if (error instanceof HttpError) {

@@ -10,6 +10,7 @@ import {
   type CredentialCipher,
 } from "../../infrastructure/credentials.ts";
 import { HttpError, notFound } from "../../infrastructure/errors.ts";
+import type { Metrics } from "../../infrastructure/metrics.ts";
 import type {
   DataSourceRecord,
   Persistence,
@@ -50,6 +51,7 @@ export interface QueryServiceDeps {
   allowPrivateNetwork: boolean;
   fetch: typeof globalThis.fetch;
   concurrency?: ConcurrencyGate;
+  metrics?: Metrics;
 }
 
 export interface ExecuteOptions {
@@ -160,6 +162,7 @@ export class QueryService {
   private readonly allowPrivateNetwork: boolean;
   private readonly fetchImpl: typeof globalThis.fetch;
   private readonly gate: ConcurrencyGate;
+  private readonly metrics: Metrics | undefined;
 
   constructor({
     persistence,
@@ -168,6 +171,7 @@ export class QueryService {
     allowPrivateNetwork,
     fetch,
     concurrency = new ConcurrencyGate(),
+    metrics,
   }: QueryServiceDeps) {
     this.persistence = persistence;
     this.plugins = plugins;
@@ -175,6 +179,7 @@ export class QueryService {
     this.allowPrivateNetwork = allowPrivateNetwork;
     this.fetchImpl = fetch;
     this.gate = concurrency;
+    this.metrics = metrics;
   }
 
   private scope(caller: QueryCaller): TenantScope {
@@ -315,6 +320,7 @@ export class QueryService {
 
     const startedAt = performance.now();
 
+    let outcome: "ok" | "truncated" | "error" = "error";
     try {
       const { context } = await this.buildContext(caller, record, plugin, {
         requestId: options.requestId,
@@ -360,6 +366,7 @@ export class QueryService {
       }
 
       const limited = enforceResultLimits(parsed.data, limits);
+      outcome = limited.meta.truncated ? "truncated" : "ok";
       return {
         ...limited,
         meta: {
@@ -368,6 +375,7 @@ export class QueryService {
         },
       };
     } finally {
+      this.metrics?.recordQuery(outcome);
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", forwardAbort);
       release();
