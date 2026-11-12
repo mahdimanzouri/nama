@@ -1,6 +1,9 @@
 # Data Flow
 
-**Status:** Proposed (M0)
+**Status:** Proposed (M0); the editor save/publish and viewer read paths are
+implemented through M3.5 with two differences: the web app owns draft state in a
+Zustand store instead of the SDK, and the API store is in memory rather than
+PostgreSQL. Realtime remains a contract only.
 
 ## Editor: load, edit, save, publish
 

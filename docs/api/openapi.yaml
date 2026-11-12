@@ -1,10 +1,13 @@
 openapi: 3.0.3
 info:
   title: Nama Dashboard Platform API
-  version: 0.1.0-m0
+  version: 0.2.0-m3.5
   description: |
-    M0 proposal for the Nama dashboard platform API. Management operations use
-    REST; live updates use `/ws/v1` (see docs/architecture/realtime-protocol.md).
+    Contract for the Nama dashboard platform API. The M3.5 walking skeleton
+    implements authentication, dashboard list/create/draft/publish, the published
+    dashboard read and query execution; remaining paths are proposals. Management
+    operations use REST; live updates use `/ws/v1` (see
+    docs/architecture/realtime-protocol.md).
 
     Conventions:
     - All configuration writes carry `If-Match` with the last known revision.
@@ -14,8 +17,9 @@ info:
     - Timestamps are UTC ISO-8601. IDs are UUIDv7.
     - Errors use the ErrorEnvelope with a stable code and request ID.
 
-    `x-m0-status` values: `proposed` (contract reviewed, shapes may change in M2),
-    `stub` (path reserved; detailed schema arrives with its milestone).
+    `x-m0-status` values: `implemented` (served by apps/api in M3.5), `proposed`
+    (contract reviewed, shapes may still change), `stub` (path reserved; detailed
+    schema arrives with its milestone).
 servers:
   - url: https://api.example.invalid
     description: Placeholder; deployment is unresolved (ADR-011)
@@ -23,6 +27,7 @@ security:
   - sessionCookie: []
   - embedBearer: []
 tags:
+  - name: Auth
   - name: Dashboards
   - name: Dashboard versions
   - name: Shares
@@ -35,12 +40,77 @@ tags:
   - name: Preferences
 
 paths:
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Sign in with email and password
+      description: |
+        Verifies Argon2id credentials, creates an opaque 256-bit session stored
+        hashed, and sets the httpOnly `nama_session` cookie plus the readable
+        `nama_csrf` cookie. Credential failures return `401 INVALID_CREDENTIALS`.
+      x-m0-status: implemented
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Signed in
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: Session and CSRF cookies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionPayload'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/auth/session:
+    get:
+      tags: [Auth]
+      operationId: getSession
+      summary: Read the current session
+      x-m0-status: implemented
+      responses:
+        '200':
+          description: Current session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionPayload'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Revoke the current session
+      x-m0-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Signed out; cookies cleared
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
   /v1/dashboards:
     get:
       tags: [Dashboards]
       operationId: listDashboards
       summary: List authorized dashboards
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -59,7 +129,7 @@ paths:
       tags: [Dashboards]
       operationId: createDashboard
       summary: Create a dashboard
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
@@ -75,7 +145,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DashboardDocument'
+                $ref: '#/components/schemas/DashboardView'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -91,14 +161,14 @@ paths:
       tags: [Dashboards]
       operationId: getDashboard
       summary: Get dashboard metadata and published configuration
-      x-m0-status: proposed
+      x-m0-status: implemented
       responses:
         '200':
           description: Dashboard
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DashboardDocument'
+                $ref: '#/components/schemas/DashboardView'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -157,7 +227,7 @@ paths:
       operationId: getDashboardDraft
       summary: Get the draft configuration (editor only)
       description: Requires edit permission. Viewers never receive draft data.
-      x-m0-status: proposed
+      x-m0-status: implemented
       responses:
         '200':
           description: Draft
@@ -173,7 +243,7 @@ paths:
       tags: [Dashboards]
       operationId: saveDashboardDraft
       summary: Save the draft configuration
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -208,7 +278,7 @@ paths:
       operationId: publishDashboard
       summary: Publish the draft and create a version
       description: Requires dashboard.publish. Atomic config copy, revision increment and version insert.
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -225,7 +295,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DashboardDocument'
+                $ref: '#/components/schemas/DashboardView'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -533,7 +603,7 @@ paths:
       operationId: executeQuery
       summary: Execute a query
       description: Server-side execution with 15 s timeout and 10,000 rows / 5 MiB caps.
-      x-m0-status: proposed
+      x-m0-status: implemented
       requestBody:
         required: true
         content:
@@ -985,6 +1055,10 @@ components:
                 oneOf:
                   - { type: string }
                   - { type: integer }
+            issues:
+              type: array
+              items: { $ref: '#/components/schemas/ValidationIssue' }
+            currentRevision: { type: integer }
             retryAfterMs: { type: integer }
     Pagination:
       type: object
@@ -994,23 +1068,64 @@ components:
         pageSize: { type: integer }
         total: { type: integer }
 
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, minLength: 1, maxLength: 1024 }
+    SessionUser:
+      type: object
+      required: [id, email, displayName, locale, theme, timezone]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        locale: { type: string, enum: [en, fa] }
+        theme: { type: string, enum: [light, dark, system] }
+        timezone: { type: string, example: UTC }
+    SessionOrganization:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+    SessionPayload:
+      type: object
+      required: [user, organization, role, permissions, csrfToken, expiresAt]
+      properties:
+        user: { $ref: '#/components/schemas/SessionUser' }
+        organization: { $ref: '#/components/schemas/SessionOrganization' }
+        role: { type: string, enum: [editor, viewer] }
+        permissions:
+          type: array
+          items: { type: string }
+        csrfToken: { type: string }
+        expiresAt: { type: string, format: date-time }
     DashboardSummary:
       type: object
-      required: [id, organizationId, name, revision, updatedAt]
+      required: [id, organizationId, name, revision, publishedRevision, updatedAt]
       properties:
         id: { type: string, format: uuid }
         organizationId: { type: string, format: uuid }
         name: { type: string }
-        revision: { type: integer }
+        revision:
+          type: integer
+          description: Current revision of the draft; advances on every save.
+        publishedRevision:
+          type: integer
+          nullable: true
+          description: Revision that was last published; never advances on draft saves.
         updatedAt: { type: string, format: date-time }
         publishedAt: { type: string, format: date-time, nullable: true }
-    DashboardDocument:
+    DashboardView:
       allOf:
         - $ref: '#/components/schemas/DashboardSummary'
         - type: object
-          required: [draftConfig]
+          required: [publishedConfig, permissions]
           properties:
-            draftConfig: { $ref: '#/components/schemas/DashboardConfig' }
             publishedConfig:
               allOf:
                 - $ref: '#/components/schemas/DashboardConfig'

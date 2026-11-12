@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import "@nama/dashboard-builder/styles.css";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nama",
+  title: "Nama Dashboard Platform",
   description: "Extensible, multilingual dashboard platform",
 };
 

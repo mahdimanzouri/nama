@@ -15,6 +15,11 @@ const envSchema = z.object({
   HOST: z.string().min(1).default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3001),
   LOG_LEVEL: z.enum(LOG_LEVELS).default("info"),
+  SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(12),
+  DEMO_EDITOR_EMAIL: z.email().default("demo@nama.local"),
+  DEMO_EDITOR_PASSWORD: z.string().min(8).default("nama-demo-123"),
+  DEMO_VIEWER_EMAIL: z.email().default("viewer@nama.local"),
+  DEMO_VIEWER_PASSWORD: z.string().min(8).default("nama-viewer-123"),
 });
 
 export type Env = z.infer<typeof envSchema>;

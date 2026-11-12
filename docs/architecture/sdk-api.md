@@ -1,7 +1,7 @@
 # SDK Public API Proposal
 
-**Status:** Proposed (M0). Final signatures are validated with type tests and a
-standalone consumer example in M3.
+**Status:** Proposed (M0). The M3 subset is implemented and validated by a
+standalone consumer; see [Implementation status](#m3-implementation-status).
 
 ## Goals and constraints
 
@@ -85,9 +85,15 @@ interface DashboardProviderProps {
   /** Last known server revision for optimistic concurrency. */
   revision?: number;
 
+  /** Stable dashboard id passed to data adapters. */
+  dashboardId?: string;
+
   locale: string;
   direction: "ltr" | "rtl";
   theme: "light" | "dark" | "system";
+
+  /** User time zone; falls back to the dashboard setting, then UTC. */
+  timezone?: string;
 
   /** Host translation overrides; falls back to SDK messages, then English. */
   messages?: Record<string, string>;
@@ -108,6 +114,8 @@ interface DashboardProviderProps {
   onConflict?: (error: RevisionConflictError) => void;
 
   widgets?: WidgetPlugin[];
+  /** Share a cache when the host already owns one. */
+  queryClient?: QueryClient;
   children: React.ReactNode;
 }
 ```
@@ -129,12 +137,12 @@ interface RevisionConflictError extends Error {
 | --- | --- | --- |
 | `useDashboard()` | Runtime context | Editing state, config access, selected widget |
 | `useDashboardEditor()` | Editor actions | Add, remove, move, resize, undo, redo, save, publish |
-| `useDashboardConfig()` | `{ config, revision, dirty }` | Read-only snapshot for host widgets |
-| `useDashboardLayout()` | Layout helpers | Breakpoint, item resolution, materialization |
+| `useDashboardConfig()` | `{ config, revision }` | Read-only snapshot; `dirty` arrives with the editor |
+| `useDashboardLayout()` | `{ breakpoint, columns, rowHeight, gap, items }` | Resolved items inherit from wider breakpoints |
 | `useWidgetRegistry()` | Registry API | Resolve, register, list widget types |
 | `useDataSource()` | Data adapter facade | Execute/subscribe with dashboard variables resolved |
 | `useDashboardLocale()` | `{ locale, direction, translate, formatNumber, formatDate }` | Injected i18n |
-| `useDashboardTheme()` | `{ mode, tokens, setMode }` | Theme controls |
+| `useDashboardTheme()` | `{ mode, resolved, tokens }` | `setMode` arrives when the host owns edit controls |
 
 Hooks are stable API. The internal Zustand store is **not** exported; consumers
 must not rely on store shape or action names.
@@ -247,3 +255,35 @@ export function DashboardPage() {
 - [package-dependencies.md](package-dependencies.md)
 - [dashboard-schema.md](dashboard-schema.md)
 - [decisions/ADR-005-i18n-theme.md](decisions/ADR-005-i18n-theme.md)
+
+## M3 implementation status
+
+Implemented in `@nama/dashboard-builder`:
+
+- `DashboardProvider`, `DashboardViewer`, `DashboardCanvas`, `WidgetRenderer`,
+  `WidgetErrorBoundary`
+- `useDashboard`, `useDashboardConfig`, `useDashboardLayout`, `useDashboardLocale`,
+  `useDashboardTheme`, `useWidgetRegistry`, `useDataSource`
+- `defineWidget`, the widget/plugin types and the runtime error classes re-exported
+  from `@nama/dashboard-core`
+- `@nama/dashboard-builder/styles.css`
+
+Not yet exported, because the code does not exist:
+
+- `Dashboard`, `DashboardEditor`, `WidgetSettings`, `DashboardToolbar`,
+  `DashboardFilters`, `useDashboardEditor` — M4
+- `onChange`, `onSave`, `onConflict` behavior; the provider is read-only until the
+  editor owns a draft
+- Built-in widgets — M5
+
+Deliberate differences from the proposal above:
+
+- Widget components are **function components** (including `memo`/`forwardRef`
+  results). `WidgetSettingsProps` is invariant in its config, so an erased
+  `ComponentType` cannot accept concrete plugins without `any`.
+- The canvas positions widgets with a CSS grid. Drag, resize and container-width
+  math arrive with React Grid Layout in M4.
+- `timezone`, `dashboardId` and `queryClient` are optional provider props added
+  during implementation; none is required, so existing hosts are unaffected.
+- `useDashboardConfig` omits `dirty`; controlled writes do not exist yet.
+

@@ -1,6 +1,24 @@
 import { z } from "zod";
 
 import { PLATFORM_LIMITS, timestampSchema } from "./primitives";
+import type {
+  QueryContext,
+  QueryRequest,
+  SubscriptionHandlers,
+  Unsubscribe,
+} from "./query";
+
+/**
+ * The realtime transport injected by the host. The SDK owns one connection per
+ * provider instance; widgets never open sockets themselves.
+ */
+export interface RealtimeAdapter {
+  subscribe(
+    request: QueryRequest,
+    context: QueryContext,
+    handlers: SubscriptionHandlers,
+  ): Promise<Unsubscribe>;
+}
 
 /** Bumped only for breaking changes; a breaking change ships as `/ws/v2`. */
 export const REALTIME_PROTOCOL_VERSION = 1;

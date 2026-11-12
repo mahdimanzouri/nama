@@ -1,26 +1,36 @@
 # Package Dependencies
 
-**Status:** Proposed (M0)
+**Status:** Implemented through M3.5 (2026-11-12)
 
 ## Initial packages (created in M1)
 
 | Package | Responsibility | Runtime dependencies | Peer dependencies |
 | --- | --- | --- | --- |
 | `@nama/dashboard-types` | Public types and Zod schemas for dashboard config, widgets, layout, queries, realtime events, plugin manifests | `zod` | — |
-| `@nama/dashboard-core` | Runtime, editor engine, registries, layout integration, data query manager, realtime manager, built-in widgets | `@nama/dashboard-types`, `zod`, `zustand`, `@tanstack/react-query`, `react-grid-layout`, `echarts` | `react`, `react-dom` |
-| `@nama/dashboard-builder` | Public React API and builder UI (provider, viewer, editor, canvas, toolbar, panels) | `@nama/dashboard-types`, `@nama/dashboard-core` | `react`, `react-dom` |
-| `@nama/api-client` | OpenAPI-generated typed client; transport, auth injection, error handling | none at runtime beyond `fetch` | — |
+| `@nama/dashboard-core` | Host-agnostic runtime: registries, widget resolution, layout helpers, i18n, theme tokens, query helpers | `@nama/dashboard-types`, `zod` | `react` (types only) |
+| `@nama/dashboard-builder` | Public React API and UI: provider, viewer, renderer, hooks, editor (M4), stylesheet | `@nama/dashboard-types`, `@nama/dashboard-core`, `@tanstack/react-query` | `react`, `react-dom` |
+| `@nama/api-client` | Typed HTTP transport for the platform API: requests, cookie/CSRF handling, `ApiError` mapping | `@nama/dashboard-types` (query types) | — |
 
 Rules:
 
-- Runtime dependencies listed for `dashboard-core` are introduced with the code
-  that uses them (M3–M5); M1 installs only what the foundation needs.
+- Dependencies are introduced with the code that uses them (M3–M5); M1 installed
+  only what the foundation needed.
+- **M3 decision:** TanStack Query lives in `dashboard-builder`, not
+  `dashboard-core`. Core must stay free of React runtime imports; caching and
+  hooks are React concerns. `zustand` (editor state), `react-grid-layout` (M4)
+  and `echarts` (M5) follow the same rule: whichever package owns the code owns
+  the dependency.
+- **M3.5 state:** `api-client` is hand-written against `openapi.yaml` and depends
+  on `dashboard-types` for query contracts. `apps/web` links `builder`,
+  `dashboard-types` and `api-client`, and owns `zustand` for editor state and
+  `@tanstack/react-query` through the builder. `apps/api` runs on `fastify`,
+  `@fastify/cookie`, `@node-rs/argon2`, `zod` and `dashboard-types`.
 - React and React DOM are **peer dependencies** of every React package to avoid
   duplicate React copies.
 - No package imports from `apps/web` or `apps/api`.
 - The API may depend on `dashboard-types` for shared request/response shapes, but
   never on React packages.
-- `zustand` is an internal implementation detail of `dashboard-core`; it is not
+- `zustand` will be an internal implementation detail of the editor; it is not
   re-exported as public API.
 
 ## Target-only packages (not created in M1)
@@ -52,6 +62,7 @@ graph TD
   core --> types
   builder --> core
   builder --> types
+  client --> types
   web --> builder
   web --> types
   web --> client
@@ -112,19 +123,26 @@ Task graph as implemented in `turbo.json`:
 
 - Packages build with `tsdown` to ESM plus declarations.
 - The build must preserve `"use client"` directives; CI fails when a built file
-  that had the directive loses it.
-- CSS ships through explicit exports (`@nama/dashboard-builder/styles.css`).
+  that had the directive loses it. The builder emits the directive once via the
+  `tsdown` banner rather than per source module, because rolldown warns that
+  module-level directives are not preserved when bundling and only the entry
+  directive is meaningful to consumers.
+- CSS ships through explicit exports (`@nama/dashboard-builder/styles.css`,
+  copied to `dist/styles.css` by the build).
 - React/React DOM are peer dependencies; `pnpm why react` in the consumer test
   must show one copy.
 - Distribution is private-workspace only in v1. The consumer test packs the
   tarball with the package manager's `pack` command and installs it in a separate
   React/Next.js application. No registry or publish pipeline exists yet.
-- The SDK entry point has a gzipped bundle budget, set in M3 and enforced by the
-  build.
+- The SDK entry point has a gzipped bundle budget, set in M3: 10 KiB for the
+  builder entry (5.1 KiB at M3), enforced by `pnpm verify:consumer`.
 
 ## Consumer test
 
-The separate test application verifies:
+`pnpm verify:consumer` packs the three SDK packages, installs the tarballs
+offline into a throwaway React app built from
+`examples/standalone-consumer`, server-renders a dashboard with a custom widget
+and verifies:
 
 - Package exports and type declarations resolve.
 - CSS loads.
@@ -133,6 +151,7 @@ The separate test application verifies:
 - React is not duplicated.
 - No monorepo source alias is required.
 - A custom widget can be registered through the documented API.
+- The builder entry stays under the gzipped bundle budget.
 
 ## Related documents
 

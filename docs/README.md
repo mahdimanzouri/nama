@@ -1,8 +1,8 @@
 # Nama Dashboard Platform — Architecture Package
 
-**Status:** M0 approved; M1 and M2 complete ([current phase](implementation/current-phase.md))
+**Status:** M0 approved; M1, M2, M3 and M3.5 complete ([current phase](implementation/current-phase.md))
 **Date:** 2026-11-12
-**Scope:** Architecture and decisions; product features are not implemented.
+**Scope:** Architecture and decisions, plus the implemented walking skeleton.
 **Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)
 
 ## Purpose
@@ -16,12 +16,18 @@ evolve independently without re-deciding fundamentals or requiring a rewrite.
 M1 created the monorepo this package describes:
 
 - `apps/web` — the Next.js 16.4.6 application (moved from the repository root)
-- `apps/api` — Fastify 5 service with `GET /healthz` only
+- `apps/api` — Fastify 5 service with auth, dashboards, draft/publish, queries and
+  `GET /healthz`
 - `packages/{dashboard-types,dashboard-core,dashboard-builder,api-client}`
 - pnpm workspace, Turborepo task graph, shared strict TypeScript and ESLint
 
-The SDK packages build and link but export nothing yet; their public APIs arrive
-in M3 (core, builder) and M6 (api-client). Documents describing target-only
+M2 added the shared contracts in `dashboard-types`. M3 added the host-agnostic
+runtime in `dashboard-core`, the React provider/viewer/hooks in
+`dashboard-builder`, a stylesheet export, and the standalone consumer verified by
+`pnpm verify:consumer`. M3.5 wired the web app to `api-client` and the SDK:
+login, dashboard list/create, editor save/publish with `If-Match`, KPI and line
+widgets over HTTP, and a published-only viewer. `api-client` is a hand-written
+typed transport until codegen lands in M6. Documents describing target-only
 packages list them as such.
 
 ## Status legend

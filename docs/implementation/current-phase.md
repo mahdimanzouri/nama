@@ -1,6 +1,6 @@
 # Current Phase
 
-**Current milestone:** M2 — Shared contracts and schemas (complete; next is M3)
+**Current milestone:** M3.5 — Walking skeleton (complete; next is M4)
 **Status:** Complete, accepted 2026-11-12
 **Date:** 2026-11-12
 
@@ -9,15 +9,18 @@
 ```text
 nama/
 ├── apps/
-│   ├── web/                    # Next.js 16 app
-│   └── api/                    # Fastify 5 service, /healthz only
+│   ├── web/                    # Next.js 16 app: login, dashboard list, editor, viewer
+│   └── api/                    # Fastify 5 service: auth, dashboards, queries, /healthz
 ├── packages/
-│   ├── dashboard-types/        # platform constants + all runtime contracts (M2)
-│   ├── dashboard-core/         # empty entry point; public API lands in M3
-│   ├── dashboard-builder/      # empty entry point; public API lands in M3
-│   └── api-client/             # empty entry point; generated client lands in M6
-├── scripts/verify-workspace.mjs
-├── docs/                       # M0 architecture and decisions
+│   ├── dashboard-types/        # platform constants + runtime contracts (M2)
+│   ├── dashboard-core/         # host-agnostic runtime (M3)
+│   ├── dashboard-builder/      # public React API and CSS (M3)
+│   └── api-client/             # hand-written typed transport (M3.5)
+├── examples/standalone-consumer/  # SSR consumer with a custom widget (M3)
+├── scripts/
+│   ├── verify-workspace.mjs
+│   └── verify-consumer.mjs     # pack → offline install → SSR → distribution checks
+├── docs/                       # architecture, decisions, implementation state
 ├── turbo.json
 ├── tsconfig.base.json
 ├── eslint.config.mjs           # single root config for the whole workspace
@@ -25,49 +28,51 @@ nama/
 └── pnpm-workspace.yaml
 ```
 
-`packages/dashboard-types/src` holds one module per contract area:
+## Delivered in M3.5
 
-| Module | Contents |
+### `apps/api`
+
+| Area | Contents |
 | --- | --- |
-| `primitives.ts` | Locales, breakpoints, themes, UUIDv7 and timestamp schemas, IANA time-zone validation, frozen `PLATFORM_LIMITS` |
-| `errors.ts` | Stable issue codes, `ValidationIssue`, `ValidationResult`, Zod-to-issue mapping |
-| `layout.ts` | `LayoutItem`, per-breakpoint layouts with 12/8/4 columns, overflow and duplicate checks |
-| `widget.ts` | `DashboardWidget` plus visibility |
-| `query.ts` | Query definition, filters, aggregations, variable bindings, absolute/relative time ranges, result and error contracts, `DataAdapter` types |
-| `dashboard.ts` | Metadata, settings, variables, filters, full configuration and document schemas, `parseDashboardConfig` |
-| `realtime.ts` | The ten `/ws/v1` message schemas, close codes, replay/reconnect constants, separate `authenticate` frame |
-| `plugin.ts` | Widget manifest/capabilities and data-source plugin manifest/capabilities |
-| `migration.ts` | Dashboard and per-widget migration runners |
+| Auth | `POST /v1/auth/login`, `GET /v1/auth/session`, `POST /v1/auth/logout`; Argon2id hashes, opaque 256-bit session tokens hashed at rest, `nama_session` (httpOnly) plus readable `nama_csrf`, `X-CSRF-Token` double-submit on mutations |
+| Dashboards | List, create, get, draft get/save, publish; service-layer organization scoping so out-of-scope IDs return 404 |
+| Concurrency | `If-Match: "<revision>"` on draft writes and publish; stale writes return `409 REVISION_CONFLICT` with `currentRevision`; publish copies the draft, increments `revision`, sets `publishedRevision`/`publishedAt` and inserts into the retained version list in one step |
+| Queries | `POST /v1/queries/execute` against a seeded in-memory dataset, with validation errors returned as `errors[].issues` |
+| Views | `GET /v1/dashboards/:id` returns `publishedConfig` and `publishedRevision` only; `GET /v1/dashboards/:id/draft` is editor-only |
+| Store | In-memory, seeded with one organization, one editor and one viewer account |
 
-## Deliverables
+### `@nama/api-client`
 
-- [x] Public types and Zod schemas for dashboard, widget, layout, query, adapter
-      and realtime contracts, with types inferred from the schemas
-- [x] Plugin manifests (widget and data-source) with capability flags, semver and
-      identifier validation
-- [x] Migration interface for the dashboard `schemaVersion` and per-widget
-      `configVersion`, with idempotency, future-version rejection and typed failures
-- [x] `parseDashboardConfig` runs migrations, validates, enforces the 1 MiB cap and
-      returns warnings for the 50-widget threshold and widgets missing from every layout
-- [x] Stable cross-field issue codes (`duplicate_widget_id`, `duplicate_variable_name`,
-      `layout_unknown_widget`, `layout_duplicate_widget`, `config_too_large`,
-      `unsupported_schema_version`, `many_widgets`, `widget_not_laid_out`)
-- [x] 69 schema tests covering valid/invalid configurations, field paths, caps,
-      migrations, realtime frames and plugin manifests
-- [x] `zod` added as the runtime dependency of `dashboard-types`
+- Hand-written transport over `fetch` with cookie credentials, CSRF header injection,
+  `If-Match` support and typed `ApiError`.
+- `RevisionConflictError` exposes `currentRevision` for the editor conflict path.
+- Exported request/response types mirroring the implemented OpenAPI schemas.
 
-## Decisions taken during M2
+### `apps/web`
+
+| Area | Contents |
+| --- | --- |
+| Transport | `next.config.ts` rewrites `/api/:path*` to `${NAMA_API_URL ?? "http://localhost:3001"}/:path*`, keeping the session cookie first-party |
+| Routes | `/login`, `/` (list), `/dashboards/new`, `/dashboards/[id]/edit`, `/dashboards/[id]/view`; dynamic params awaited inside `<Suspense>` for `cacheComponents` |
+| Session | `useSession` hook plus `WorkspaceGate`; server-checked session drives all authenticated screens |
+| Editor | Zustand vanilla store per mount, add/remove widgets, keyboard move and explicit width/height controls, KPI and line settings panels, save draft, publish, dirty tracking |
+| Widgets | `KPI` and `line` plugins registered through `defineWidget` and the SDK registry; values come from TanStack Query over the HTTP data adapter with `refetchInterval` set from `settings.refreshInterval` |
+| Viewer | Renders `publishedConfig` only; shows `publishedRevision` and never exposes the draft |
+| Theme | Light/dark/system through SDK tokens plus Tailwind classes |
+
+## Decisions taken during M3.5
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| Schema authoring | Zod schema first, TypeScript type inferred | A value that parses is a value that type-checks; no drift between the two |
-| Configuration validation result | `{ ok, issues, warnings }` on both branches | The M0 shape had no warnings channel; caps that should not block saving need one |
-| Cross-field issue codes | Passed through Zod `params.code` | Zod reports every custom check as `custom`; callers must branch on stable codes, not messages |
-| Persisted widget query range | `{ mode: "relative", last }` or `{ from, to }` | Matches the M0 line-widget example and keeps relative ranges resolvable server-side |
-| Data-source identifiers | Opaque string, not UUIDv7 | The client must not assume a connector uses UUIDs; entity IDs stay UUIDv7 |
-| Realtime `authenticate` frame | Separate schema, not one of the ten message types | Keeps the documented ten-type protocol invariant while supporting embed tokens |
-| Widget plugin runtime interface | Deferred to M3 | It references React components; `dashboard-types` stays React-free |
-| `apps/web` `noUnusedLocals` | Disabled for that project only | Next 16 writes `.next/dev/types/validator.ts` with unused declarations; ESLint still reports unused code in our sources |
+| API client | Hand-written typed transport | M3.5 needed real calls before M6 codegen; the transport is small and the OpenAPI file remains the contract |
+| Web → API transport | Same-origin rewrite proxy | Keeps `nama_session`/`nama_csrf` first-party and avoids CORS in development |
+| Viewer revision | New `publishedRevision` summary field | Viewers must not see draft revision numbers or infer draft activity |
+| Viewer payload | `publishedConfig` only, no `draftConfig` | Enforces rule 17 at the API boundary, not in the UI |
+| CSRF | Double-submit cookie, checked on every mutating route | Cookie-only auth is forgeable from another origin |
+| Editor baseline | Zustand store, no SDK editor API | `onSave`/`onConflict` and drag/resize remain M4 |
+| Widget registration | Local `WEB_WIDGETS` array passed to the provider | Proves the plugin path without shipping built-ins |
+| Editor movement | Buttons for move/resize | Functionally complete without a layout library; drag/resize is M4 |
+| Route state | Loaders keyed by `dashboardId`, login resets on unmount | Next 16 preserves route component state across navigation |
 
 ## Open decisions
 
@@ -76,44 +81,49 @@ nama/
 | Deployment topology | **Unresolved** | M6, M8 | ADR-011 recommends self-hosted Docker; options and trade-offs recorded |
 | Prisma major version | Open | M6 | Latest registry version is a release candidate; pin newest stable at M6 |
 | Persian calendar library | Open | M10 | Display-only strategy decided; library selection deferred |
+| API code generation | Deferred to M6 | M6 | `api-client` is hand-written; no drift check until codegen lands |
 | Raw SQL for non-admin users | Deferred | — | Not supported in v1 (ADR-010) |
 | Public/anonymous sharing | Deferred | — | Organization-scoped sharing only in v1 |
 | External time-series store | Deferred | — | Telemetry stays out of Postgres; product selection later |
 | Plugin sandbox/marketplace | Deferred | — | Trusted install only (ADR-006) |
-| OpenAPI code generation | Deferred to M6 | M6 | Spec is hand-written; no client generated from it yet |
-| Plugin runtime interfaces | Deferred to M3 | M3 | Manifests exist; component/props contracts need React and the renderer |
+| Browser end-to-end test | Deferred | — | The HTTP slice runs in CI; the browser walkthrough was manual |
+| SDK editor callbacks | Deferred to M4 | M4 | `onSave`/`onConflict` and draft ownership belong to the editor |
 
-## What M3 must not assume
+## What M4 must not assume
 
-- That `@nama/dashboard-types` exports anything beyond schemas, constants and
-  migration helpers. There are no components, hooks or adapters yet.
-- That `dashboard-core`, `dashboard-builder` or `api-client` export anything; all
-  three are still empty modules.
-- That the API executes queries, serves dashboards or handles sessions; only
-  `/healthz` exists.
-- That a realtime gateway exists; only the message contracts are defined, and the
-  server side lands with the API.
-- That `dashboard-types` renders or imports React; it must remain host-agnostic.
-- That the web application renders dashboards; it still renders one static page.
+- That drag, resize or a layout library exist; the editor moves widgets with
+  buttons against the CSS-grid canvas.
+- That the SDK owns editor state or draft persistence; the web app keeps a
+  Zustand store and calls `api-client` directly.
+- That viewers can read drafts; the API never returns `draftConfig` to them.
+- That data persists; the API store is in memory and reseeds on restart.
+- That realtime is wired; only HTTP polling with `refetchInterval` is live.
+- That rate limiting, audit logs, RLS or connection pooling exist.
+- That Jalali dates render; formatting uses `Intl` with the host locale.
+- That `dashboard-core` may import React at runtime or Next.js at all.
 
-## Verification (M2)
+## Verification (M3.5)
 
 All commands were run from the repository root on Node 24.13.0 with pnpm 10.33.2.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Install | `pnpm install` | Lockfile updated for `zod`; no peer warnings |
-| Boundaries | `pnpm verify:workspace` | Passes: approved graph, no host imports, single React version |
+| Boundaries | `pnpm verify:workspace` | Passes: approved graph (`api-client → types`), no host imports, single React version |
 | Lint | `pnpm lint` | Clean |
 | Format | `pnpm format:check` | All files match |
-| Typecheck | `pnpm typecheck` | 8 tasks successful (4 packages, web, api) |
-| Test | `pnpm test` | 69 tests pass in `dashboard-types`; API health/env tests unchanged |
-| Build | `pnpm build` | 6 tasks successful; `dashboard-types` emits ESM, `.d.mts` and a source map |
-| Built exports | `node -e "import('./dist/index.mjs')"` | `parseDashboardConfig`, `dashboardConfigSchema`, `realtimeServerMessageSchema`, `widgetManifestSchema`, `runMigrations`, `PLATFORM_LIMITS` all present |
+| Typecheck | `pnpm typecheck` | 10 tasks successful |
+| Test | `pnpm test` | 70 types + 37 core + 10 builder + 9 api-client + 24 api + 10 web = 160 tests pass |
+| Build | `pnpm build` | 6 tasks successful, 8 routes (`/`, `/login`, `/dashboards/new`, `/dashboards/[id]/edit`, `/dashboards/[id]/view`, plus framework routes) |
+| Browser slice | Manual run against the dev servers | Editor logged in, created a dashboard, added KPI + line over HTTP data, saved (rev 2), published (rev 3), added a third widget and saved a draft (rev 4) |
+| Published-only viewer | Same run, second account | List showed "Published revision 3", no edit affordance; view showed exactly the two published widgets while the draft at rev 4 stayed invisible |
+
+Polling was verified by inspecting the adapter wiring
+(`packages/dashboard-builder/src/widget-query.ts:43`) rather than observed
+requests: the in-app browser reports `visibility: hidden`, and TanStack Query
+pauses background refetches for hidden tabs.
 
 ## Next action
 
-M2 is accepted. The next milestone is M3 (SDK foundation): `DashboardProvider`,
-runtime context, dependency injection, widget registry, `DashboardViewer`, the
-renderer, public exports and a standalone consumer. Do not begin M3 until it is
-requested.
+M3.5 is accepted. The next milestone is M4 (editor): SDK-owned draft state,
+`onSave`/`onConflict`, drag and resize on the canvas, and richer widget settings.
+Do not begin M4 until it is requested.

@@ -62,24 +62,40 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M2 (shared contracts and schemas) is complete (accepted 2026-11-12); M3 is the
-next milestone and has not started. The workspace contains `apps/web`,
-`apps/api` and exactly four packages:
-`@nama/dashboard-types`, `@nama/dashboard-core`, `@nama/dashboard-builder`,
-`@nama/api-client`. `dashboard-types` owns all Zod schemas and public types; the
-other three packages are still empty. Do not create the target-only packages
-listed in `docs/architecture/package-dependencies.md`.
+M3.5 (walking skeleton) is complete and accepted (2026-11-12); M4 (editor) is the
+next milestone and has not started. The workspace contains `apps/web`, `apps/api`,
+`examples/standalone-consumer` and exactly four packages:
+`@nama/dashboard-types` (contracts), `@nama/dashboard-core` (host-agnostic
+runtime: plugin contract, registry, query keys, i18n, layout, theme),
+`@nama/dashboard-builder` (React provider, viewer, canvas, renderer, hooks) and
+`@nama/api-client` (hand-written typed transport until M6 codegen). Do not create
+the target-only packages listed in
+`docs/architecture/package-dependencies.md`.
 
-Working rules for M3 and later:
+The API keeps all state in memory and reseeds on restart. Demo accounts come from
+`DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD` (`demo@nama.local` /
+`nama-demo-123`) and `DEMO_VIEWER_EMAIL`/`DEMO_VIEWER_PASSWORD`
+(`viewer@nama.local` / `nama-viewer-123`). The web app proxies `/api/*` to
+`NAMA_API_URL` (default `http://localhost:3001`).
+
+Working rules for M4 and later:
 
 1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
-   `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`).
+   `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`,
+   `pnpm verify:consumer`).
 2. Package entry points resolve to `dist`; build before typechecking or running
    a dependent app.
 3. Do not add cross-package imports outside the approved graph; the boundary
    script fails the build.
 4. Import contracts from `@nama/dashboard-types`; do not duplicate schema
    definitions in the SDK or the API.
-5. Do not implement M3 SDK APIs while closing M2.
+5. `dashboard-core` stays React-runtime-free; TanStack Query may only be used in
+   `dashboard-builder`.
+6. Built output must keep `"use client"`; `pnpm verify:consumer` must stay green.
+7. Keep viewer responses free of draft data: `GET /v1/dashboards/:id` returns
+   `publishedConfig` and `publishedRevision` only.
+8. Preserve `If-Match` conflict handling and the 409 `REVISION_CONFLICT` payload
+   when moving draft ownership into the SDK.
+9. Do not implement M4 SDK editor APIs while closing M3.5.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

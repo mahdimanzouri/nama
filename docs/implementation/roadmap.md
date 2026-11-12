@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-**Status:** Active — M0, M1 and M2 complete (2026-11-12)
+**Status:** Active — M0, M1, M2, M3 and M3.5 complete (2026-11-12)
 **Date:** 2026-11-12
 
 Milestones have review gates. Do not begin the next milestone until the current
@@ -15,8 +15,8 @@ engineer should expect roughly 1.8× the elapsed time.
 | M0 | Architecture and decisions | 1 week | This package approved | Complete |
 | M1 | Monorepo foundation | 1 week | Web + API start; workspace package imports; commands pass | Complete |
 | M2 | Contracts and schemas | 1.5 weeks | Valid/invalid configs behave; migration tests pass | Complete |
-| M3 | SDK foundation | 2 weeks | Separate React app renders without the web app | Not started |
-| M3.5 | Walking skeleton (monitoring) | 2 weeks | Login → KPI + line → save/publish/view in CI | Not started |
+| M3 | SDK foundation | 2 weeks | Separate React app renders without the web app | Complete |
+| M3.5 | Walking skeleton (monitoring) | 2 weeks | Login → KPI + line → save/publish/view in CI | Complete |
 | M4 | Visual editor | 3 weeks | Edit, move/resize, draft/publish/restore, 409 flow | Not started |
 | M5 | Visualization system | 2.5 weeks | Multiple widget types from validated config | Not started |
 | M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI | Not started |
@@ -81,17 +81,23 @@ examples.
 **Acceptance:** valid configurations pass, invalid configurations fail with
 field paths, and migrations are tested for every supported version.
 
-## M3 — SDK foundation
+## M3 — SDK foundation (complete 2026-11-12)
 
 **Tasks:** `DashboardProvider`, runtime context, dependency injection, widget
 registry, `DashboardViewer`, renderer, public exports, CSS exports, standalone
 consumer example.
 
+**Delivered:** host-agnostic core (registry, widget resolution, layout, i18n,
+theme, query helpers) and the React builder (provider, viewer, CSS-grid canvas,
+renderer with error boundary and placeholders, hooks, stylesheet export). The
+editor, built-in widgets and save callbacks remain M4/M5 work.
+
 **Acceptance:** a separate React application renders a dashboard through the SDK
 without the platform web app. Built output preserves `"use client"`. The
-consumer test packs and installs the tarball.
+consumer test packs and installs the tarball. Verified by
+`examples/standalone-consumer` and `pnpm verify:consumer`.
 
-## M3.5 — Walking skeleton (monitoring)
+## M3.5 — Walking skeleton (monitoring) (complete 2026-11-12)
 
 **Tasks:** wire the web app to `api-client` and the SDK; login and one
 organization; dashboard list/create/save/publish/load; KPI and line widgets over
@@ -99,9 +105,23 @@ HTTP polling; viewer against the published config; minimal editor (add, remove,
 move, resize, save draft, publish); client-only rendering, SSR safety, theme
 tokens; end-to-end test.
 
+**Delivered:** Fastify API with cookie sessions, CSRF protection, tenant-scoped
+dashboard reads/writes with `If-Match`, publish snapshots and a demo query
+engine; hand-written typed `@nama/api-client`; Next.js app with same-origin API
+proxy, login, dashboard list/create, editor shell (add/remove/move/resize, save,
+publish, reload-on-conflict) and published-only viewer; KPI and line widgets
+polling over HTTP; 34 API/api-client tests plus 10 web tests, and the HTTP slice
+exercised in CI.
+
 **Acceptance:** a user logs in, creates a monitoring dashboard with a KPI and a
 line widget, saves, publishes and views it. A second viewer sees the published
 state and never the draft. The slice runs in CI.
+
+**Verified 2026-11-12:** exercised in a browser end to end (editor publishes at
+revision 3, a later draft save reaches revision 4, the viewer sees published
+revision 3 with two widgets and no Edit affordance); `pnpm lint`,
+`format:check`, `typecheck`, `test`, `build` and `verify:workspace` pass.
+Browser-level automation in CI is deferred (technical debt).
 
 **Gate:** M3.5 precedes M4. The full editor is not built on an unproven slice.
 

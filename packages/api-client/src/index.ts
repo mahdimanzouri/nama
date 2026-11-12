@@ -1,9 +1,30 @@
 /**
- * Transport-aware typed client for the platform API: request building, auth
- * injection, error mapping and revision-conflict handling. Generated from the
- * OpenAPI document in M6; the checked-in contract lives in `docs/api`.
+ * Typed transport client for the platform API.
  *
- * Public API lands in M6. The package exists in M1 so the workspace graph is
- * established before backend integration begins.
+ * The client handles cookie credentials, CSRF headers, `If-Match` revision
+ * headers and error-envelope mapping. It is hand-written for the M3.5 slice;
+ * M6 may generate it from the OpenAPI document once the contract settles.
  */
-export {};
+export { createApiClient } from "./client";
+export type {
+  ApiClient,
+  ApiClientOptions,
+  ListDashboardsOptions,
+  RequestOptions,
+} from "./client";
+export { ApiError, RevisionConflictError } from "./errors";
+export type {
+  ApiErrorBody,
+  CreateDashboardRequest,
+  DashboardDraft,
+  DashboardList,
+  DashboardSummary,
+  DashboardView,
+  LoginRequest,
+  QueryRequest,
+  QueryResult,
+  RevisionResponse,
+  SessionOrganization,
+  SessionPayload,
+  SessionUser,
+} from "./types";

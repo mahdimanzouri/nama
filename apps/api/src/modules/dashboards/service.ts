@@ -1,0 +1,89 @@
+import type { DashboardConfig } from "@nama/dashboard-types";
+
+import { badRequest } from "../../infrastructure/errors.ts";
+import type {
+  DashboardRecord,
+  SessionRecord,
+  Store,
+} from "../../infrastructure/store.ts";
+
+export interface DashboardSummary {
+  id: string;
+  organizationId: string;
+  name: string;
+  revision: number;
+  publishedRevision: number | null;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+
+export interface DashboardView extends DashboardSummary {
+  publishedConfig: DashboardConfig | null;
+  permissions: string[];
+}
+
+export interface DraftPayload {
+  config: DashboardConfig;
+  revision: number;
+  updatedAt: string;
+}
+
+export function toSummary(record: DashboardRecord): DashboardSummary {
+  return {
+    id: record.id,
+    organizationId: record.organizationId,
+    name: record.name,
+    revision: record.revision,
+    publishedRevision: record.publishedRevision ?? null,
+    updatedAt: record.updatedAt,
+    publishedAt: record.publishedAt ?? null,
+  };
+}
+
+export function toView(
+  record: DashboardRecord,
+  permissions: readonly string[],
+): DashboardView {
+  return {
+    ...toSummary(record),
+    publishedConfig: record.publishedConfig ?? null,
+    permissions: [...permissions],
+  };
+}
+
+export function toDraft(record: DashboardRecord): DraftPayload {
+  return {
+    config: record.draftConfig,
+    revision: record.revision,
+    updatedAt: record.updatedAt,
+  };
+}
+
+/** Tenant-scoped lookup: out-of-scope ids are indistinguishable from missing. */
+export function findDashboard(
+  store: Store,
+  session: SessionRecord,
+  id: string,
+): DashboardRecord | undefined {
+  const record = store.dashboards.get(id);
+  if (!record || record.organizationId !== session.organizationId) return undefined;
+  return record;
+}
+
+export function parseIfMatch(value: string | string[] | undefined): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+
+  if (!raw) {
+    throw badRequest(
+      "IF_MATCH_REQUIRED",
+      "An If-Match header with the last known revision is required",
+    );
+  }
+
+  const match = /^(?:W\/)?"?(\d+)"?$/u.exec(raw.trim());
+  if (!match) {
+    throw badRequest("INVALID_IF_MATCH", "If-Match must be the last known revision");
+  }
+
+  return Number(match[1]);
+}

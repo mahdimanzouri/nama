@@ -1,0 +1,131 @@
+/*
+ * @nama/dashboard-builder styles.
+ * Semantic tokens are set here; hosts override them on `.nama-root` or a parent.
+ */
+
+.nama-root,
+[data-theme="light"] {
+  --nama-bg: #ffffff;
+  --nama-surface: #f5f7fa;
+  --nama-text: #111827;
+  --nama-muted: #6b7280;
+  --nama-border: #e5e7eb;
+  --nama-accent: #2563eb;
+  --nama-danger: #dc2626;
+  --nama-warning: #d97706;
+  --nama-success: #059669;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --nama-bg: #0b1120;
+  --nama-surface: #111827;
+  --nama-text: #f9fafb;
+  --nama-muted: #9ca3af;
+  --nama-border: #1f2937;
+  --nama-accent: #60a5fa;
+  --nama-danger: #f87171;
+  --nama-warning: #fbbf24;
+  --nama-success: #34d399;
+
+  color-scheme: dark;
+}
+
+.nama-root {
+  background: var(--nama-bg);
+  color: var(--nama-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  min-height: 100%;
+}
+
+.nama-viewer {
+  display: block;
+  padding: 16px;
+}
+
+.nama-viewer--empty {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  color: var(--nama-muted);
+  font-size: 14px;
+}
+
+.nama-canvas-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nama-canvas__notice {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--nama-warning);
+  border-radius: 6px;
+  color: var(--nama-text);
+  background: color-mix(in srgb, var(--nama-warning) 12%, transparent);
+  font-size: 13px;
+}
+
+.nama-canvas {
+  display: grid;
+  grid-template-columns: repeat(var(--nama-columns, 12), minmax(0, 1fr));
+  grid-auto-rows: var(--nama-row-height, 40px);
+  gap: var(--nama-gap, 8px);
+  direction: ltr;
+  min-width: 0;
+}
+
+.nama-canvas__item {
+  min-width: 0;
+  min-height: 0;
+}
+
+.nama-canvas__item--unplaced {
+  grid-column: 1 / -1;
+  min-height: 160px;
+}
+
+.nama-widget {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--nama-border);
+  border-radius: 8px;
+  background: var(--nama-surface);
+  color: var(--nama-text);
+}
+
+.nama-widget__header {
+  flex: none;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--nama-border);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nama-widget__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nama-widget__placeholder {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  padding: 16px;
+  color: var(--nama-muted);
+  font-size: 13px;
+  text-align: center;
+}

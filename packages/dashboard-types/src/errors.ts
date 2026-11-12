@@ -14,6 +14,9 @@ export const ISSUE_CODES = Object.freeze({
   duplicateVariableName: "duplicate_variable_name",
   unsupportedSchemaVersion: "unsupported_schema_version",
   widgetNotLaidOut: "widget_not_laid_out",
+  invalidWidgetPlugin: "invalid_widget_plugin",
+  duplicateWidgetType: "duplicate_widget_type",
+  widgetMigrationFailed: "widget_migration_failed",
 } as const);
 
 export interface ValidationIssue {

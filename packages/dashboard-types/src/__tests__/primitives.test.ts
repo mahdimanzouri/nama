@@ -5,6 +5,7 @@ import {
   PLATFORM_LIMITS,
   SUPPORTED_LOCALES,
   SUPPORTED_THEMES,
+  createId,
   idSchema,
   isValidTimeZone,
   localeSchema,
@@ -54,6 +55,15 @@ describe("identifiers and timestamps", () => {
       false,
     );
     expect(idSchema.safeParse("not-an-id").success).toBe(false);
+  });
+
+  it("generates valid, unique UUIDv7 identifiers", () => {
+    const first = createId();
+    const second = createId();
+
+    expect(idSchema.safeParse(first).success).toBe(true);
+    expect(idSchema.safeParse(second).success).toBe(true);
+    expect(first).not.toBe(second);
   });
 
   it("requires UTC ISO-8601 timestamps with an offset", () => {

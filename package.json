@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify:workspace": "node scripts/verify-workspace.mjs"
+    "verify:workspace": "node scripts/verify-workspace.mjs",
+    "verify:consumer": "node scripts/verify-consumer.mjs"
   },
   "devDependencies": {
     "@types/node": "^24",

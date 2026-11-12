@@ -20,7 +20,7 @@ const APPROVED_INTERNAL_DEPENDENCIES = {
   "dashboard-types": [],
   "dashboard-core": ["@nama/dashboard-types"],
   "dashboard-builder": ["@nama/dashboard-core", "@nama/dashboard-types"],
-  "api-client": [],
+  "api-client": ["@nama/dashboard-types"],
 };
 
 const REACT_PACKAGES = ["@nama/dashboard-core", "@nama/dashboard-builder"];

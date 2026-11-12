@@ -2,9 +2,9 @@
 
 **Status:** Manifest and capability schemas implemented in M2
 (`widgetManifestSchema`, `widgetCapabilitiesSchema` in `@nama/dashboard-types`).
-This file is the normative source for the widget contract; other documents link
-here instead of restating it. The runtime `WidgetPlugin`, render-prop and settings
-interfaces land in M3, because they reference React components.
+Runtime `WidgetPlugin`, render-prop and settings interfaces implemented in M3
+(`@nama/dashboard-core`). This file is the normative source for the widget
+contract; other documents link here instead of restating it.
 
 ## Manifest
 
@@ -47,9 +47,9 @@ interface WidgetPlugin<TConfig = unknown> {
 
   defaultSize: { w: number; h: number };
 
-  component: React.ComponentType<WidgetRenderProps<TConfig>>;
+  component: (props: WidgetRenderProps<TConfig>) => ReactNode;
 
-  settings?: React.ComponentType<WidgetSettingsProps<TConfig>>;
+  settings?: (props: WidgetSettingsProps<TConfig>) => ReactNode;
 
   capabilities?: {
     realtime?: boolean;
@@ -58,6 +58,11 @@ interface WidgetPlugin<TConfig = unknown> {
   };
 }
 ```
+
+Components are function components; `memo` and `forwardRef` results are accepted
+because they remain callable with the same props. Class components are outside
+the v1 contract: the erased registry form relies on a contravariant props
+signature, and class `defaultProps` makes that impossible to type safely.
 
 ## Render props
 

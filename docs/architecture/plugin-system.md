@@ -1,6 +1,8 @@
 # Plugin System
 
-**Status:** Proposed (M0)
+**Status:** Proposed (M0). The registry, widget resolution, capability gating and
+placeholder behavior are implemented in `@nama/dashboard-core` (M3). Editor
+extensions and data-source plugins remain proposals.
 
 The normative contracts live in:
 
@@ -69,7 +71,7 @@ A widget without `realtime` is never subscribed to a stream. A widget without
 
 ```ts
 interface WidgetRegistry {
-  register(plugin: WidgetPlugin): void;
+  register(plugin: WidgetPlugin, options?: { replace?: boolean }): void;
   unregister(type: string): void;
   get(type: string): WidgetPlugin | undefined;
   list(): WidgetManifest[];

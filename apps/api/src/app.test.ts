@@ -23,6 +23,11 @@ describe("loadEnv", () => {
       HOST: "0.0.0.0",
       PORT: 3001,
       LOG_LEVEL: "info",
+      SESSION_TTL_HOURS: 12,
+      DEMO_EDITOR_EMAIL: "demo@nama.local",
+      DEMO_EDITOR_PASSWORD: "nama-demo-123",
+      DEMO_VIEWER_EMAIL: "viewer@nama.local",
+      DEMO_VIEWER_PASSWORD: "nama-viewer-123",
     });
   });
 

@@ -1,9 +1,72 @@
-/**
- * Public React API for hosts: provider, viewer, editor, canvas, toolbar and
- * panels. React is a peer dependency; authentication, data access and realtime
- * connections are injected by the host.
- *
- * Public API lands in M3. The package exists in M1 so the workspace graph and
- * peer-dependency rules are established before that work.
- */
-export {};
+export { DashboardProvider, type DashboardProviderProps } from "./provider";
+export { DashboardViewer, type DashboardViewerProps } from "./viewer";
+export { DashboardCanvas, type DashboardCanvasProps } from "./canvas";
+export { WidgetRenderer, type WidgetRendererProps } from "./widget-renderer";
+export { useDataSource, type DashboardDataSource } from "./data-source";
+export { WidgetErrorBoundary } from "./error-boundary";
+export {
+  useDashboard,
+  useDashboardConfig,
+  useDashboardLayout,
+  useDashboardLocale,
+  useDashboardTheme,
+  useWidgetRegistry,
+  type DashboardLayoutState,
+} from "./hooks";
+export type { DashboardRuntime } from "./context";
+
+export {
+  createDashboardI18n,
+  createThemeTokens,
+  createWidgetRegistry,
+  defineWidget,
+  InvalidDashboardConfigError,
+  isRevisionConflictError,
+  normalizeDigits,
+  RevisionConflictError,
+  UnsupportedConfigVersionError,
+  WidgetRegistrationError,
+} from "@nama/dashboard-core";
+
+export type {
+  DashboardI18n,
+  DataSourceSummary,
+  Direction,
+  ErasedWidgetPlugin,
+  ResolvedFilters,
+  ResolvedLayoutItem,
+  ResolvedTheme,
+  StreamState,
+  ThemeToken,
+  ThemeTokens,
+  WidgetActions,
+  WidgetDataState,
+  WidgetError,
+  WidgetPlugin,
+  WidgetRegistry,
+  WidgetRenderProps,
+  WidgetSettingsProps,
+  WidgetSize,
+} from "@nama/dashboard-core";
+
+export type {
+  Breakpoint,
+  DashboardConfig,
+  DashboardLayouts,
+  DashboardWidget,
+  DataAdapter,
+  LayoutItem,
+  Locale,
+  QueryContext,
+  QueryDefinition,
+  QueryError,
+  QueryRequest,
+  QueryResult,
+  RealtimeAdapter,
+  SubscriptionHandlers,
+  ThemeMode,
+  Unsubscribe,
+  ValidationIssue,
+  WidgetCapabilities,
+  WidgetManifest,
+} from "@nama/dashboard-types";

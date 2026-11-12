@@ -1,23 +1,46 @@
 # API Conventions
 
-**Status:** Proposed (M0). [`openapi.yaml`](openapi.yaml) is a contract
-proposal; code generation begins in M6.
+**Status:** M3.5 implemented slice (2026-11-12). [`openapi.yaml`](openapi.yaml)
+describes the contract; operations marked `x-m0-status: implemented` are served
+by `apps/api` today. Code generation remains M6 work.
+
+## Implemented endpoints (M3.5)
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/v1/auth/login` | Argon2id credentials; sets `nama_session` + `nama_csrf` cookies |
+| `GET` | `/v1/auth/session` | Current user, organization, role and permissions |
+| `POST` | `/v1/auth/logout` | CSRF-protected; revokes the session and clears cookies |
+| `GET` | `/v1/dashboards` | Tenant-scoped list, `page`/`pageSize` |
+| `POST` | `/v1/dashboards` | Creates an empty `schemaVersion: 1` draft at revision 1 |
+| `GET` | `/v1/dashboards/{id}` | Published configuration and permissions only; never the draft |
+| `GET` | `/v1/dashboards/{id}/draft` | Editor-only draft |
+| `PUT` | `/v1/dashboards/{id}/draft` | `If-Match` required; validates the full config |
+| `POST` | `/v1/dashboards/{id}/publish` | Copies draft, increments revision, records version |
+| `POST` | `/v1/queries/execute` | Demo query engine; 15 s / 10,000 rows / 5 MiB limits |
+
+State is in memory in M3.5 and resets when the API restarts; M6 replaces the
+store with Postgres behind the same service layer.
 
 ## Versioning and scope
 
 - Base path `/v1`. Breaking changes create a new major path.
 - Management operations are REST; live updates use `/ws/v1`.
-- `x-m0-status: proposed` means the contract is reviewed but shapes may change
-  until the API implements them (M6). `x-m0-status: stub` reserves the path;
-  detailed schemas arrive with the owning milestone.
+- `x-m0-status: implemented` is served by `apps/api`. `proposed` means the
+  contract is reviewed but shapes may change until the owning milestone.
+  `stub` reserves the path; detailed schemas arrive with that milestone.
 - Dashboard and query shapes must match the implemented Zod schemas in
-  `@nama/dashboard-types` (M2); those schemas win any disagreement.
+  `@nama/dashboard-types`; those schemas win any disagreement.
 
 ## Authentication
 
-- Web clients use the opaque `nama_session` cookie (`httpOnly`, `Secure`,
-  `SameSite=Lax`).
-- Mutating cookie-authenticated requests also send `X-CSRF-Token`.
+- `POST /v1/auth/login` verifies the password, creates an opaque 256-bit session
+  stored hashed, and sets two cookies: `nama_session` (`httpOnly`, `Secure`
+  outside localhost, `SameSite=Lax`) and `nama_csrf` (readable, same scope).
+- Mutating cookie-authenticated requests send `X-CSRF-Token` with the value of
+  the `nama_csrf` cookie; the API rejects mismatches with `403`.
+- The web app calls the API through its own origin (`/api/*` rewrite to
+  `NAMA_API_URL`), so both cookies stay first-party.
 - Embedded clients use `Authorization: Bearer <embed token>`.
 - Embed tokens are scoped to dashboards and never widen the issuer's
   permissions. See [ADR-009](../architecture/decisions/ADR-009-embed-tokens.md).
@@ -68,10 +91,16 @@ Every error uses one envelope:
 {
   "error": {
     "code": "VALIDATION_FAILED",
-    "message": "Configuration is invalid.",
-    "requestId": "req_01J...",
-    "fieldPaths": ["widgets", 2, "config", "valueField"],
-    "retryAfterMs": null
+    "message": "The payload failed validation",
+    "requestId": "0192f4c2-7a1e-7cc3-9a0e-3f5f0f6a1b21",
+    "fieldPaths": ["widgets.2.config.valueField"],
+    "issues": [
+      {
+        "code": "invalid_type",
+        "path": ["widgets", 2, "config", "valueField"],
+        "message": "Expected string, received number"
+      }
+    ]
   }
 }
 ```
@@ -81,6 +110,9 @@ Rules:
 - `code` is stable and machine-readable; `message` is human-readable and may be
   localized by the client.
 - `fieldPaths` is present for validation errors and never contains free text.
+- `issues` carries structured, array-indexed validation detail.
+- `currentRevision` is present on `409 REVISION_CONFLICT` so the client can
+  reload the latest draft.
 - `requestId` correlates with server logs and audit records.
 - `retryAfterMs` is present for rate limits and transient upstream failures.
 - Internal details, credentials, stack traces and query text are never returned.
@@ -125,10 +157,12 @@ session cookie or embed token. See
 
 ## Typed client
 
-- `@nama/api-client` is generated from `openapi.yaml`.
-- CI fails when the checked-in generated client differs from a fresh generation.
-- Authentication is injected per client instance so the web app, embed runtime
-  and tests share one implementation.
+- `@nama/api-client` exposes the typed transport implemented in M3.5
+  (`createApiClient` plus `ApiError`/`RevisionConflictError`).
+- It is hand-written against `openapi.yaml`; there is no generator or drift
+  check yet. M6 may generate it — until then the spec and the client are kept in
+  sync by review (tracked as technical debt).
+- Authentication travels as cookies; the client never stores tokens.
 - No endpoint types are duplicated by hand in applications.
 
 ## Security headers and transport

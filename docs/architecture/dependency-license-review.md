@@ -1,8 +1,8 @@
 # Dependency License and Compatibility Review
 
-**Status:** Proposed (M0). Versions verified against the npm registry on
-**2026-11-12**. Nothing beyond the current Next.js app is installed yet;
-M1 installs and re-verifies licenses and peer compatibility.
+**Status:** Verified through M3.5 (2026-11-12). Versions were checked against the
+npm registry on **2026-11-12**; the installed inventory below is the source of
+truth for what ships.
 
 ## Policy
 
@@ -33,9 +33,11 @@ M1 installs and re-verifies licenses and peer compatibility.
 | `echarts` | 6.1.0 | Apache-2.0 | Charts | Pin v6 major; import only used modules; bundle budget |
 | `next-intl` | 4.15.0 | MIT | Web app i18n | Web only; never in SDK; verify Next 16 compatibility at M1 |
 | `zod` | 4.6.7 | MIT | Validation | Shared schema version across packages |
-| `zustand` | 5.1.0 | MIT | Editor state | Internal to `dashboard-core` |
-| `@tanstack/react-query` | 5.107.1 | MIT | Server state | Snapshot queries only |
+| `zustand` | 5.1.0 | MIT | Editor state (`apps/web` editor store) | Internal implementation detail; not re-exported by the SDK |
+| `@tanstack/react-query` | 5.107.1 | MIT | Server state | Snapshot queries in the builder |
 | `fastify` | 5.12.8 | MIT | API framework | Requires Node ≥ 20; repo runs Node 24 |
+| `@fastify/cookie` | 11.1.5 | MIT | Session/CSRF cookies | Session and CSRF cookie parsing and signing |
+| `@node-rs/argon2` | 2.2.2 | MIT | Password hashing | Prebuilt native binding; used by `apps/api` only |
 | `prisma` | 8.0.0-rc.33 | Apache-2.0 | ORM | **Release candidate**; pin latest stable at M1 and record the choice |
 | `vitest` | 5.1.0 | MIT | Unit/integration tests | |
 | `@playwright/test` | 1.65.0 | Apache-2.0 | E2E | |
@@ -69,11 +71,13 @@ Assessment:
 - No copyleft dependency exists in the shipped SDK surface. Re-run the scan on
   every lockfile change.
 
+M3.5 added `@fastify/cookie`, `@node-rs/argon2`, `zustand` and `vitest` — all
+MIT; the lockfile was re-verified with `pnpm licenses list` on 2026-11-12.
+
 ## Not yet verified (verify at M1)
 
 | Candidate | Purpose | Status |
 | --- | --- | --- |
-| `@node-rs/argon2` (or `argon2`) | Password hashing | License/ABI support must be checked before adoption |
 | `ws` or `@fastify/websocket` | WebSocket server | Verify Fastify 5 compatibility |
 | `pino` | Structured logging | Likely fastify default; verify |
 | `storybook` | Widget/UI development | License and React 19 compatibility |

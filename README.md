@@ -7,21 +7,29 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M2 (shared contracts and schemas) is complete (accepted 2026-11-12).**
+**Milestone M3.5 (walking skeleton) is complete (2026-11-12).** M4 (editor) is
+next.
 
 The workspace contains:
 
 ```text
-apps/web                 Next.js 16 application
-apps/api                 Fastify 5 service (health endpoint only)
-packages/dashboard-types public contracts: constants plus Zod schemas (M2)
-packages/dashboard-core  dashboard runtime (public API in M3)
-packages/dashboard-builder public React API (public API in M3)
-packages/api-client      typed API client (generated in M6)
+apps/web                  Next.js 16 application: login, dashboard list, editor,
+                          published viewer
+apps/api                  Fastify 5 service: auth, dashboards, draft/publish,
+                          queries, health endpoint
+packages/dashboard-types  public contracts: constants plus Zod schemas (M2)
+packages/dashboard-core   host-agnostic runtime: plugin contract, registry,
+                          query keys, i18n, layout, theme (M3)
+packages/dashboard-builder React provider, viewer, canvas, renderer, hooks (M3)
+packages/api-client       hand-written typed transport and errors (M3.5)
+examples/standalone-consumer  React app that renders a dashboard via packed
+                              tarballs (M3)
 ```
 
-The three SDK packages build and link but intentionally export nothing yet. The
-dashboard itself is specified, not implemented — see the
+The walking skeleton runs end to end: a user logs in, creates a dashboard with a
+KPI and a line widget, saves and publishes it, and a viewer account sees the
+published configuration only. State is in memory and reseeds on restart; drag and
+resize, realtime and persistence land in M4–M8 — see the
 [roadmap](docs/implementation/roadmap.md).
 
 ## Architecture documentation
@@ -51,11 +59,22 @@ pnpm test
 pnpm lint              # ESLint over the whole workspace
 pnpm format            # Prettier
 pnpm verify:workspace  # package boundaries and single React version
+pnpm verify:consumer   # packs the SDK and renders it in examples/standalone-consumer
 pnpm clean
 ```
 
-The API reads `HOST`, `PORT`, `NODE_ENV` and `LOG_LEVEL`; see
-`apps/api/.env.example`. `GET /healthz` returns the service status.
+The API reads `HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL` and the demo-account
+variables; see `apps/api/.env.example`. `GET /healthz` returns the service status.
+The web app proxies `/api/*` to `NAMA_API_URL` (default `http://localhost:3001`).
+
+Sign in at <http://localhost:3000/login> with the seeded accounts:
+
+| Role   | Email               | Password          |
+| ------ | ------------------- | ----------------- |
+| Editor | `demo@nama.local`   | `nama-demo-123`   |
+| Viewer | `viewer@nama.local` | `nama-viewer-123` |
+
+The store is in memory: restarting the API discards dashboards and sessions.
 
 ## Architectural rules (summary)
 

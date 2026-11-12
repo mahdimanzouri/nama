@@ -1,6 +1,9 @@
 # Internationalization and Themes
 
-**Status:** Proposed (M0)
+**Status:** Proposed (M0). The client i18n facade, message fallback, theme tokens
+and LTR-canvas notice are implemented in M3 (`@nama/dashboard-core` i18n/theme,
+`@nama/dashboard-builder` provider). Jalali formatting and full RTL chrome land
+in M10.
 
 ## Locales and directions
 

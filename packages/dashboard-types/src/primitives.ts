@@ -21,6 +21,32 @@ export type ThemeMode = z.infer<typeof themeModeSchema>;
 export const idSchema = z.uuidv7();
 export type PlatformId = z.infer<typeof idSchema>;
 
+function hexByte(value: number): string {
+  return value.toString(16).padStart(2, "0");
+}
+
+/**
+ * Generates a UUIDv7 identifier. Shared by the API and the web app so both
+ * sides produce the same sortable identifier format without a dependency.
+ */
+export function createId(): PlatformId {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  const now = Date.now();
+
+  bytes[0] = Math.floor(now / 2 ** 40) & 0xff;
+  bytes[1] = Math.floor(now / 2 ** 32) & 0xff;
+  bytes[2] = Math.floor(now / 2 ** 24) & 0xff;
+  bytes[3] = Math.floor(now / 2 ** 16) & 0xff;
+  bytes[4] = Math.floor(now / 2 ** 8) & 0xff;
+  bytes[5] = now & 0xff;
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+
+  const hex = Array.from(bytes, hexByte).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 /**
  * Data-source identifiers are opaque to the client: it never parses them and
  * never assumes they are UUIDs, so a future connector may use another scheme.

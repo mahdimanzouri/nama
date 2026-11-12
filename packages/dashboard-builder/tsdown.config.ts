@@ -6,4 +6,6 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: true,
+  banner: { js: '"use client";' },
+  copy: ["src/styles.css"],
 });
