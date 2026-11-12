@@ -15,6 +15,14 @@ export type {
 } from "./editor/types";
 export { DashboardCanvas, type DashboardCanvasProps } from "./canvas";
 export { WidgetRenderer, type WidgetRendererProps } from "./widget-renderer";
+export {
+  DashboardControls,
+  useDashboardControls,
+  useDashboardControlsState,
+  type DashboardControlsController,
+  type DashboardControlsProps,
+  type DashboardControlsState,
+} from "./controls";
 export { useDataSource, type DashboardDataSource } from "./data-source";
 export { WidgetErrorBoundary } from "./error-boundary";
 export {
@@ -29,13 +37,20 @@ export {
 export type { DashboardRuntime } from "./context";
 
 export {
+  buildControlledQueryRequest,
   createDashboardI18n,
   createThemeTokens,
   createWidgetRegistry,
   defineWidget,
+  defaultVariables,
+  evaluateVisibilityCondition,
   InvalidDashboardConfigError,
   isRevisionConflictError,
+  isWidgetVisible,
   normalizeDigits,
+  queryKeyForRequest,
+  resolveControlValues,
+  resolveDashboardFilters,
   RevisionConflictError,
   UnsupportedConfigVersionError,
   WidgetRegistrationError,
@@ -58,6 +73,7 @@ export type {
   WidgetPlugin,
   WidgetRegistry,
   WidgetRenderProps,
+  WidgetSelection,
   WidgetSettingsProps,
   WidgetSize,
 } from "@nama/dashboard-core";
@@ -65,7 +81,10 @@ export type {
 export type {
   Breakpoint,
   DashboardConfig,
+  DashboardControlValues,
+  DashboardFilter,
   DashboardLayouts,
+  DashboardVariable,
   DashboardWidget,
   DataAdapter,
   LayoutItem,
@@ -75,11 +94,14 @@ export type {
   QueryError,
   QueryRequest,
   QueryResult,
+  QueryTimeRange,
   RealtimeAdapter,
   SubscriptionHandlers,
   ThemeMode,
   Unsubscribe,
   ValidationIssue,
   WidgetCapabilities,
+  WidgetInteraction,
   WidgetManifest,
+  WidgetVisibility,
 } from "@nama/dashboard-types";

@@ -16,6 +16,7 @@ import {
   PLATFORM_LIMITS,
 } from "./primitives";
 import { filterOperatorSchema, variableBindingSchema } from "./query";
+import type { QueryTimeRange } from "./query";
 import { dashboardWidgetSchema } from "./widget";
 import { runMigrations, type SchemaMigration } from "./migration";
 
@@ -62,7 +63,8 @@ function isTimeRange(value: unknown): boolean {
   );
 }
 
-function matchesVariableType(type: VariableType, value: unknown): boolean {
+/** Runtime check shared by validation and control-value resolution. */
+export function isVariableValue(type: VariableType, value: unknown): boolean {
   switch (type) {
     case "string":
       return typeof value === "string";
@@ -105,7 +107,7 @@ export const dashboardVariableSchema = z
       return;
     }
 
-    if (!matchesVariableType(variable.type, variable.defaultValue)) {
+    if (!isVariableValue(variable.type, variable.defaultValue)) {
       ctx.addIssue({
         code: "custom",
         path: ["defaultValue"],
@@ -204,6 +206,16 @@ export type DashboardMetadata = z.infer<typeof dashboardMetadataSchema>;
 export type DashboardSettings = z.infer<typeof dashboardSettingsSchema>;
 export type DashboardVariable = z.infer<typeof dashboardVariableSchema>;
 export type DashboardFilter = z.infer<typeof dashboardFilterSchema>;
+
+/**
+ * Runtime control state held by the host viewer. It is never persisted: values
+ * start from variable defaults and are resolved into query requests on read.
+ */
+export interface DashboardControlValues {
+  variables: Readonly<Record<string, unknown>>;
+  /** Dashboard-wide range selected by a time control. */
+  timeRange?: QueryTimeRange;
+}
 
 export const dashboardDocumentSchema = z
   .object({

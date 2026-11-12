@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { DashboardProvider, DashboardViewer } from "@nama/dashboard-builder";
+import {
+  DashboardControls,
+  DashboardProvider,
+  DashboardViewer,
+} from "@nama/dashboard-builder";
 import type { DashboardView, SessionPayload } from "@nama/api-client";
 
 import { WorkspaceGate } from "@/components/workspace-gate";
@@ -123,6 +127,7 @@ function ViewerLoader({
         realtimeAdapter={realtimeAdapter}
         widgets={WEB_WIDGETS}
       >
+        <DashboardControls />
         <DashboardViewer />
       </DashboardProvider>
     </div>

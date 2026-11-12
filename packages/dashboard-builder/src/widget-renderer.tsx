@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  isWidgetVisible,
+  resolveDashboardFilters,
   resolveWidgetConfig,
   type ResolvedFilters,
   type WidgetRenderProps,
+  type WidgetSelection,
 } from "@nama/dashboard-core";
 import type { DashboardWidget } from "@nama/dashboard-types";
 
@@ -10,8 +13,6 @@ import { joinClassNames } from "./classnames";
 import { useDashboardRuntime } from "./context";
 import { WidgetErrorBoundary } from "./error-boundary";
 import { useWidgetQuery } from "./widget-query";
-
-const EMPTY_FILTERS: ResolvedFilters = Object.freeze({});
 
 function useElementSize(): [
   (element: HTMLDivElement | null) => void,
@@ -87,20 +88,48 @@ function WidgetPlaceholder({
 export interface WidgetRendererProps {
   widget: DashboardWidget;
   className?: string;
+  /** The editor keeps hidden widgets on the board while authoring. */
+  ignoreVisibility?: boolean;
 }
 
 /**
  * Renders one widget by type through the registry. Unknown types, newer config
  * versions and invalid configuration render placeholders; the persisted data is
- * never discarded.
+ * never discarded. Dashboard filters, visibility conditions and interactions
+ * resolve against the runtime control values.
  */
-export function WidgetRenderer({ widget, className }: WidgetRendererProps) {
+export function WidgetRenderer({
+  widget,
+  className,
+  ignoreVisibility = false,
+}: WidgetRendererProps) {
   const runtime = useDashboardRuntime();
   const plugin = runtime.registry.get(widget.type);
   const resolved = resolveWidgetConfig(plugin, widget);
-  const data = useWidgetQuery(widget, plugin);
+  const values = runtime.controls.values;
+  const visible = isWidgetVisible(widget, values);
+  const data = useWidgetQuery(widget, plugin, visible || ignoreVisibility);
   const [measure, size] = useElementSize();
   const translate = runtime.i18n.translate;
+
+  const filters = useMemo<ResolvedFilters>(() => {
+    const entries = resolveDashboardFilters(runtime.config, values).flatMap((filter) =>
+      filter.value === undefined ? [] : ([[filter.field, filter.value]] as const),
+    );
+
+    return Object.freeze(Object.fromEntries(entries));
+  }, [runtime.config, values]);
+
+  const interactionVariable = widget.interaction?.variable;
+  const setVariable = runtime.controls.setVariable;
+  const onSelect = useMemo(() => {
+    if (!interactionVariable) return undefined;
+    return (selection: WidgetSelection) => {
+      setVariable(interactionVariable, selection.value);
+    };
+  }, [interactionVariable, setVariable]);
+
+  if (!ignoreVisibility && !visible) return null;
 
   if (!plugin || resolved.status === "unknownType") {
     return (
@@ -144,7 +173,8 @@ export function WidgetRenderer({ widget, className }: WidgetRendererProps) {
     theme: runtime.theme.tokens,
     width: size.width,
     height: size.height,
-    filters: EMPTY_FILTERS,
+    filters,
+    ...(onSelect ? { onSelect } : {}),
   };
 
   return (

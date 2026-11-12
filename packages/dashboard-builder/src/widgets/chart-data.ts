@@ -68,6 +68,8 @@ export function resolveChartColors(
 export interface SeriesPoint {
   label: string;
   value: number;
+  /** Unformatted category value, used when a click writes a variable. */
+  raw?: unknown;
 }
 
 export interface SeriesOptions {
@@ -124,7 +126,9 @@ export function toSeries(
     if (typeof value !== "number" || !Number.isFinite(value)) return [];
 
     const rawLabel = xField === undefined ? index : row[xField];
-    return [{ label: formatLabel(formatX(rawLabel), String(index + 1)), value }];
+    return [
+      { label: formatLabel(formatX(rawLabel), String(index + 1)), value, raw: rawLabel },
+    ];
   });
 }
 

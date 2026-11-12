@@ -38,6 +38,7 @@ function PieWidget({
   data,
   locale,
   theme,
+  onSelect,
 }: WidgetRenderProps<PieConfig>) {
   const result = data.status === "ready" ? data.result : undefined;
   const points = useMemo(
@@ -50,6 +51,13 @@ function PieWidget({
           })
         : EMPTY_POINTS,
     [result, config.labelField, config.valueField, locale],
+  );
+
+  const selectPoint = useCallback(
+    (index: number) => {
+      onSelect?.({ value: points[index]?.raw });
+    },
+    [onSelect, points],
   );
 
   const buildOption = useCallback(
@@ -80,7 +88,12 @@ function PieWidget({
 
   return (
     <div className="nama-chart-frame">
-      <EChart ariaLabel={widget.title} theme={theme} buildOption={buildOption} />
+      <EChart
+        ariaLabel={widget.title}
+        theme={theme}
+        buildOption={buildOption}
+        onSelect={onSelect ? selectPoint : undefined}
+      />
       {data.truncated ? <TruncatedNote locale={locale} /> : null}
     </div>
   );

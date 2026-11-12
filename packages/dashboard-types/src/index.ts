@@ -14,3 +14,4 @@ export * from "./dashboard";
 export * from "./realtime";
 export * from "./plugin";
 export * from "./migration";
+export * from "./transfer";

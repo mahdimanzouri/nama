@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { isWidgetVisible } from "@nama/dashboard-core";
 
 import { DashboardCanvas } from "./canvas";
 import { joinClassNames } from "./classnames";
@@ -16,8 +17,9 @@ export interface DashboardViewerProps {
  */
 export function DashboardViewer({ className, emptyState }: DashboardViewerProps) {
   const runtime = useDashboardRuntime();
-  const hasVisibleWidgets = runtime.config.widgets.some(
-    (widget) => widget.visibility?.enabled !== false,
+  const values = runtime.controls.values;
+  const hasVisibleWidgets = runtime.config.widgets.some((widget) =>
+    isWidgetVisible(widget, values),
   );
 
   if (!hasVisibleWidgets) {

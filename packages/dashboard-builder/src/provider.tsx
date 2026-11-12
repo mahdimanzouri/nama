@@ -14,12 +14,14 @@ import {
   dashboardConfigSchema,
   issuesFromZod,
   type DashboardConfig,
+  type DashboardControlValues,
   type DataAdapter,
   type RealtimeAdapter,
   type ThemeMode,
 } from "@nama/dashboard-types";
 
 import { DashboardRuntimeContext, type DashboardRuntime } from "./context";
+import { useDashboardControlsState } from "./controls";
 import type { DashboardPublishHandler, DashboardSaveHandler } from "./editor/types";
 import { useSystemPrefersDark } from "./media";
 
@@ -57,6 +59,10 @@ export interface DashboardProviderProps {
   onPublish?: DashboardPublishHandler;
   /** Notified after a `REVISION_CONFLICT` rejection of save or publish. */
   onConflict?: (error: RevisionConflictError) => void;
+  /** Initial variable values and dashboard-wide range; read on first render. */
+  initialControls?: Partial<DashboardControlValues>;
+  /** Called whenever the viewer changes a variable or the time range. */
+  onControlsChange?: (values: DashboardControlValues) => void;
 
   children: ReactNode;
 }
@@ -98,6 +104,8 @@ export function DashboardProvider({
   onSave,
   onPublish,
   onConflict,
+  initialControls,
+  onControlsChange,
   children,
 }: DashboardProviderProps) {
   const [defaultClient] = useState(createQueryClient);
@@ -116,6 +124,11 @@ export function DashboardProvider({
     () => ({ onChange, onSave, onPublish, onConflict }),
     [onChange, onSave, onPublish, onConflict],
   );
+  const controls = useDashboardControlsState({
+    config: parsedConfig,
+    ...(initialControls === undefined ? {} : { initial: initialControls }),
+    ...(onControlsChange === undefined ? {} : { onChange: onControlsChange }),
+  });
 
   const runtime = useMemo<DashboardRuntime>(
     () => ({
@@ -131,6 +144,7 @@ export function DashboardProvider({
       realtimeAdapter,
       timezone: resolvedTimeZone,
       editor,
+      controls,
     }),
     [
       parsedConfig,
@@ -147,6 +161,7 @@ export function DashboardProvider({
       realtimeAdapter,
       resolvedTimeZone,
       editor,
+      controls,
     ],
   );
 

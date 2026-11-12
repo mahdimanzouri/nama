@@ -48,6 +48,7 @@ function CartesianWidget({
   data,
   locale,
   theme,
+  onSelect,
   kind,
 }: WidgetRenderProps<CartesianConfig> & { kind: CartesianVariant["id"] }) {
   const result = data.status === "ready" ? data.result : undefined;
@@ -61,6 +62,13 @@ function CartesianWidget({
           })
         : EMPTY_POINTS,
     [result, config.xField, config.yField, locale],
+  );
+
+  const selectPoint = useCallback(
+    (index: number) => {
+      onSelect?.({ value: points[index]?.raw });
+    },
+    [onSelect, points],
   );
 
   const buildOption = useCallback(
@@ -103,7 +111,12 @@ function CartesianWidget({
 
   return (
     <div className="nama-chart-frame">
-      <EChart ariaLabel={widget.title} theme={theme} buildOption={buildOption} />
+      <EChart
+        ariaLabel={widget.title}
+        theme={theme}
+        buildOption={buildOption}
+        onSelect={onSelect ? selectPoint : undefined}
+      />
       {data.truncated ? <TruncatedNote locale={locale} /> : null}
     </div>
   );

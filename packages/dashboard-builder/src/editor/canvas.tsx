@@ -12,6 +12,7 @@ import {
   type Layout,
 } from "react-grid-layout";
 import { PLATFORM_LIMITS, type DashboardWidget } from "@nama/dashboard-types";
+import { isWidgetVisible } from "@nama/dashboard-core";
 
 import { joinClassNames } from "../classnames";
 import { useDashboardRuntime } from "../context";
@@ -44,6 +45,7 @@ export function EditorCanvas({ className }: { className?: string }) {
   const { width, mounted, containerRef } = useContainerWidth({ initialWidth: 960 });
   const layout = state.config.layouts[state.breakpoint];
   const interactive = !readOnly && !state.preview;
+  const controlValues = runtime.controls.values;
 
   const { widgets, unplaced, gridLayout } = useMemo(() => {
     const widgetIds = new Set(state.config.widgets.map((widget) => widget.id));
@@ -159,6 +161,7 @@ export function EditorCanvas({ className }: { className?: string }) {
                 widget={widget}
                 selected={state.selectedWidgetId === widget.id}
                 interactive={interactive}
+                hidden={!isWidgetVisible(widget, controlValues)}
               />
             ))}
           </GridLayout>
@@ -173,7 +176,7 @@ export function EditorCanvas({ className }: { className?: string }) {
         >
           {unplaced.map((widget) => (
             <div key={widget.id} className="nama-editor-unplaced__item">
-              <WidgetRenderer widget={widget} />
+              <WidgetRenderer widget={widget} ignoreVisibility={interactive} />
               <button
                 type="button"
                 className="nama-button"
@@ -201,6 +204,8 @@ type EditorItemProps = {
   widget: DashboardWidget;
   selected: boolean;
   interactive: boolean;
+  /** Visibility is dimmed, not enforced, while authoring. */
+  hidden: boolean;
 } & ComponentPropsWithoutRef<"div">;
 
 /**
@@ -209,7 +214,7 @@ type EditorItemProps = {
  * forward all of them.
  */
 const EditorItem = forwardRef<HTMLDivElement, EditorItemProps>(function EditorItem(
-  { widget, selected, interactive, className, onMouseDown, children, ...rest },
+  { widget, selected, interactive, hidden, className, onMouseDown, children, ...rest },
   ref,
 ) {
   const { store } = useEditorContext();
@@ -222,7 +227,7 @@ const EditorItem = forwardRef<HTMLDivElement, EditorItemProps>(function EditorIt
         "nama-editor-item",
         className,
         selected ? "nama-editor-item--selected" : undefined,
-        widget.visibility?.enabled === false ? "nama-editor-item--hidden" : undefined,
+        hidden ? "nama-editor-item--hidden" : undefined,
       )}
       data-widget-id={widget.id}
       onMouseDown={(event) => {
@@ -230,7 +235,7 @@ const EditorItem = forwardRef<HTMLDivElement, EditorItemProps>(function EditorIt
         if (interactive) store.getState().selectWidget(widget.id);
       }}
     >
-      <WidgetRenderer widget={widget} />
+      <WidgetRenderer widget={widget} ignoreVisibility={interactive} />
       {children}
     </div>
   );

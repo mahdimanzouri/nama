@@ -54,6 +54,12 @@ export interface DataSourceSummary {
   kind?: string;
 }
 
+/** A user pick inside a widget, forwarded to the configured variable binding. */
+export interface WidgetSelection {
+  /** Raw category value; formatted labels are never written to a variable. */
+  value: unknown;
+}
+
 export interface WidgetRenderProps<TConfig> {
   widget: DashboardWidget;
   config: TConfig;
@@ -64,6 +70,8 @@ export interface WidgetRenderProps<TConfig> {
   height: number;
   filters: ResolvedFilters;
   actions?: WidgetActions;
+  /** Present only when the widget declares an interaction target. */
+  onSelect?: (selection: WidgetSelection) => void;
 }
 
 export interface WidgetSettingsProps<TConfig> {

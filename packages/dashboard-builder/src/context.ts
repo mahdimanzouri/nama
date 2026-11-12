@@ -14,6 +14,7 @@ import type {
 } from "@nama/dashboard-types";
 
 import type { DashboardPublishHandler, DashboardSaveHandler } from "./editor/types";
+import type { DashboardControlsState } from "./controls";
 
 /** Editing hooks injected by the host; unused by the viewer. */
 export interface DashboardEditorRuntime {
@@ -41,6 +42,8 @@ export interface DashboardRuntime {
   realtimeAdapter?: RealtimeAdapter;
   timezone: string;
   editor: DashboardEditorRuntime;
+  /** Runtime variable values and dashboard-wide time range. */
+  controls: DashboardControlsState;
 }
 
 export const DashboardRuntimeContext = createContext<DashboardRuntime | null>(null);

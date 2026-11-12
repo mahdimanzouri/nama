@@ -11,7 +11,7 @@ import {
 import { useStore } from "zustand";
 import { isRevisionConflictError } from "@nama/dashboard-core";
 
-import { useDashboardRuntime } from "../context";
+import { useDashboardRuntime, DashboardRuntimeContext } from "../context";
 import {
   createEditorStore,
   isDirty,
@@ -64,6 +64,11 @@ export function EditorDraftProvider({
     }),
   );
   const propsRef = useRef({ config: runtime.config, revision: runtime.revision });
+  const draftConfig = useStore(store, (state) => state.config);
+  const draftRuntime = useMemo(
+    () => ({ ...runtime, config: draftConfig }),
+    [runtime, draftConfig],
+  );
 
   // The store is created once per mount; keep the host bindings current through
   // an action instead of re-creating it, so local edits survive prop changes.
@@ -177,7 +182,13 @@ export function EditorDraftProvider({
     [store, save, publish, runtime.editor.onSave, runtime.editor.onPublish, readOnly],
   );
 
-  return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
+  return (
+    <EditorContext.Provider value={value}>
+      <DashboardRuntimeContext.Provider value={draftRuntime}>
+        {children}
+      </DashboardRuntimeContext.Provider>
+    </EditorContext.Provider>
+  );
 }
 
 export interface DashboardEditorApi extends EditorStore {

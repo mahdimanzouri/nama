@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { isWidgetVisible } from "@nama/dashboard-core";
 
 import { joinClassNames } from "./classnames";
 import { useDashboardRuntime } from "./context";
@@ -22,8 +23,9 @@ export interface DashboardCanvasProps {
 export function DashboardCanvas({ className }: DashboardCanvasProps) {
   const runtime = useDashboardRuntime();
   const { items, columns, rowHeight, gap, breakpoint } = useDashboardLayout();
-  const widgets = runtime.config.widgets.filter(
-    (widget) => widget.visibility?.enabled !== false,
+  const values = runtime.controls.values;
+  const widgets = runtime.config.widgets.filter((widget) =>
+    isWidgetVisible(widget, values),
   );
   const byId = new Map(widgets.map((widget) => [widget.id, widget]));
   const placed = items.flatMap((item) => {

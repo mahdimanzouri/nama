@@ -12,6 +12,22 @@ export const widgetVisibilitySchema = z
 
 export type WidgetVisibility = z.infer<typeof widgetVisibilitySchema>;
 
+/**
+ * A selection in this widget writes its category value into a dashboard
+ * variable. The variable's bindings decide where the value is applied.
+ */
+export const widgetInteractionSchema = z
+  .object({
+    variable: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/u, "must be an identifier"),
+  })
+  .strict();
+
+export type WidgetInteraction = z.infer<typeof widgetInteractionSchema>;
+
 export interface DashboardWidget {
   id: string;
   type: string;
@@ -21,6 +37,7 @@ export interface DashboardWidget {
   config: Record<string, unknown>;
   query?: QueryDefinition;
   visibility?: WidgetVisibility;
+  interaction?: WidgetInteraction;
 }
 
 export const dashboardWidgetSchema: z.ZodType<DashboardWidget> = z
@@ -33,5 +50,6 @@ export const dashboardWidgetSchema: z.ZodType<DashboardWidget> = z
     config: z.record(z.string(), z.unknown()),
     query: queryDefinitionSchema.optional(),
     visibility: widgetVisibilitySchema.optional(),
+    interaction: widgetInteractionSchema.optional(),
   })
   .strict();

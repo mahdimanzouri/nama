@@ -4,7 +4,7 @@ import { BarChart, GaugeChart, LineChart, PieChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
 import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
-import type { ECharts, EChartsCoreOption } from "echarts/core";
+import type { ECElementEvent, ECharts, EChartsCoreOption } from "echarts/core";
 import type { ThemeTokens } from "@nama/dashboard-core";
 
 import { joinClassNames } from "../classnames";
@@ -88,18 +88,31 @@ export interface EChartProps {
   /** Must be stable across renders; build it with `useCallback`. */
   buildOption: (colors: ChartColors, animation: boolean) => EChartsCoreOption;
   className?: string;
+  /** Reports the clicked data index; charts map it back to a raw category. */
+  onSelect?: (index: number) => void;
 }
 
 /**
  * Canvas host for the built-in chart widgets. Initialisation is deferred until
  * the container has a measurable size, which keeps grid layouts and SSR safe.
  */
-export function EChart({ ariaLabel, theme, buildOption, className }: EChartProps) {
+export function EChart({
+  ariaLabel,
+  theme,
+  buildOption,
+  className,
+  onSelect,
+}: EChartProps) {
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   const chartRef = useRef<ECharts | null>(null);
   const optionRef = useRef<EChartsCoreOption | null>(null);
+  const onSelectRef = useRef(onSelect);
   const colors = useResolvedColors(theme, element);
   const reducedMotion = usePrefersReducedMotion();
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
 
   const attach = useCallback((node: HTMLDivElement | null) => {
     setElement(node);
@@ -112,6 +125,9 @@ export function EChart({ ariaLabel, theme, buildOption, className }: EChartProps
 
     registerModules();
     const chart = echarts.init(node, undefined, { renderer: "canvas" });
+    chart.on("click", (params: ECElementEvent) => {
+      onSelectRef.current?.(params.dataIndex);
+    });
     chartRef.current = chart;
 
     if (optionRef.current) chart.setOption(optionRef.current, { notMerge: true });
@@ -148,6 +164,7 @@ export function EChart({ ariaLabel, theme, buildOption, className }: EChartProps
       className={joinClassNames("nama-chart", className)}
       role="img"
       aria-label={ariaLabel}
+      data-selectable={onSelect ? "true" : undefined}
     />
   );
 }

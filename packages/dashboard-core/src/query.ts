@@ -89,6 +89,18 @@ export function stableStringify(value: unknown): string {
   return JSON.stringify(sortValue(value));
 }
 
+/** Cache key for a fully resolved request, including filters and parameters. */
+export function queryKeyForRequest(request: QueryRequest): readonly unknown[] {
+  return [
+    "nama-dashboard-query",
+    request.dataSourceId,
+    request.query.queryId,
+    stableStringify(request.query),
+    request.parameters ? stableStringify(request.parameters) : null,
+    request.timeRange ? `${request.timeRange.from}/${request.timeRange.to}` : null,
+  ];
+}
+
 /** Snapshot queries dedupe on the persisted query, not the resolved window. */
 export function queryKeyFor(
   widget: DashboardWidget,

@@ -3,6 +3,7 @@ import { useStore } from "zustand";
 import type { DataSourceSummary } from "@nama/dashboard-core";
 
 import { joinClassNames } from "../classnames";
+import { DashboardControls } from "../controls";
 import { useDashboardRuntime } from "../context";
 import { EditorCanvas } from "./canvas";
 import { EditorDraftProvider, useEditorContext } from "./context";
@@ -64,6 +65,7 @@ function EditorLayout({
       >
         {state.preview ? null : <WidgetPalette />}
         <div className="nama-editor__main">
+          {state.preview ? <DashboardControls /> : null}
           <EditorCanvas />
         </div>
         {state.preview ? null : <WidgetSettings dataSources={dataSources} />}

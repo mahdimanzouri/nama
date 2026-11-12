@@ -160,6 +160,10 @@
   min-height: 0;
 }
 
+.nama-chart[data-selectable="true"] {
+  cursor: pointer;
+}
+
 .nama-chart-frame__note {
   flex: none;
   margin: 0;
@@ -345,6 +349,59 @@
 .nama-button--danger {
   border-color: var(--nama-danger);
   color: var(--nama-danger);
+}
+
+/* Runtime controls */
+
+.nama-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 10px 12px;
+  border: 1px solid var(--nama-border);
+  border-radius: 8px;
+  background: var(--nama-surface);
+}
+
+.nama-controls__group,
+.nama-controls__presets,
+.nama-controls__field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.nama-controls__group {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.nama-controls__label {
+  color: var(--nama-muted);
+  font-size: 12px;
+}
+
+.nama-controls__field {
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 140px;
+}
+
+.nama-controls__field--inline {
+  flex-direction: row;
+  min-width: 0;
+}
+
+.nama-controls__field--range {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.nama-controls__field--range .nama-input {
+  min-width: 170px;
 }
 
 .nama-editor__body {
