@@ -4,8 +4,10 @@
 (`widgetManifestSchema`, `widgetCapabilitiesSchema` in `@nama/dashboard-types`).
 Runtime `WidgetPlugin`, render-prop and settings interfaces implemented in M3
 (`@nama/dashboard-core`). M4 added the optional `defaultQuery` and
-`defaultDataSourceId` creation defaults. This file is the normative source for
-the widget contract; other documents link here instead of restating it.
+`defaultDataSourceId` creation defaults; M5 shipped seven built-ins from
+`@nama/dashboard-builder/widgets` (table below). This file is the normative
+source for the widget contract; other documents link here instead of restating
+it.
 
 ## Manifest
 
@@ -192,6 +194,31 @@ migrate?: (config: unknown, fromVersion: number) => TConfig;
 - All user-facing strings go through `locale.translate`.
 - The plugin must be compatible with the host's React version (React 19 in v1)
   and declared as a peer dependency.
+
+## Built-in widgets (M5 reference implementation)
+
+The seven built-ins ship from `@nama/dashboard-builder/widgets` as
+`NAMA_WIDGETS`. They are ordinary plugins under this contract, with
+`configVersion: 1`.
+
+| id | Name | Config schema (defaults) | Default size |
+| --- | --- | --- | --- |
+| `kpi` | KPI | `label` ("Metric"), `unit?`, `valueField?` | 3×5 |
+| `line` | Line chart | `seriesLabel` ("Series"), `xField?`, `yField?`, `smooth` (false), `area` (false) | 9×5 |
+| `area` | Area chart | Same as line, `area` defaults to true | 9×5 |
+| `bar` | Bar chart | `seriesLabel`, `xField?`, `yField?` | 6×5 |
+| `pie` | Pie chart | `labelField?`, `valueField?`, `donut` (true) | 4×5 |
+| `gauge` | Gauge | `min` (0), `max` (200), `unit?`, `valueField?` — `max` must exceed `min` | 4×5 |
+| `table` | Table | `maxRows` (25, 1–100) | 6×6 |
+
+- Field overrides are optional; omitted fields are inferred from the result
+  columns (timestamp/category strings and numeric measures).
+- Config schemas are `.strict()` and use `.default()` so M4 documents remain
+  valid; the settings panel validates every commit through the same schema.
+- The built-ins contain no host-specific query or data-source defaults; hosts
+  such as `apps/web` supply `defaultQuery`/`defaultDataSourceId` wrappers.
+- Layout coordinates remain in `LayoutItem`; sizes above are insertion defaults
+  only.
 
 ## Registration example
 

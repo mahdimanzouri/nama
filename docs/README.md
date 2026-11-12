@@ -1,6 +1,6 @@
 # Nama Dashboard Platform — Architecture Package
 
-**Status:** M0 approved; M1, M2, M3, M3.5 and M4 complete ([current phase](implementation/current-phase.md))
+**Status:** M0 approved; M1, M2, M3, M3.5, M4 and M5 complete ([current phase](implementation/current-phase.md))
 **Date:** 2026-11-12
 **Scope:** Architecture and decisions, plus the implemented walking skeleton.
 **Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)
@@ -29,9 +29,12 @@ login, dashboard list/create, editor save/publish with `If-Match`, KPI and line
 widgets over HTTP, and a published-only viewer. M4 moved the editor into
 `dashboard-builder`: a React Grid Layout canvas with drag/resize, undo/redo,
 per-breakpoint editing, save/publish callbacks and visible 409 conflict handling,
-plus version listing and restore. `api-client` is a hand-written typed transport
-until codegen lands in M6. Documents describing target-only packages list them as
-such.
+plus version listing and restore. M5 added seven built-in widgets behind the
+`@nama/dashboard-builder/widgets` subpath: a shared tree-shaken ECharts 6 canvas,
+per-widget Zod config schemas with settings-time validation feedback, and
+loading/error/empty/truncated states; the main entry stays ECharts-free.
+`api-client` is a hand-written typed transport until codegen lands in M6.
+Documents describing target-only packages list them as such.
 
 ## Status legend
 

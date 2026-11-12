@@ -6,10 +6,10 @@
  * installs the tarballs into a throwaway React project, server-renders a
  * dashboard with a custom widget and checks the distribution guarantees:
  *
- *  - the built entry keeps its `"use client"` directive
+ *  - the built entries keep their `"use client"` directive
  *  - `@nama/dashboard-builder/styles.css` resolves and ships tokens
  *  - exactly one React copy is installed
- *  - the builder entry stays under the gzipped bundle budget
+ *  - the builder and widgets entries stay under their gzipped bundle budgets
  *
  * Usage: node scripts/verify-consumer.mjs [--keep]
  */
@@ -33,7 +33,8 @@ import { gzipSync } from "node:zlib";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const keep = process.argv.includes("--keep");
 const PACKAGES = ["dashboard-types", "dashboard-core", "dashboard-builder"];
-// M4 adds the editor (React Grid Layout integration, toolbar and settings).
+// M4 adds the editor (React Grid Layout integration, toolbar and settings);
+// M5 adds the widgets entry, which keeps ECharts external.
 const BUNDLE_BUDGET_BYTES = 16 * 1024;
 
 const failures = [];
@@ -129,6 +130,22 @@ try {
     pass(`bundle budget: ${(gzipped / 1024).toFixed(1)} KiB gzipped (limit 16 KiB)`);
   } else {
     fail(`builder entry is ${gzipped} bytes gzipped, over the 16 KiB budget`);
+  }
+
+  const widgetsEntry = readFileSync(join(installed, "dist", "widgets.mjs"), "utf8");
+  if (widgetsEntry.startsWith('"use client";')) {
+    pass('widgets entry preserves "use client"');
+  } else {
+    fail('widgets entry lost its "use client" directive');
+  }
+
+  const widgetsGzipped = gzipSync(widgetsEntry).length;
+  if (widgetsGzipped <= BUNDLE_BUDGET_BYTES) {
+    pass(
+      `widgets budget: ${(widgetsGzipped / 1024).toFixed(1)} KiB gzipped (limit 16 KiB)`,
+    );
+  } else {
+    fail(`widgets entry is ${widgetsGzipped} bytes gzipped, over the 16 KiB budget`);
   }
 
   const appRequire = createRequire(join(appDirectory, "package.json"));

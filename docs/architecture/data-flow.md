@@ -1,9 +1,9 @@
 # Data Flow
 
 **Status:** Proposed (M0); the editor save/publish/restore and viewer read paths
-are implemented through M4. The API store is still in memory rather than
-PostgreSQL, version restore copies into the draft without publishing, and
-realtime remains a contract only.
+are implemented through M4, and M5 added the widget rendering path. The API store
+is still in memory rather than PostgreSQL, version restore copies into the draft
+without publishing, and realtime remains a contract only.
 
 ## Editor: load, edit, save, publish
 
@@ -83,6 +83,26 @@ Widget query definition
   policy.
 - Cancellation aborts the upstream execution.
 - Truncated results set `meta.truncated` and are surfaced in the widget.
+
+## Widget rendering (M5)
+
+```text
+QueryResult (ready | loading | error | idle)
+  → widget projects rows (toSeries / latestValue, optional field overrides)
+  → empty? → "no data" state
+  → chart widget → buildOption(colors, animation) with resolved tokens
+  → EChart host → ECharts canvas (init after layout, resize on container change)
+  → table widget → formatted rows, capped at maxRows
+  → truncated? → disclosure note
+```
+
+- Charts paint CSS tokens resolved from the mounted element; a `data-theme`
+  change re-resolves them without remounting the chart.
+- Animation is disabled when `prefers-reduced-motion` matches.
+- Settings commits are validated against the widget `configSchema` before the
+  draft changes; rejected values render an inline notice and never persist.
+- The viewer and editor run the same widget components; only the surrounding
+  layout engine differs.
 
 ## Stream flow
 

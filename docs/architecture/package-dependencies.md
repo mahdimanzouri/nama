@@ -1,6 +1,6 @@
 # Package Dependencies
 
-**Status:** Implemented through M4 (2026-11-12)
+**Status:** Implemented through M5 (2026-11-12)
 
 ## Initial packages (created in M1)
 
@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | `@nama/dashboard-types` | Public types and Zod schemas for dashboard config, widgets, layout, queries, realtime events, plugin manifests | `zod` | — |
 | `@nama/dashboard-core` | Host-agnostic runtime: registries, widget resolution, layout helpers, i18n, theme tokens, query helpers | `@nama/dashboard-types`, `zod` | `react` (types only) |
-| `@nama/dashboard-builder` | Public React API and UI: provider, viewer, renderer, hooks, editor, stylesheet | `@nama/dashboard-types`, `@nama/dashboard-core`, `@tanstack/react-query`, `zustand`, `react-grid-layout` | `react`, `react-dom` |
+| `@nama/dashboard-builder` | Public React API and UI: provider, viewer, renderer, hooks, editor, stylesheet; built-in widgets behind the `./widgets` subpath | `@nama/dashboard-types`, `@nama/dashboard-core`, `@tanstack/react-query`, `zustand`, `react-grid-layout`, `zod`, `echarts` | `react`, `react-dom` |
 | `@nama/api-client` | Typed HTTP transport for the platform API: requests, cookie/CSRF handling, `ApiError` mapping | `@nama/dashboard-types` (query types) | — |
 
 Rules:
@@ -17,14 +17,18 @@ Rules:
   only what the foundation needed.
 - **M3 decision:** TanStack Query lives in `dashboard-builder`, not
   `dashboard-core`. Core must stay free of React runtime imports; caching and
-  hooks are React concerns. `zustand` (editor state) and `react-grid-layout`
-  (M4 canvas) follow the same rule; `echarts` (M5) will too. Whichever package
-  owns the code owns the dependency.
+  hooks are React concerns. `zustand` (editor state), `react-grid-layout`
+  (M4 canvas) and `echarts` + `zod` (M5 widgets) follow the same rule. Whichever
+  package owns the code owns the dependency.
 - **M4 state:** the editor moved into `dashboard-builder`, so `zustand` and
   `react-grid-layout` are builder runtime dependencies and `apps/web` no longer
   owns editor state. `apps/web` links `builder`, `dashboard-types` and
   `api-client`; `apps/api` runs on `fastify`, `@fastify/cookie`,
   `@node-rs/argon2`, `zod` and `dashboard-types`.
+- **M5 state:** the built-in widgets live in `dashboard-builder` but are exposed
+  through the separate `./widgets` entry, and `echarts` is a builder runtime
+  dependency. The main entry must not import ECharts; `verify:consumer` budgets
+  both entries.
 - React and React DOM are **peer dependencies** of every React package to avoid
   duplicate React copies.
 - No package imports from `apps/web` or `apps/api`.
@@ -54,7 +58,8 @@ Rules:
 graph TD
   types["@nama/dashboard-types\n(types + zod)"]
   core["@nama/dashboard-core\n(runtime, registry, layout, i18n,\ntheme, query keys)"]
-  builder["@nama/dashboard-builder\n(provider, viewer, editor, canvas,\nrenderer, hooks, widgets)"]
+  builder["@nama/dashboard-builder\n(provider, viewer, editor, canvas,\nrenderer, hooks)"]
+  widgets["@nama/dashboard-builder/widgets\n(kpi, line, area, bar, pie, gauge, table)"]
   client["@nama/api-client\n(OpenAPI typed client)"]
   web["apps/web (Next.js)"]
   api["apps/api (Fastify)"]
@@ -62,14 +67,16 @@ graph TD
   core --> types
   builder --> core
   builder --> types
+  widgets -. "subpath of builder" .-> builder
   client --> types
   web --> builder
+  web --> widgets
   web --> types
   web --> client
   api --> types
 
   classDef initial fill:#e8f5e9,stroke:#2e7d32;
-  class types,core,builder,client initial;
+  class types,core,builder,widgets,client initial;
 ```
 
 **Edges that must never exist:**
@@ -77,6 +84,7 @@ graph TD
 - `types` → `core`, `builder`, `api-client`, or any app
 - `core` → `builder` or any app
 - `builder` → `api-client` (the host injects the adapter)
+- the `builder` main entry → `echarts` (charts live behind `./widgets` only)
 - any package → `apps/web` or `apps/api`
 - `apps/api` → any React package
 - any cycle, including dev-only cycles

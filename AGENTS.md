@@ -62,14 +62,16 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M4 (visual editor) is complete and awaiting acceptance (2026-11-12); M5
-(visualization system) is the next milestone and has not started. The workspace
-contains `apps/web`, `apps/api`, `examples/standalone-consumer` and exactly four
-packages: `@nama/dashboard-types` (contracts), `@nama/dashboard-core`
-(host-agnostic runtime: plugin contract, registry, query keys, i18n, layout,
-theme), `@nama/dashboard-builder` (React provider, viewer, editor, canvas,
-renderer, hooks) and `@nama/api-client` (hand-written typed transport until M6
-codegen). Do not create the target-only packages listed in
+M5 (visualization system) is complete and awaiting acceptance (2026-11-12); M6
+(backend and persistence) is the next milestone, is blocked on the ADR-011
+deployment decision, and has not started. The workspace contains `apps/web`,
+`apps/api`, `examples/standalone-consumer` and exactly four packages:
+`@nama/dashboard-types` (contracts), `@nama/dashboard-core` (host-agnostic
+runtime: plugin contract, registry, query keys, i18n, layout, theme),
+`@nama/dashboard-builder` (React provider, viewer, editor, canvas, renderer,
+hooks, plus seven built-in widgets behind the `./widgets` subpath) and
+`@nama/api-client` (hand-written typed transport until M6 codegen). Do not create
+the target-only packages listed in
 `docs/architecture/package-dependencies.md`.
 
 The API keeps all state in memory and reseeds on restart. Demo accounts come from
@@ -78,7 +80,7 @@ The API keeps all state in memory and reseeds on restart. Demo accounts come fro
 (`viewer@nama.local` / `nama-viewer-123`). The web app proxies `/api/*` to
 `NAMA_API_URL` (default `http://localhost:3001`).
 
-Working rules for M5 and later:
+Working rules for M6 and later:
 
 1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
    `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`,
@@ -99,6 +101,12 @@ Working rules for M5 and later:
 9. Keep the editor draft inside `dashboard-builder`; hosts must not reimplement
    editor state. React Grid Layout child components must forward injected props,
    refs, styles and children.
-10. Do not implement M5 widget or chart work while closing M4.
+10. Keep ECharts out of the `@nama/dashboard-builder` main entry: built-in
+    widgets live in `./widgets`, import from `echarts/core`, `echarts/charts`,
+    `echarts/components` and `echarts/renderers` only, and must keep both
+    entries inside the `verify:consumer` budgets.
+11. Widget settings must validate through the plugin `configSchema` before
+    writing to the draft; never bypass it with a settings-specific parse.
+12. Do not implement M6 persistence or auth work while closing M5.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

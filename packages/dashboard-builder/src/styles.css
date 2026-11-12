@@ -130,6 +130,125 @@
   text-align: center;
 }
 
+/* Built-in widgets */
+
+.nama-widget-state {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  padding: 16px;
+  color: var(--nama-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.nama-widget-state--error {
+  color: var(--nama-danger);
+}
+
+.nama-chart-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.nama-chart {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.nama-chart-frame__note {
+  flex: none;
+  margin: 0;
+  padding: 2px 8px;
+  color: var(--nama-warning);
+  font-size: 11px;
+}
+
+.nama-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+  height: 100%;
+  padding: 12px 16px;
+}
+
+.nama-kpi__label {
+  color: var(--nama-muted);
+  font-size: 12px;
+}
+
+.nama-kpi__value {
+  font-size: clamp(22px, 4vw, 36px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.nama-kpi__unit {
+  color: var(--nama-muted);
+  font-size: 12px;
+}
+
+.nama-table-wrap {
+  height: 100%;
+  overflow: auto;
+}
+
+.nama-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.nama-table th,
+.nama-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--nama-border);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.nama-table th {
+  position: sticky;
+  top: 0;
+  background: var(--nama-surface);
+  color: var(--nama-muted);
+  font-weight: 600;
+}
+
+.nama-table td {
+  color: var(--nama-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.nama-table tbody tr:hover {
+  background: color-mix(in srgb, var(--nama-accent) 6%, transparent);
+}
+
+.nama-settings__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nama-settings__check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.nama-settings__issues {
+  margin: 0;
+  padding-inline-start: 16px;
+  font-size: 12px;
+}
+
 /* Editor chrome */
 
 .nama-editor {

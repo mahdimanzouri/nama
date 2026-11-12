@@ -1,7 +1,7 @@
 # Current Phase
 
-**Current milestone:** M5 — Visualization system (next)
-**Status:** M4 complete, awaiting acceptance (2026-11-12)
+**Current milestone:** M6 — Backend and persistence (next)
+**Status:** M5 complete, awaiting acceptance (2026-11-12)
 **Date:** 2026-11-12
 
 ## What the repository looks like now
@@ -14,7 +14,8 @@ nama/
 ├── packages/
 │   ├── dashboard-types/        # platform constants + runtime contracts (M2)
 │   ├── dashboard-core/         # host-agnostic runtime (M3)
-│   ├── dashboard-builder/      # public React API, editor and CSS (M3, editor in M4)
+│   ├── dashboard-builder/      # public React API, editor and CSS (M3/M4);
+│   │                           # built-in widgets behind the `./widgets` entry (M5)
 │   └── api-client/             # hand-written typed transport (M3.5)
 ├── examples/standalone-consumer/  # SSR consumer with a custom widget (M3)
 ├── scripts/
@@ -28,50 +29,47 @@ nama/
 └── pnpm-workspace.yaml
 ```
 
-## Delivered in M4
+## Delivered in M5
 
-### `@nama/dashboard-builder`
-
-| Area | Contents |
-| --- | --- |
-| Editor API | `DashboardEditor` (with host `children` slot), `DashboardToolbar`, `WidgetPalette`, `WidgetSettings`, `useDashboardEditor` |
-| Draft store | Zustand vanilla store owned by the SDK: add/remove/select, keyboard and pointer move/resize, per-breakpoint materialize-on-edit with wider-breakpoint inheritance, preview, dirty tracking, save/publish phases |
-| History | Undo/redo bounded to 50 entries; one entry per drag/resize gesture; cleared on publish, restore or draft replacement |
-| Canvas | React Grid Layout 2.3.0 (`GridLayout`, `useContainerWidth`, `noCompactor`) on an LTR surface; child items forward all grid-injected props, ref, style and resize-handle children |
-| Persistence | Provider `onChange`, `onSave`, `onPublish` and `onConflict`; `SaveContext`/`PublishContext` carry the base revision |
-| Conflicts | `RevisionConflictError` mapped to an in-editor banner with expected/current revisions, dismiss and local discard; host-driven reload via the `children` slot |
-| Plugins | Optional `defaultQuery` and `defaultDataSourceId` on the widget contract, applied at creation |
-
-### `apps/api`
+### `@nama/dashboard-builder/widgets`
 
 | Area | Contents |
 | --- | --- |
-| Versions | `GET /v1/dashboards/:id/versions` (paginated, newest first) and `POST /v1/dashboards/:id/restore` (`If-Match` guarded, copies a version into the draft and increments `revision`, keeps the last 50 versions) |
-| Draft/publish | Unchanged `If-Match` semantics; publish still copies the draft, increments the revision and inserts a version atomically in one step |
+| Built-ins | `kpi`, `line`, `area`, `bar`, `pie`, `gauge`, `table` as `NAMA_WIDGETS`; the subpath keeps the main entry free of ECharts |
+| Chart host | One `EChart` canvas component: deferred init after layout, `ResizeObserver` resizing, tree-shaken ECharts 6 registration, CSS-token resolution for canvas painting, `data-theme` re-resolution |
+| Option builders | `buildLineOption`, `buildBarOption`, `buildPieOption`, `buildGaugeOption` in widget terms; canvas-rendered rich-text tooltips; reduced-motion aware |
+| Settings | Per-widget settings components with text/number/toggle fields; every commit is validated against the plugin `configSchema` before it reaches the draft |
+| States | Loading, error and empty states per widget; truncated results disclosed for charts and tables |
+| Data projection | `toSeries`, `latestValue`, field selection and locale-aware category/value formatting |
+
+### `@nama/dashboard-builder` (main entry)
+
+| Area | Contents |
+| --- | --- |
+| Validation feedback | `WidgetSettings` reports `ValidationIssue`s from Zod and clears them when the user edits again; invalid commits never enter the draft |
+| Media | `usePrefersReducedMotion` via `useSyncExternalStore` |
 
 ### `apps/web`
 
 | Area | Contents |
 | --- | --- |
-| Editor mount | `DashboardEditor` from the SDK; the web app no longer keeps its own editor store |
-| Wire-up | Provider receives the draft config/revision plus `onSave`, `onPublish`, `onConflict` and `publishedRevision`; unsaved edits are sent through `api-client` |
-| Conflict recovery | `ConflictRecovery` renders inside the editor when a 409 occurs and can fetch the latest draft, replacing local state |
-| Versions | `VersionHistory` lists retained versions and restores a selected one with the current revision |
-| Widgets | KPI and line plugins declare `defaultQuery`/`defaultDataSourceId` so new widgets render live demo data immediately |
+| Widget plugins | `WEB_WIDGETS` wraps the SDK built-ins with demo query bindings for `demo-source`; the host keeps data policy out of the SDK |
+| Editor/viewer | Unchanged mount points now render all seven types from live demo data |
+| Local widgets | The M4 hand-written KPI/line plugins were removed; the SDK is the only widget implementation |
 
-## Decisions taken during M4
+## Decisions taken during M5
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| Editor ownership | Draft store lives in `dashboard-builder`, not the web app | Hosts must delegate persistence through `onSave`/`onConflict`; the SDK owns editing behavior |
-| Layout source | React Grid Layout 2.3.0, no compactor | Persisted positions stay authoritative; compaction would rewrite configs behind the user's back |
-| Grid integration | `forwardRef` item that spreads injected props and renders injected children | RGL clones children for positioning and `react-resizable` injects handles as children; dropping either silently breaks the canvas |
-| Breakpoints | Materialize on first edit; inherit from the wider breakpoint until then | Avoids duplicating identical layouts across three breakpoints |
-| Conflict resolution | SDK shows state; host fetches and rebases | The SDK has no HTTP client and must not invent endpoints |
-| Conflict discard | Reverts to the last locally saved config | Honest local undo without pretending the server changed |
-| Version restore | Restore copies into the draft, then normal save/publish | One persistence path; restore cannot bypass `If-Match` |
-| Web test runner | `vitest run --passWithNoTests` | Editor tests moved into the SDK package |
-| Demo data | Plugin `defaultQuery`/`defaultDataSourceId` | Keeps new widgets useful without host-specific creation logic |
+| Widget location | Built-ins ship behind `@nama/dashboard-builder/widgets` | Keeps ECharts out of the main entry (12.5 KiB) while staying inside the four-package graph |
+| ECharts imports | Modular `echarts/core` + explicit chart/component registrations | Avoids the full bundle; new widget types extend `registerModules` |
+| Demo data | Host wrapper adds `defaultQuery`/`defaultDataSourceId` | The SDK must not assume a data source; M4 already made creation defaults plugin-provided |
+| Settings validation | Central `plugin.configSchema.safeParse` in the settings panel | One validation path for every widget; the draft can never hold invalid config |
+| Config migration | Widen M4 schemas with defaults, keep `configVersion: 1` | Persisted KPI/line documents keep loading without a migration step |
+| Chart theming | Resolve CSS tokens after mount; observe `data-theme` | Canvas cannot paint `var(...)`; re-resolution keeps light/dark switching correct |
+| Tooltips | `renderMode: "richText"` | Data labels are never interpolated into HTML |
+| Table limits | Render at most `maxRows` (default 25) client-side | Keeps large results readable while the API truncation flag is disclosed |
+| Legend/axis language | Category labels use the dashboard locale formatter; canvas stays LTR | Matches the disclosed LTR-only canvas decision (ADR-005) |
 
 ## Open decisions
 
@@ -85,26 +83,29 @@ nama/
 | Public/anonymous sharing | Deferred | — | Organization-scoped sharing only in v1 |
 | External time-series store | Deferred | — | Telemetry stays out of Postgres; product selection later |
 | Plugin sandbox/marketplace | Deferred | — | Trusted install only (ADR-006) |
-| Browser end-to-end test in CI | Deferred | — | M4 was verified with a manual headless-browser walkthrough; no CI job yet |
-| Viewer/editor pixel parity | Open | M5 | Editor uses RGL; the viewer canvas still uses CSS grid |
+| Browser end-to-end test in CI | Deferred | — | M4 and M5 were verified with a manual headless-browser walkthrough; no CI job yet |
+| Viewer/editor pixel parity | Open | — | Editor uses RGL; the viewer canvas still uses CSS grid; re-targeted from M5 to M9 |
 
-## What M5 must not assume
+## What M6 must not assume
 
-- That built-in widget types exist beyond KPI and line; those two are
-  host-registered plugins in `apps/web`, not an SDK widget library.
-- That ECharts is installed; line rendering is a hand-rolled SVG polyline.
-- That widget settings are generated; each plugin supplies its own settings
-  component and there is no schema-driven form builder.
-- That the viewer and editor render identically at pixel level; both derive from
-  `LayoutItem`s but use different layout engines.
-- That config validation runs while editing; invalid configs are caught on save.
-- That realtime, persistence or shared connections exist; only HTTP polling is
-  live and the API store is in memory.
-- That rate limiting, audit logs, RLS or connection pooling exist.
-- That `dashboard-core` may import React at runtime or Next.js at all.
-- That a restored version is published; restore updates the draft only.
+- That the API is persistent; it is an in-memory seeded store that reseeds on
+  restart, with no migrations or connection pooling.
+- That authentication hardening exists; demo accounts and cookies are walking-
+  skeleton implementations, not the ADR-007 design.
+- That RLS, rate limiting, audit logging or credential storage exist; only
+  service-layer organization scoping is active.
+- That query execution is real; the demo adapter answers from a static dataset
+  with no groupBy, and no external source is contacted.
+- That realtime exists; only HTTP polling is live and the gateway is M8.
+- That widget data bindings are host-configurable; `apps/web` hard-codes demo
+  queries per built-in type until M7 introduces data-source selection.
+- That charts render multi-series data; every built-in draws one series, and
+  there is no variable/filter binding yet (M9).
+- That `dashboard-core` may import React at runtime, ECharts, or Next.js.
+- That the widgets entry is imported by hosts automatically; consumers opt into
+  `@nama/dashboard-builder/widgets` and bundle ECharts themselves.
 
-## Verification (M4)
+## Verification (M5)
 
 All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2.
 
@@ -114,18 +115,19 @@ All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2
 | Lint | `pnpm lint` | Clean |
 | Format | `pnpm format:check` | All files match |
 | Typecheck | `pnpm typecheck` | 10 tasks successful |
-| Test | `pnpm test` | 37 core + 31 builder = 68 tests pass (web suite passes with no test files after editor tests moved to the SDK) |
+| Test | `pnpm test` | 186 tests in 19 files: types 70, core 37, builder 44, api-client 10, api 25 |
 | Build | `pnpm build` | 6 tasks successful, 8 routes |
-| Consumer | `pnpm verify:consumer` | Passes: `"use client"` preserved, 12.8 KiB gzipped (16 KiB budget), SSR render, single React copy |
-| Browser walkthrough | Headless Chromium via Playwright | Created a dashboard, added KPI + line with live data, dragged and resized items, edited a tablet layout, renamed a widget, undo/redo, preview, save 1→2, publish 2→3, restore 3→4, second-tab save 4→5, stale save rejected with the 409 banner, reload recovered at revision 5 |
-| Published-only viewer | Same walkthrough | Viewer showed published revision 3 with the two published widgets and live KPI/line data, no edit affordances |
+| Consumer | `pnpm verify:consumer` | Passes: `"use client"` preserved on both entries, 12.5 KiB and 6.9 KiB gzipped (16 KiB budgets), SSR render, single React copy |
+| Browser walkthrough | Headless Chromium via Playwright | Created a dashboard with all seven widget types; five chart canvases, KPI value and 25 table rows rendered from live data; blank series label and gauge max below min were rejected with field-level messages and no draft change; saved (1→2), published (2→3); published-only viewer rendered in light and dark themes with no console errors or warnings |
 
-The browser walkthrough is a scratch script, not a CI test. The in-app browser
-panel was unusable for this (hidden tab pauses TanStack Query and Next
-hydration), so verification used headless Chromium directly.
+The browser walkthrough is a scratch script, not a CI test. During verification a
+dev-server restart produced one stale frame where canvases were sized but painted
+at animation frame zero; fresh runs rendered correctly and a resize forced the
+expected repaint. No product code change was needed, and a production build
+renders the same widgets.
 
 ## Next action
 
-M4 is complete and awaiting acceptance. The next milestone is M5 (visualization
-system): ECharts v6 with module imports, built-in widget types, loading/error/
-empty states and chart validation. Do not begin M5 until it is requested.
+M5 is complete and awaiting acceptance. The next milestone is M6 (backend and
+persistence), which remains blocked on the ADR-011 deployment decision. Do not
+begin M6 until it is requested.

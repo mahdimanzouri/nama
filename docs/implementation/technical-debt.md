@@ -1,6 +1,6 @@
 # Technical Debt
 
-**Status:** Updated at M4 (2026-11-12)
+**Status:** Updated at M5 (2026-11-12)
 
 Debt is recorded honestly with impact, owner and target milestone. Items are
 removed only when the fix is merged and verified; closed items are listed at the
@@ -36,9 +36,13 @@ end so IDs stay stable.
 | TD-034 | API state is an in-memory seeded store with demo accounts; nothing survives a restart and there are no migrations | Data loss on restart; the walking skeleton cannot be demoed without reseeding | Backend | M6 |
 | TD-035 | The API has no rate limiting, audit logging, RLS enforcement or connection limits | ADR-007/008 controls are unimplemented; only service-layer scoping is active | Backend | M6 |
 | TD-036 | No browser end-to-end test in CI; M4 was verified with a scratch headless Playwright script | Regressions in the editor/viewer UI are caught manually, not on every change | QA | M8, with Playwright |
-| TD-037 | The settings panel covers the widget title plus whatever each plugin renders; there is no schema-driven form or per-field validation feedback | Invalid configs are caught on save rather than while editing | Frontend | M5, with chart config validation |
-| TD-038 | Editor and viewer use different layout engines: React Grid Layout for editing, CSS grid for viewing | Widgets can differ by a pixel or two between modes; no parity test exists | Frontend | M5 |
+| TD-038 | Editor and viewer use different layout engines: React Grid Layout for editing, CSS grid for viewing | Widgets can differ by a pixel or two between modes; no parity test exists | Frontend | M9 |
 | TD-039 | The grid and resize rules from React Grid Layout are reproduced in the SDK stylesheet instead of importing the package CSS | RGL upgrades can silently break drag/resize styling | SDK | Every RGL upgrade |
+| TD-040 | Every built-in chart renders a single series; there is no groupBy, multi-series, stacked or combo chart support | Users cannot compare categories on one chart; the demo dataset has no grouping | Product/Frontend | M9, with variables and filters |
+| TD-041 | Canvas charts stay LTR inside RTL chrome: axes, legends and tooltips are not mirrored, only text is locale-formatted | Persian dashboards read chart axes left-to-right; disclosed alongside the LTR canvas | Product/UX | Same review as TD-001 |
+| TD-042 | Charts expose only `role="img"` with the widget title; there is no data-table fallback or keyboard interaction | Screen-reader users cannot inspect chart values | Accessibility | M10.5 |
+| TD-043 | `apps/web` hard-codes a demo query and data source per built-in type; hosts cannot choose bindings in the UI | Real sources cannot be attached without code changes | Frontend | M7, with data-source selection |
+| TD-044 | ECharts modules are registered manually in `registerModules`; adding a chart type requires an SDK code change | A host cannot add an ECharts chart type without forking the built-ins | SDK | When a third-party chart plugin is requested |
 
 ## Closed
 
@@ -52,6 +56,7 @@ end so IDs stay stable.
 | TD-021 | `apps/web` has unit tests for the editor store and dashboard-config helpers; `pnpm test` runs them with the workspace | M3.5 |
 | TD-029 | The SDK editor owns the draft and bridges `onSave`/`onPublish`/`onConflict`; `apps/web` passes those callbacks to the provider | M4 |
 | TD-031 | React Grid Layout 2.3.0 canvas with drag, resize, container-width measurement, selection and per-breakpoint editing; covered by `grid.test.tsx` and a browser walkthrough | M4 |
+| TD-037 | Widget settings validate every commit through the plugin `configSchema`, show field-level Zod issues and keep invalid values out of the draft; covered by `widgets.test.tsx`, a builder test and a browser walkthrough | M5 |
 
 ## Process
 

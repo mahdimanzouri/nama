@@ -1,6 +1,6 @@
 # Dependency License and Compatibility Review
 
-**Status:** Verified through M3.5 (2026-11-12). Versions were checked against the
+**Status:** Verified through M5 (2026-11-12). Versions were checked against the
 npm registry on **2026-11-12**; the installed inventory below is the source of
 truth for what ships.
 
@@ -106,10 +106,18 @@ new license categories were introduced.
 
 ### Apache ECharts 6.x
 
-- Pin one major (v6).
+- Pin one major (v6); M5 installed and verified 6.1.0 (Apache-2.0).
 - Import only the chart/renderer modules in use; never import the full bundle.
-- Enforce a bundle-size budget in CI.
+  M5 registers `LineChart`, `BarChart`, `PieChart`, `GaugeChart`,
+  `GridComponent`, `TooltipComponent` and `CanvasRenderer`.
+- Enforce a bundle-size budget in CI. `verify:consumer` now checks both
+  `@nama/dashboard-builder` entries: the main entry (12.5 KiB gzipped) and the
+  widgets entry (6.9 KiB gzipped), each under a 16 KiB budget; ECharts stays
+  external to both bundles.
 - Chart configuration is expressed in widget terms, not raw ECharts options.
+- ECharts 6 requires `grid.outerBounds*` instead of the deprecated
+  `containLabel`; the built-ins use `outerBoundsMode: "same"` with
+  `outerBoundsContain: "axisLabel"` and emit no console warnings.
 
 ### Next.js 16 and `cacheComponents`
 

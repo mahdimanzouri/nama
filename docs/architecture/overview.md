@@ -10,9 +10,9 @@ dashboards. It targets industrial and manufacturing monitoring, operational
 dashboards, production/quality KPIs, business intelligence, administrative
 dashboards, real-time telemetry and embedded dashboards.
 
-The first vertical slice is **monitoring-first**: KPI and line widgets, HTTP
-polling, one organization, a viewer and a visual editor with drag/resize,
-draft/publish and version restore.
+The first vertical slice is **monitoring-first**: seven built-in widget types
+(KPI, line, area, bar, pie, gauge, table), HTTP polling, one organization, a
+viewer and a visual editor with drag/resize, draft/publish and version restore.
 
 Supported presentation: English and Persian, RTL and LTR chrome, light, dark and
 system themes. The dashboard canvas is LTR-only in v1 (ADR-005).
@@ -27,7 +27,7 @@ system themes. The dashboard canvas is LTR-only in v1 (ADR-005).
 3. **Backend API** — Fastify modular monolith: persistence, authorization,
    data-source management, query execution, realtime gateway, audit.
 
-## Current repository state (after M4)
+## Current repository state (after M5)
 
 The monorepo matches the target structure below:
 
@@ -44,9 +44,10 @@ nama/
 ```
 
 All four initial packages export working code: `dashboard-types` contracts,
-`dashboard-core` runtime, `dashboard-builder` provider/viewer/editor and the
-hand-written `api-client`. Target-only packages are still absent, the API store
-is in memory, and realtime remains a contract.
+`dashboard-core` runtime, `dashboard-builder` provider/viewer/editor plus the
+built-in widgets behind its `./widgets` entry, and the hand-written `api-client`.
+Target-only packages are still absent, the API store is in memory, and realtime
+remains a contract.
 
 ## Target monorepo structure
 
@@ -140,7 +141,7 @@ open database connections or read cookies.
 | Decision | Value |
 | --- | --- |
 | Canvas direction | LTR-only editing; RTL chrome everywhere else |
-| First slice | Monitoring-first: KPI + line widgets, HTTP polling, one organization |
+| First slice | Monitoring-first: KPI, line, area, bar, pie, gauge and table widgets over HTTP polling, one organization |
 | SDK distribution | Private workspace only; consumer test installs a packed tarball |
 | Editing model | Draft plus explicit publish |
 | Configuration concurrency | Optimistic with `If-Match` and `409 Conflict` |

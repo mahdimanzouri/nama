@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 /** Server and first client render agree on a desktop viewport. */
 export const SERVER_VIEWPORT_WIDTH = 1280;
@@ -24,6 +25,23 @@ function getSystemTheme(): boolean {
 
 export function useSystemPrefersDark(): boolean {
   return useSyncExternalStore(subscribeSystemTheme, getSystemTheme, () => false);
+}
+
+function subscribeReducedMotion(onChange: () => void): () => void {
+  if (!canMatchMedia()) return () => {};
+
+  const query = window.matchMedia(REDUCED_MOTION_QUERY);
+  query.addEventListener("change", onChange);
+
+  return () => query.removeEventListener("change", onChange);
+}
+
+function getReducedMotion(): boolean {
+  return canMatchMedia() ? window.matchMedia(REDUCED_MOTION_QUERY).matches : false;
+}
+
+export function usePrefersReducedMotion(): boolean {
+  return useSyncExternalStore(subscribeReducedMotion, getReducedMotion, () => false);
 }
 
 function subscribeViewport(onChange: () => void): () => void {

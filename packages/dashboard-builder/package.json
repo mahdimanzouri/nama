@@ -14,6 +14,10 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./widgets": {
+      "types": "./dist/widgets.d.mts",
+      "import": "./dist/widgets.mjs"
+    },
     "./styles.css": "./dist/styles.css"
   },
   "scripts": {
@@ -26,7 +30,9 @@
     "@nama/dashboard-core": "workspace:*",
     "@nama/dashboard-types": "workspace:*",
     "@tanstack/react-query": "5.107.1",
+    "echarts": "6.1.0",
     "react-grid-layout": "2.3.0",
+    "zod": "4.6.7",
     "zustand": "5.1.0"
   },
   "peerDependencies": {
@@ -38,7 +44,6 @@
     "@types/react-dom": "^19",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tsdown": "0.23.7",
-    "zod": "4.6.7"
+    "tsdown": "0.23.7"
   }
 }

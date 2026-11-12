@@ -1,11 +1,15 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useStore } from "zustand";
 import {
   resolveWidgetConfig,
   type DataSourceSummary,
   type WidgetSettingsProps,
 } from "@nama/dashboard-core";
-import type { DashboardWidget } from "@nama/dashboard-types";
+import {
+  issuesFromZod,
+  type DashboardWidget,
+  type ValidationIssue,
+} from "@nama/dashboard-types";
 
 import { joinClassNames } from "../classnames";
 import { useDashboardRuntime } from "../context";
@@ -85,6 +89,21 @@ function WidgetSettingsBody({
   const resolved = plugin ? resolveWidgetConfig(plugin, widget) : undefined;
   const Settings = plugin?.settings as unknown as
     ((props: WidgetSettingsProps<unknown>) => ReactNode) | undefined;
+  // Invalid settings are reported here and never reach the draft.
+  const [issues, setIssues] = useState<ValidationIssue[]>([]);
+
+  const applyConfig = (next: unknown) => {
+    if (!plugin) return;
+
+    const parsed = plugin.configSchema.safeParse(next);
+    if (!parsed.success) {
+      setIssues(issuesFromZod(parsed.error));
+      return;
+    }
+
+    setIssues([]);
+    onChangeConfig(parsed.data);
+  };
 
   return (
     <div className="nama-settings__body">
@@ -121,17 +140,36 @@ function WidgetSettingsBody({
       ) : null}
 
       {resolved?.status === "ready" && Settings ? (
-        <div className="nama-settings__plugin">
+        <div
+          className="nama-settings__plugin"
+          // The notice describes the last rejected commit; typing starts a fresh
+          // attempt without clearing it on the Tab that caused the rejection.
+          onInputCapture={() => setIssues([])}
+        >
           <Settings
             widget={widget}
             config={resolved.config}
-            onChange={onChangeConfig}
+            onChange={applyConfig}
             dataSources={dataSources}
             disabled={disabled}
           />
         </div>
       ) : resolved?.status === "ready" ? (
         <p className="nama-panel__hint">{translate("builder.settings.noOptions")}</p>
+      ) : null}
+
+      {issues.length > 0 ? (
+        <div className="nama-notice nama-notice--error" role="alert">
+          <p>{translate("builder.settings.invalid")}</p>
+          <ul className="nama-settings__issues">
+            {issues.map((issue, index) => (
+              <li key={`${issue.code}:${index}`}>
+                {issue.path.length > 0 ? `${issue.path.join(".")}: ` : ""}
+                {issue.message}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <div className="nama-settings__nudge" role="group">

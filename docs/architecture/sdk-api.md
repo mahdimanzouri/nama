@@ -324,10 +324,25 @@ Implemented in `@nama/dashboard-builder`:
 - Widget plugins may declare `defaultQuery` and `defaultDataSourceId`, applied
   when a widget is created
 
+### M5 (visualization system)
+
+- A second package entry, `@nama/dashboard-builder/widgets`, exporting
+  `NAMA_WIDGETS`, the seven built-in plugins, their config schemas/types, the
+  chart option builders and the shared `EChart` host
+- Built-ins: `kpi`, `line`, `area`, `bar`, `pie`, `gauge`, `table`, each with a
+  Zod `configSchema`, defaults that keep M4 documents valid, a settings panel and
+  loading/error/empty/truncated states
+- Chart rendering: ECharts 6.1.0 from module imports only; CSS-token colours
+  resolved after mount and re-resolved on `data-theme`; animation disabled under
+  `prefers-reduced-motion`; tooltips rendered as canvas rich text
+- `WidgetSettings` validates every plugin config commit and renders field-level
+  `ValidationIssue`s without touching the draft
+- `usePrefersReducedMotion` in the main entry
+
 Not yet exported or implemented, because the code does not exist:
 
 - `Dashboard` composed entry point and `DashboardFilters` — M9
-- Built-in widgets — M5
+- Multi-series, stacked or combo charts — M9
 
 Deliberate differences from the proposal above:
 

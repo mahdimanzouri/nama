@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-**Status:** Active — M0, M1, M2, M3, M3.5 and M4 complete (2026-11-12)
+**Status:** Active — M0, M1, M2, M3, M3.5, M4 and M5 complete (2026-11-12)
 **Date:** 2026-11-12
 
 Milestones have review gates. Do not begin the next milestone until the current
@@ -18,7 +18,7 @@ engineer should expect roughly 1.8× the elapsed time.
 | M3 | SDK foundation | 2 weeks | Separate React app renders without the web app | Complete |
 | M3.5 | Walking skeleton (monitoring) | 2 weeks | Login → KPI + line → save/publish/view in CI | Complete |
 | M4 | Visual editor | 3 weeks | Edit, move/resize, draft/publish/restore, 409 flow | Complete |
-| M5 | Visualization system | 2.5 weeks | Multiple widget types from validated config | Not started |
+| M5 | Visualization system | 2.5 weeks | Multiple widget types from validated config | Complete |
 | M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI | Not started |
 | M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced | Not started |
 | M8 | Realtime infrastructure | 3 weeks | Shared connections; resume, gap, cleanup | Not started |
@@ -158,14 +158,40 @@ and current revision; "Reload latest draft" recovered the editor at revision 5.
 and `verify:consumer` pass. The walkthrough is manual; a CI browser suite is
 still deferred (technical debt).
 
-## M5 — Visualization system
+## M5 — Visualization system (complete 2026-11-12)
 
 **Tasks:** ECharts v6 with module imports; built-in line/area/bar/pie/gauge/KPI/
 table widgets; loading/error/empty states; theme-aware chart rendering; chart
 config validation; custom widget example; visualization tests.
 
+**Delivered:** seven built-ins (`kpi`, `line`, `area`, `bar`, `pie`, `gauge`,
+`table`) exported from the `@nama/dashboard-builder/widgets` subpath, leaving
+the main entry ECharts-free. ECharts 6.1.0 is imported from `echarts/core`,
+`echarts/charts`, `echarts/components` and `echarts/renderers` only, with one
+shared `EChart` canvas host that initialises after layout, resolves CSS tokens
+for canvas painting and re-resolves them on `data-theme` changes. Each widget
+carries a Zod `configSchema`, a settings panel and defaults that widen the M4
+KPI/line configs without breaking persisted documents (`configVersion` stays 1).
+The settings panel validates every commit through the plugin schema and reports
+field-level issues instead of writing an invalid config into the draft. Charts
+and tables disclose truncated results; charts disable animation under
+`prefers-reduced-motion`; tooltips render as canvas rich text, never HTML. The
+web app supplies demo query bindings for all seven types in
+`apps/web/lib/widgets`, and the M3 standalone consumer still covers the custom
+widget example.
+
 **Acceptance:** multiple widget types render from validated configuration and
 support independent settings. Bundle budget is enforced.
+
+**Verified 2026-11-12:** a headless-browser walkthrough created a dashboard with
+all seven types, confirmed five chart canvases plus the KPI and table rendered
+with live data, observed invalid settings (blank series label, gauge max below
+min) rejected with field-level messages and no draft change, saved and published,
+and verified the published-only viewer in light and dark themes with no console
+errors or warnings. `pnpm lint`, `format:check`, `typecheck`, `test`, `build`,
+`verify:workspace` and `verify:consumer` pass; the consumer check now enforces
+budgets for both the builder (12.5 KiB gzipped) and widgets (6.9 KiB gzipped)
+entries. Browser automation in CI remains deferred (technical debt).
 
 ## M6 — Backend and persistence
 
