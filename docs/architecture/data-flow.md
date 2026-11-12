@@ -70,7 +70,7 @@ published, the viewer shows an "unpublished" state rather than the draft.
 
 ```text
 Widget query definition
-  → Query Manager resolves variables, filters, time range
+  → SDK resolves variables, filters, time range (buildControlledQueryRequest)
   → POST /v1/queries/execute
   → authorization (viewer's effective permissions + data-source scope)
   → limits (15 s, 10,000 rows, 5 MiB)
@@ -82,10 +82,29 @@ Widget query definition
 ```
 
 - Cache deduplicates identical requests from multiple widgets.
+- The cache key covers the fully resolved request, so changing a variable,
+  filter or the dashboard time range refetches only the affected widgets.
+  Relative ranges resolve against a pinned clock in the key so a dashboard
+  that has not changed does not refetch on every render.
 - Refresh interval comes from dashboard settings; a widget may override within
   policy.
 - Cancellation aborts the upstream execution.
 - Truncated results set `meta.truncated` and are surfaced in the widget.
+
+## Control and interaction flow (M9)
+
+```text
+Time-range preset | variable edit | chart point click
+  → runtime controls state (viewer/editor mount, never persisted)
+  → setVariable writes the raw category value from widget.interaction.variable
+  → buildControlledQueryRequest merges variables, filters and range
+  → query cache key changes for affected widgets only
+  → hidden widgets (visibility grammar false) are not rendered and do not fetch
+```
+
+Dashboard filters only join queries whose `fields` include the filtered field.
+Export/import moves the configuration, not control state: imported dashboards
+start from variable defaults.
 
 ## Widget rendering (M5)
 

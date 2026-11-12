@@ -22,22 +22,30 @@ declarations and an explicit CSS entry point.
 
 ## Package entry points
 
+| Entry | Loads | Used by |
+| --- | --- | --- |
+| `@nama/dashboard-builder` | Provider, viewer, renderer, controls, hooks and runtime re-exports | Every host |
+| `@nama/dashboard-builder/editor` | Editor, toolbar, palette, settings and draft hooks, plus React Grid Layout and the editor store | Editor hosts only |
+| `@nama/dashboard-builder/widgets` | Seven built-in widgets; ECharts stays external | Hosts that register the defaults |
+| `@nama/dashboard-builder/styles.css` | Theme tokens and component styles | Every host |
+
+The editor entry exists since M9: importing the root package no longer pulls the
+authoring UI, so a viewer-only host stays at the smaller budget.
+
 ```ts
 // @nama/dashboard-builder
 export { DashboardProvider } from "./provider";
-export { Dashboard } from "./dashboard";            // target (M9)
-export { DashboardEditor } from "./editor";
 export { DashboardViewer } from "./viewer";
 export { DashboardCanvas } from "./canvas";
 export { WidgetRenderer } from "./widget-renderer";
-export { WidgetSettings } from "./widget-settings";
-export { WidgetPalette } from "./widget-palette";
-export { DashboardToolbar } from "./toolbar";
-export { DashboardFilters } from "./filters";       // target (M9)
+export { DashboardControls } from "./controls";
+export {
+  useDashboardControls,
+  useDashboardControlsState,
+} from "./controls";
 
 export {
   useDashboard,
-  useDashboardEditor,
   useDashboardConfig,
   useDashboardLayout,
   useWidgetRegistry,
@@ -45,17 +53,21 @@ export {
   useDashboardLocale,
   useDashboardTheme,
 } from "./hooks";
-
-export type {
-  DashboardProviderProps,
-  DashboardConfig,
-  DashboardWidget,
-  RevisionConflictError,
-  WidgetPlugin,
-  DataAdapter,
-  RealtimeAdapter,
-} from "@nama/dashboard-types";
 ```
+
+```ts
+// @nama/dashboard-builder/editor
+export { DashboardEditor } from "./editor";
+export { DashboardToolbar } from "./toolbar";
+export { WidgetSettings } from "./widget-settings";
+export { WidgetPalette } from "./widget-palette";
+export { useDashboardEditor } from "./editor";
+```
+
+Both entries re-export the types a host needs: the root entry re-exports the
+runtime helpers and contracts from `@nama/dashboard-core` and
+`@nama/dashboard-types`, and the editor entry re-exports its own props and
+handler types.
 
 CSS:
 
@@ -76,7 +88,7 @@ import "@nama/dashboard-builder/styles.css";
 | `WidgetSettings` | Renders the selected widget's settings panel |
 | `WidgetPalette` | Registered widget types; adding one places it on the active breakpoint |
 | `DashboardToolbar` | Save, publish, undo/redo, preview and breakpoint controls |
-| `DashboardFilters` | Global filters and variables |
+| `DashboardControls` | Runtime variable fields, time-range presets and reset; never persists values |
 
 ## Provider contract
 
@@ -130,6 +142,11 @@ interface DashboardProviderProps {
   /** Called when a save is rejected because the server has a newer revision. */
   onConflict?: (error: RevisionConflictError) => void;
 
+  /** Initial variable values and dashboard-wide range; read on first render. */
+  initialControls?: Partial<DashboardControlValues>;
+  /** Called whenever a variable or the time range changes. Values are never persisted. */
+  onControlsChange?: (values: DashboardControlValues) => void;
+
   widgets?: WidgetPlugin[];
   /** Share a cache when the host already owns one. */
   queryClient?: QueryClient;
@@ -158,6 +175,7 @@ interface RevisionConflictError extends Error {
 | `useDashboardLayout()` | `{ breakpoint, columns, rowHeight, gap, items }` | Resolved items inherit from wider breakpoints |
 | `useWidgetRegistry()` | Registry API | Resolve, register, list widget types |
 | `useDataSource()` | Data adapter facade | Execute/subscribe with dashboard variables resolved |
+| `useDashboardControls()` | `{ values, setVariable, setTimeRange, reset }` | Runtime control state; viewer and editor share it |
 | `useDashboardLocale()` | `{ locale, direction, translate, formatNumber, formatDate }` | Injected i18n |
 | `useDashboardTheme()` | `{ mode, resolved, tokens }` | `setMode` arrives when the host owns edit controls |
 
@@ -211,6 +229,43 @@ publishes it. `revision` defaults to `0` and is used as the `If-Match` value in
 - Viewers never see draft edits; `DashboardViewer` renders the published config
   the host passes it.
 
+## Controls, visibility and interactions (M9)
+
+Runtime control values are resolved in the SDK, never persisted and never sent
+to a backend as configuration:
+
+- `DashboardControls` renders a time-range preset picker, one field per declared
+  variable (`string`, `number`, `boolean`, `date`, `timeRange`) and a reset
+  action. It stores the host's *choices* and derives values from the config with
+  `resolveControlValues`, so a config edit that removes a variable cannot leave
+  a stale value behind.
+- `useDashboardControls()` returns `{ values, setVariable, setTimeRange, reset }`
+  for hosts that build their own chrome. `setVariable` ignores values that do not
+  match the declared variable type.
+- Every query request is built with `buildControlledQueryRequest`, which
+  resolves dashboard filters, `filter.value` bindings, `query.parameter`
+  bindings and the range. Range precedence is dashboard control →
+  `query.timeRange` binding → the widget's persisted range.
+- Dashboard filters apply only to widgets whose query `fields` include the
+  filtered field, so adding a global filter cannot blank unrelated widgets.
+  A `filter.value` binding resolves its filter by id first, then by field name.
+- Widget visibility uses a small grammar: comparisons (`region == "emea"`,
+  `minValue > 3`) joined by `and`/`or`, a bare variable for truthiness, and
+  `not`. Parentheses are not supported. A missing variable is false; a
+  malformed expression is treated as visible so a typo cannot hide a widget
+  silently. The editor keeps hidden widgets on the board while authoring.
+- A widget that declares `interaction.variable` receives `onSelect`, called
+  with the raw category value of the clicked point. `WidgetRenderer` writes it
+  into that variable; the variable's bindings then decide which queries change.
+- `initialControls` and `onControlsChange` let a host seed values (for example
+  from the URL) and react to changes without owning the state.
+
+Export and import are host-facing helpers from `@nama/dashboard-types`:
+`exportDashboardConfig(config, { applicationVersion })` creates the portable
+envelope and `importDashboardConfig(input)` validates it, runs migrations and
+regenerates widget, variable and filter ids. The editor toolbar wires both
+actions; hosts may call the helpers directly for server-side import.
+
 ## Data and realtime injection
 
 The host supplies a `DataAdapter` (see
@@ -240,10 +295,8 @@ A single shared realtime connection serves all subscriptions.
 ```tsx
 "use client";
 
-import {
-  DashboardProvider,
-  DashboardEditor,
-} from "@nama/dashboard-builder";
+import { DashboardProvider } from "@nama/dashboard-builder";
+import { DashboardEditor } from "@nama/dashboard-builder/editor";
 import "@nama/dashboard-builder/styles.css";
 
 export function DashboardPage({ dashboard }: { dashboard: DashboardDraft }) {
@@ -341,10 +394,25 @@ Implemented in `@nama/dashboard-builder`:
   `ValidationIssue`s without touching the draft
 - `usePrefersReducedMotion` in the main entry
 
+### M9 (controls, visibility and interactions)
+
+- `DashboardControls`, `useDashboardControls` and
+  `useDashboardControlsState` in the main entry
+- `buildControlledQueryRequest`, `resolveControlValues`,
+  `resolveDashboardFilters`, `evaluateVisibilityCondition` and
+  `isWidgetVisible` re-exported from `@nama/dashboard-core`
+- The editorial surfaces (`DashboardEditor`, `DashboardToolbar`,
+  `WidgetSettings`, `WidgetPalette`, `useDashboardEditor`) moved to the
+  `@nama/dashboard-builder/editor` entry, so the root entry no longer ships
+  React Grid Layout, the editor store or the authoring panels
+- Variable, filter and interaction authoring, plus JSON import/export, inside
+  the editor entry
+
 Not yet exported or implemented, because the code does not exist:
 
-- `Dashboard` composed entry point and `DashboardFilters` — M9
-- Multi-series, stacked or combo charts — M9
+- `Dashboard` composed entry point — hosts compose `DashboardProvider` with the
+  viewer or editor themselves
+- Multi-series, stacked or combo charts — tracked as TD-040
 
 Deliberate differences from the proposal above:
 

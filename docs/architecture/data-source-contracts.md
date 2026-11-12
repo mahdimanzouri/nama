@@ -168,11 +168,23 @@ and returns `408 CANCELLED`.
 
 - Variables map to query parameters, the query time range or filter values via
   `VariableBinding`.
-- Resolution happens on the server against the persisted dashboard config and the
-  request's current values.
-- The server validates the resolved request and never trusts client-side
-  interpolation.
-- Persian digits are normalized to canonical numbers before validation.
+- Resolution happens in the SDK: `buildControlledQueryRequest` merges the
+  current control values, dashboard filters and the selected range into the
+  `QueryRequest` before the adapter executes it. Control state is never
+  persisted, so the server cannot re-resolve it against stored values.
+- Range precedence is dashboard control → `query.timeRange` binding → the
+  widget's persisted range. Dashboard filters only join queries whose `fields`
+  include the filtered field.
+- The server validates the resolved request — schema, connector `validate`,
+  limits and authorization — and never trusts client-side SQL or interpolation.
+  A client can choose different parameters within the request contract, exactly
+  as it could by editing a draft; authorization and the connector remain
+  authoritative.
+- Persian and Arabic-Indic digit normalization exists as
+  `normalizeDigits` but is not yet applied to control values or query
+  parameters; tracked as TD-062.
+- Data-source credentials never enter the SDK or a query request; they stay in
+  the API and are decrypted only by the connector.
 
 ## TanStack Query responsibilities
 

@@ -9,7 +9,8 @@
  *  - the built entries keep their `"use client"` directive
  *  - `@nama/dashboard-builder/styles.css` resolves and ships tokens
  *  - exactly one React copy is installed
- *  - the builder and widgets entries stay under their gzipped bundle budgets
+ *  - the builder, editor and widgets entries stay under their gzipped bundle
+ *    budgets, measured over the entry and every chunk it imports
  *
  * Usage: node scripts/verify-consumer.mjs [--keep]
  */
@@ -34,8 +35,12 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const keep = process.argv.includes("--keep");
 const PACKAGES = ["dashboard-types", "dashboard-core", "dashboard-builder"];
 // M4 adds the editor (React Grid Layout integration, toolbar and settings);
-// M5 adds the widgets entry, which keeps ECharts external.
+// M5 adds the widgets entry, which keeps ECharts external. M9 moves the editor
+// behind `./editor` so viewer-only hosts do not load authoring UI.
 const BUNDLE_BUDGET_BYTES = 16 * 1024;
+// The editor entry carries React Grid Layout, the store and the authoring
+// panels; its budget is separate because only editor hosts load it.
+const EDITOR_BUDGET_BYTES = 20 * 1024;
 
 const failures = [];
 
@@ -54,6 +59,44 @@ function run(command, args, options = {}) {
     stdio: ["ignore", "pipe", "pipe"],
     ...options,
   });
+}
+
+/**
+ * Measures an entry together with every relative chunk it imports, because
+ * multi-entry builds move shared code into chunks that a host still loads.
+ */
+function entryClosure(entryPath) {
+  const seen = new Set();
+  const sources = [];
+  const visit = (file) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const source = readFileSync(file, "utf8");
+    sources.push(source);
+    for (const match of source.matchAll(/from\s+"(\.[^"]+)"/gu)) {
+      visit(join(dirname(file), match[1]));
+    }
+  };
+  visit(entryPath);
+  return sources.join("\n");
+}
+
+function checkEntry(installed, name, budget) {
+  const entryPath = join(installed, "dist", `${name}.mjs`);
+  const entry = readFileSync(entryPath, "utf8");
+  if (!entry.startsWith('"use client";')) {
+    fail(`${name} entry lost its "use client" directive`);
+    return;
+  }
+  pass(`${name} entry preserves "use client"`);
+
+  const gzipped = gzipSync(entryClosure(entryPath)).length;
+  const limit = `${(budget / 1024).toFixed(0)} KiB`;
+  if (gzipped <= budget) {
+    pass(`${name} budget: ${(gzipped / 1024).toFixed(1)} KiB gzipped (limit ${limit})`);
+  } else {
+    fail(`${name} entry is ${gzipped} bytes gzipped, over the ${limit} budget`);
+  }
 }
 
 const workspace = mkdtempSync(join(tmpdir(), "nama-consumer-"));
@@ -118,35 +161,9 @@ try {
   pass("installed packed tarballs offline");
 
   const installed = join(appDirectory, "node_modules", "@nama", "dashboard-builder");
-  const entry = readFileSync(join(installed, "dist", "index.mjs"), "utf8");
-  if (entry.startsWith('"use client";')) {
-    pass('built entry preserves "use client"');
-  } else {
-    fail('built entry lost its "use client" directive');
-  }
-
-  const gzipped = gzipSync(entry).length;
-  if (gzipped <= BUNDLE_BUDGET_BYTES) {
-    pass(`bundle budget: ${(gzipped / 1024).toFixed(1)} KiB gzipped (limit 16 KiB)`);
-  } else {
-    fail(`builder entry is ${gzipped} bytes gzipped, over the 16 KiB budget`);
-  }
-
-  const widgetsEntry = readFileSync(join(installed, "dist", "widgets.mjs"), "utf8");
-  if (widgetsEntry.startsWith('"use client";')) {
-    pass('widgets entry preserves "use client"');
-  } else {
-    fail('widgets entry lost its "use client" directive');
-  }
-
-  const widgetsGzipped = gzipSync(widgetsEntry).length;
-  if (widgetsGzipped <= BUNDLE_BUDGET_BYTES) {
-    pass(
-      `widgets budget: ${(widgetsGzipped / 1024).toFixed(1)} KiB gzipped (limit 16 KiB)`,
-    );
-  } else {
-    fail(`widgets entry is ${widgetsGzipped} bytes gzipped, over the 16 KiB budget`);
-  }
+  checkEntry(installed, "index", BUNDLE_BUDGET_BYTES);
+  checkEntry(installed, "editor", EDITOR_BUDGET_BYTES);
+  checkEntry(installed, "widgets", BUNDLE_BUDGET_BYTES);
 
   const appRequire = createRequire(join(appDirectory, "package.json"));
   const cssPath = appRequire.resolve("@nama/dashboard-builder/styles.css");

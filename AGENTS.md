@@ -62,16 +62,18 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M8 (realtime infrastructure) is complete and awaiting acceptance (2026-11-12);
-M9 (dashboard features) is next and has not started. ADR-011 is accepted as a
-self-hosted Docker topology. The workspace contains `apps/web`, `apps/api`,
+M9 (advanced dashboard capabilities) is complete and awaiting acceptance
+(2026-11-12); M10 (internationalization and themes) is next and has not started.
+ADR-011 is accepted as a self-hosted Docker topology. The workspace contains
+`apps/web`, `apps/api`,
 `examples/standalone-consumer` and exactly four packages:
 `@nama/dashboard-types` (contracts), `@nama/dashboard-core` (host-agnostic
 runtime: plugin contract, registry, query keys, i18n, layout, theme, HTTP/static
-data adapters, WebSocket and SSE realtime adapters), `@nama/dashboard-builder`
-(React provider, viewer, editor, canvas, renderer, hooks, plus seven built-in
-widgets behind the `./widgets` subpath) and `@nama/api-client` (hand-written
-typed transport; codegen is deferred). Do not create the target-only packages
+data adapters, WebSocket and SSE realtime adapters, control/filter/visibility
+resolution), `@nama/dashboard-builder` (React provider, viewer, controls, canvas,
+renderer and hooks; the editor behind the `./editor` subpath; seven built-in
+widgets behind `./widgets`) and `@nama/api-client` (hand-written typed transport;
+codegen is deferred). Do not create the target-only packages
 listed in `docs/architecture/package-dependencies.md`.
 
 The API persists product data in PostgreSQL behind the `Persistence` facade when
@@ -108,10 +110,13 @@ Working rules for M9 and later:
 9. Keep the editor draft inside `dashboard-builder`; hosts must not reimplement
    editor state. React Grid Layout child components must forward injected props,
    refs, styles and children.
-10. Keep ECharts out of the `@nama/dashboard-builder` main entry: built-in
+10. Keep ECharts out of the `@nama/dashboard-builder` root entry: built-in
     widgets live in `./widgets`, import from `echarts/core`, `echarts/charts`,
-    `echarts/components` and `echarts/renderers` only, and must keep both
-    entries inside the `verify:consumer` budgets.
+    `echarts/components` and `echarts/renderers` only, and must keep the root,
+    editor and widgets entries inside their `verify:consumer` budgets. Editor
+    surfaces (editor, toolbar, palette, settings, draft hook) live behind
+    `./editor`, and the root entry must not import React Grid Layout, the editor
+    store or the authoring panels.
 11. Widget settings must validate through the plugin `configSchema` before
     writing to the draft; never bypass it with a settings-specific parse.
 12. Keep every tenant table under `ENABLE` + `FORCE ROW LEVEL SECURITY`; set the
@@ -152,5 +157,15 @@ Working rules for M9 and later:
     keep its 250 ms flush and `REALTIME_DEFAULTS.maxBufferedSamples` buffer, and
     write snapshots into the TanStack cache instead of component state.
 23. Do not implement work from a later milestone while closing the current one.
+24. Control values (variables, dashboard time range) are runtime SDK state:
+    never persist them in the configuration, never fetch with them resolved
+    server-side, and build every request through `buildControlledQueryRequest`.
+25. Dashboard filters apply only to queries whose `fields` include the filtered
+    field; a `filter.value` binding resolves by filter id first, then field.
+26. `interaction.variable` must name a declared variable, and the value written
+    is the raw category (never a formatted label). Hidden widgets must not fetch.
+27. Import through `importDashboardConfig` so ids are regenerated and the shared
+    schema validates; never hand-roll an import or create a dashboard from
+    unvalidated configuration.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

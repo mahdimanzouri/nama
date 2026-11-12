@@ -113,10 +113,11 @@ new license categories were introduced. M6 added Prisma 7.10.1 and
 - Import only the chart/renderer modules in use; never import the full bundle.
   M5 registers `LineChart`, `BarChart`, `PieChart`, `GaugeChart`,
   `GridComponent`, `TooltipComponent` and `CanvasRenderer`.
-- Enforce a bundle-size budget in CI. `verify:consumer` now checks both
-  `@nama/dashboard-builder` entries: the main entry (12.5 KiB gzipped) and the
-  widgets entry (6.9 KiB gzipped), each under a 16 KiB budget; ECharts stays
-  external to both bundles.
+- Enforce a bundle-size budget in CI. `verify:consumer` checks every
+  `@nama/dashboard-builder` entry over its full chunk closure: the root entry
+  (7.8 KiB gzipped), the editor entry (17.3 KiB) and the widgets entry
+  (8.1 KiB) at M9, under 16 KiB / 20 KiB / 16 KiB budgets respectively; ECharts
+  stays external to all bundles.
 - Chart configuration is expressed in widget terms, not raw ECharts options.
 - ECharts 6 requires `grid.outerBounds*` instead of the deprecated
   `containLabel`; the built-ins use `outerBoundsMode: "same"` with

@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-**Status:** Active — M0, M1, M2, M3, M3.5, M4, M5, M6, M7 and M8 complete (2026-11-12)
+**Status:** Active — M0, M1, M2, M3, M3.5, M4, M5, M6, M7, M8 and M9 complete (2026-11-12)
 **Date:** 2026-11-12
 
 Milestones have review gates. Do not begin the next milestone until the current
@@ -22,7 +22,7 @@ engineer should expect roughly 1.8× the elapsed time.
 | M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI | Complete |
 | M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced | Complete |
 | M8 | Realtime infrastructure | 3 weeks | Shared connections; resume, gap, cleanup | Complete |
-| M9 | Advanced dashboard capabilities | 3 weeks | Variables, filters, import/export, templates | Not started |
+| M9 | Advanced dashboard capabilities | 3 weeks | Variables, filters, import/export, templates | Complete |
 | M10 | Internationalization and themes | 2 weeks | en/fa, RTL chrome, LTR canvas disclosed, themes | Not started |
 | M10.5 | Accessibility | 1.5 weeks | Automated checks and keyboard review pass | Not started |
 | M11 | Plugin ecosystem | 2 weeks | Custom widget and data source via public contracts | Not started |
@@ -321,6 +321,22 @@ sharing; responsive preview; conditional visibility.
 
 **Acceptance:** reusable, interactive monitoring and analytical dashboards work
 end to end.
+
+**Delivered:** controls resolution in `dashboard-core` (variables, filters,
+dashboard time range, visibility grammar and query flattening); runtime control
+state plus `DashboardControls` and `useDashboardControls`; chart click →
+variable interaction; schema-validated variable/filter authoring, per-widget
+visibility and interaction settings in the editor; portable export/import with
+id regeneration; built-in host templates and `POST /v1/dashboards` accepting a
+validated starting `config`. Version restore and sharing were already delivered
+by M4 and M6, and responsive preview by M4's breakpoint switcher.
+
+**Verified by:** core controls tests, builder control/viewer tests, editor store
+tests, API create-with-config tests in `dashboards.test.ts`, web template tests
+and the workspace checks recorded in [current-phase.md](current-phase.md).
+
+**Deferred:** the data-source picker in the editor remains open (TD-043); the
+web app still binds built-in widgets to `demo-source`.
 
 ## M10 — Internationalization and themes
 

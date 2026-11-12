@@ -1,6 +1,6 @@
 # Technical Debt
 
-**Status:** Updated at M8 (2026-11-12)
+**Status:** Updated at M9 (2026-11-12)
 
 Debt is recorded honestly with impact, owner and target milestone. Items are
 removed only when the fix is merged and verified; closed items are listed at the
@@ -25,19 +25,19 @@ end so IDs stay stable.
 | TD-023 | Transitive MPL-2.0, LGPL-3.0 and CC-BY-4.0 dependencies are installed | `lightningcss`, `@img/sharp-libvips-linux-x64` and `caniuse-lite` need re-scan on lockfile change | Platform | Every dependency change |
 | TD-024 | `allowedDevOrigins` is unset, so non-`localhost` dev hosts are blocked | Next 16 rejects dev resources from e.g. a LAN IP; affects mobile/device testing | Tooling | When device testing starts |
 | TD-025 | `apps/web` runs with `noUnusedLocals: false` | Next 16 generates `.next/dev/types/validator.ts` with unused declarations; only ESLint checks our app sources for unused code | Tooling | When Next stops emitting that file, or routes are added and verified |
-| TD-027 | Dashboard `schemaVersion` migration steps must be registered by callers; there is no on-disk discovery or version table (database migrations use Prisma and are unaffected) | Import/read paths must wire config migrations explicitly; forgetting one fails closed with `missing_migration` | SDK | M9, with import/export |
+| TD-027 | Dashboard `schemaVersion` migration steps must be registered by callers; there is no on-disk discovery or version table (database migrations use Prisma and are unaffected) | Export/import exists, but both the editor import and the API create path call `parseDashboardConfig` without migrations; forgetting to register one fails closed with `missing_migration` | SDK | Before `schemaVersion` changes |
 | TD-028 | Widget plugins must be function components; class components are rejected by the erased registry type | A host with class-based widgets needs a wrapper or a contract change | SDK | Revisit if a consumer needs classes |
 | TD-030 | Client adapter lifecycle is covered, but the `useWidgetQuery` buffer/flush path has no React test | The SDK connection manager is tested; widget-level subscription behavior still relies on review | QA | M12 |
 | TD-032 | `verify:consumer` installs with `--offline` and needs React, TanStack Query and zod in the local pnpm store | A clean CI runner must prime the store first (lockfile install) | Tooling | M12 CI hardening |
 | TD-033 | Changing the `widgets` array identity rebuilds the registry; dynamic register/unregister after mount is unsupported | Hosts must pass a stable array; live plugin registration waits for M11 | SDK | M11 |
 | TD-035 | The API has no request rate limiting or connection-pool sizing; RLS and audit logging now exist | A burst can exhaust the pool or the database; login has no throttling | Backend/Security | M12 |
 | TD-036 | No browser end-to-end test in CI; M4 and M8 were verified with suites and manual checks | Regressions in the editor/viewer UI and realtime wiring are caught manually, not on every change | QA | M12 |
-| TD-038 | Editor and viewer use different layout engines: React Grid Layout for editing, CSS grid for viewing | Widgets can differ by a pixel or two between modes; no parity test exists | Frontend | M9 |
+| TD-038 | Editor and viewer use different layout engines: React Grid Layout for editing, CSS grid for viewing | Widgets can differ by a pixel or two between modes; no parity test exists | Frontend | M12, with visual/E2E coverage |
 | TD-039 | The grid and resize rules from React Grid Layout are reproduced in the SDK stylesheet instead of importing the package CSS | RGL upgrades can silently break drag/resize styling | SDK | Every RGL upgrade |
-| TD-040 | Every built-in chart renders a single series; there is no groupBy, multi-series, stacked or combo chart support | Users cannot compare categories on one chart; the demo dataset has no grouping | Product/Frontend | M9, with variables and filters |
+| TD-040 | Every built-in chart renders a single series; there is no groupBy, multi-series, stacked or combo chart support | Users cannot compare categories on one chart; the demo dataset has no grouping | Product/Frontend | When a grouped dataset exists |
 | TD-041 | Canvas charts stay LTR inside RTL chrome: axes, legends and tooltips are not mirrored, only text is locale-formatted | Persian dashboards read chart axes left-to-right; disclosed alongside the LTR canvas | Product/UX | Same review as TD-001 |
 | TD-042 | Charts expose only `role="img"` with the widget title; there is no data-table fallback or keyboard interaction | Screen-reader users cannot inspect chart values | Accessibility | M10.5 |
-| TD-043 | `apps/web` still hard-codes a demo query per built-in type; the SDK adapters are wired but hosts cannot choose data sources in the UI | Real sources cannot be attached without code changes | Frontend | M9, with data-source selection |
+| TD-043 | `apps/web` still hard-codes a demo query per built-in type, and the editor lists registered data sources but offers no picker; the built-in templates also bind to `demo-source` | Real sources cannot be attached without code changes; template dashboards only work against the demo connector | Frontend | M11 or when a data-source catalog UI is scheduled |
 | TD-052 | The egress guard resolves DNS once and relies on disabled redirects; the connect address is not pinned | A hostile DNS answer could rebind between resolution and connect (SSRF) | Security | M12 hardening |
 | TD-053 | `postgres`, `mysql` and `mqtt` data-source kinds are accepted by metadata CRUD but no connector exists; execution returns `501 NOT_IMPLEMENTED` | Users can register sources that cannot run queries | Backend | When SQL/MQTT connectors are scheduled |
 | TD-054 | Query concurrency limits are per process and there is no request rate limiting | Multiple API replicas multiply the effective concurrency; bursts are unbounded | Backend | M12 |
@@ -54,6 +54,12 @@ end so IDs stay stable.
 | TD-059 | Realtime channels, replay threads and connection limits live in one API process; fan-out to other replicas needs Redis or sticky routing | A second replica would not share subscriptions, exceed per-process limits, and lose the 60 s resume window on failover | Backend | When a second instance exists |
 | TD-060 | SSE opens one HTTP stream per subscription and the web app uses SSE by default behind the Next proxy | Many live widgets exhaust browser per-origin HTTP/1.1 connections; WebSocket requires exposing the API origin via `NEXT_PUBLIC_NAMA_WS_URL` | Frontend/Platform | Revisit with deployment or HTTP/2 |
 | TD-061 | Per-connection limits exist (50 subscriptions, 120 messages per 10 s), but there is no global connection cap or socket backpressure signal | A client fleet can exhaust file descriptors; slow sockets are only bounded by the replay buffer | Backend | M12 hardening |
+| TD-062 | `normalizeDigits` exists in `dashboard-core` but is not applied to control values or query parameters | Persian/Arabic-Indic digits typed into a number or date control can fail validation or reach a connector unnormalized | SDK | M10, with Persian input |
+| TD-063 | The visibility grammar has no parentheses and `and`/`or` precedence is fixed (comparisons and `and`, then `or`); malformed expressions fail open | Complex conditions need grouping through separate variables; a typo makes a widget visible rather than hiding it | SDK | When operators request grouped conditions |
+| TD-064 | Controls, visibility and cross-widget selections are covered by SSR and store tests, not a browser test; the chart click path is only asserted through `onSelect` wiring | Real pointer interaction and refetch behaviour are verified manually | QA | M12 browser suite |
+| TD-065 | Editor import replaces the whole draft after a confirm dialog; there is no merge, diff or partial import | An accidental import loses the current draft from the working tree unless the user undoes it | Frontend | Revisit if host needs merge workflows |
+| TD-066 | Variable and filter resolution happens in the SDK; the server validates the resolved request but cannot re-derive control state | A custom client can choose different filters/parameters within the request contract (subject to authorization and connector validation) | Architecture | Accepted; revisit with server-side control state |
+| TD-067 | `verify:consumer` totals an entry's budget by following static relative imports only; a dynamically imported chunk would be excluded from the measurement | A future lazy-loaded feature could exceed the budget without the check noticing | Tooling | When the SDK introduces a dynamic import |
 
 ## Closed
 

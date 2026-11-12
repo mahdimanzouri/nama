@@ -48,6 +48,12 @@ per-subscription authorization, `GET /v1/stream` as an SSE fallback, a shared
 subscription hub with 60 s replay threads, sequence and gap handling, 250 ms
 stream throttling, and SDK WebSocket/SSE connection managers wired into the web
 app and built-in live widgets.
+M9 added variables, global filters, time-range controls, conditional visibility
+and cross-widget selections resolved in `dashboard-core`; `DashboardControls`
+and the control-authoring UI; JSON import/export and host templates; and
+`POST /v1/dashboards` accepting a validated starting `config`. The editor moved
+to the `@nama/dashboard-builder/editor` entry so viewer-only hosts do not load
+authoring code.
 Documents describing target-only packages list them as such.
 
 ## Status legend

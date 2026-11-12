@@ -44,8 +44,9 @@ nama/
 ```
 
 All four initial packages export working code: `dashboard-types` contracts,
-`dashboard-core` runtime, `dashboard-builder` provider/viewer/editor plus the
-built-in widgets behind its `./widgets` entry, and the hand-written `api-client`.
+`dashboard-core` runtime, `dashboard-builder` provider/viewer/controls plus the
+editor behind its `./editor` entry and the built-in widgets behind `./widgets`,
+and the hand-written `api-client`.
 Target-only packages are still absent. The API stores product data in PostgreSQL
 behind the `Persistence` facade (the in-memory adapter remains for tests), enforces
 tenant isolation through row-level security, executes queries through connector

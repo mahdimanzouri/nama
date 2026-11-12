@@ -29,6 +29,9 @@ Rules:
   through the separate `./widgets` entry, and `echarts` is a builder runtime
   dependency. The main entry must not import ECharts; `verify:consumer` budgets
   both entries.
+- **M9 state:** the editor moved behind `./editor`, so `react-grid-layout` and
+  `zustand` are loaded only by editor hosts. `verify:consumer` budgets the
+  root, editor and widgets entries over each entry's full chunk closure.
 - React and React DOM are **peer dependencies** of every React package to avoid
   duplicate React copies.
 - No package imports from `apps/web` or `apps/api`.
@@ -142,8 +145,11 @@ Task graph as implemented in `turbo.json`:
 - Distribution is private-workspace only in v1. The consumer test packs the
   tarball with the package manager's `pack` command and installs it in a separate
   React/Next.js application. No registry or publish pipeline exists yet.
-- The SDK entry point has a gzipped bundle budget, set in M3: 10 KiB for the
-  builder entry (5.1 KiB at M3), enforced by `pnpm verify:consumer`.
+- Every public entry has a gzipped bundle budget, enforced by
+  `pnpm verify:consumer`. The budget was 10 KiB at M3 (5.1 KiB measured), 16 KiB
+  from M4, and is now 16 KiB for the root and widgets entries plus 20 KiB for
+  the editor entry. M9 measured 7.8 KiB (root), 17.3 KiB (editor) and 8.1 KiB
+  (widgets), each counting the whole chunk closure a host loads.
 
 ## Consumer test
 
@@ -159,7 +165,8 @@ and verifies:
 - React is not duplicated.
 - No monorepo source alias is required.
 - A custom widget can be registered through the documented API.
-- The builder entry stays under the gzipped bundle budget.
+- The root, editor and widgets entries each stay under their gzipped bundle
+  budget, measured over the entry plus every chunk it imports.
 
 ## Related documents
 

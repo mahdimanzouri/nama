@@ -1,7 +1,7 @@
 # Current Phase
 
-**Current milestone:** M9 — Advanced dashboard capabilities (next)
-**Status:** M8 complete, awaiting acceptance (2026-11-12)
+**Current milestone:** M10 — Internationalization and themes (next)
+**Status:** M9 complete, awaiting acceptance (2026-11-12)
 **Date:** 2026-11-12
 
 ## What the repository looks like now
@@ -12,7 +12,8 @@ nama/
 │   ├── web/                    # Next.js 16 app: login, dashboard list, editor, viewer
 │   │   └── lib/
 │   │       ├── data-adapter.ts # SDK HTTP adapter pointed at the /api proxy
-│   │       └── realtime-adapter.ts # SSE over /api, or WS via NEXT_PUBLIC_NAMA_WS_URL
+│   │       ├── realtime-adapter.ts # SSE over /api, or WS via NEXT_PUBLIC_NAMA_WS_URL
+│   │       └── templates.ts    # host templates bound to the demo connector
 │   └── api/                    # Fastify 5 service with PostgreSQL persistence
 │       ├── prisma/             # schema, migrations, seed
 │       ├── scripts/            # OpenAPI drift check
@@ -24,12 +25,15 @@ nama/
 │               ├── queries/    # QueryService, limits, plugins/{static,rest,egress}
 │               └── realtime/   # /ws/v1 gateway, SSE stream, authorizer, hub, buffers
 ├── packages/
-│   ├── dashboard-types/        # platform constants + runtime contracts (M2)
-│   ├── dashboard-core/         # host-agnostic runtime, HTTP/static data adapters (M3/M7)
-│   │                           # and WebSocket/SSE realtime adapters (M8)
-│   ├── dashboard-builder/      # public React API, editor and CSS (M3/M4);
+│   ├── dashboard-types/        # platform constants + runtime contracts (M2);
+│   │                           # controls, interaction and transfer schemas (M9)
+│   ├── dashboard-core/         # host-agnostic runtime, HTTP/static data adapters (M3/M7),
+│   │                           # WebSocket/SSE realtime adapters (M8),
+│   │                           # control/filter/visibility resolution (M9)
+│   ├── dashboard-builder/      # provider, viewer, controls and CSS (M3/M4/M9);
+│   │                           # editor behind the `./editor` entry (M9);
 │   │                           # built-in widgets behind the `./widgets` entry (M5)
-│   └── api-client/             # hand-written typed transport (M3.5, extended in M6/M7)
+│   └── api-client/             # hand-written typed transport (M3.5, extended in M6/M7/M9)
 ├── examples/standalone-consumer/  # SSR consumer with a custom widget (M3)
 ├── infra/postgres/init.sql     # owner role, runtime role grants
 ├── docker-compose.dev.yml      # PostgreSQL 17 on host port 5433
@@ -42,121 +46,127 @@ nama/
 └── pnpm-workspace.yaml
 ```
 
-## Delivered in M8
+## Delivered in M9
 
-### Server realtime gateway
-
-| Area | Contents |
-| --- | --- |
-| WebSocket | Raw `upgrade` handler on `/ws/v1`; cookie or `nama.embed.<token>` subprotocol authenticated before the upgrade, HTTP 401 otherwise; `ws` 8.18.3 with a 256 KiB payload cap |
-| SSE | `GET /v1/stream` with cookie or Bearer auth, Zod-validated query parameters, `reply.hijack()` streaming, `id:` sequence per frame, `Last-Event-ID` resume, keep-alive comments |
-| Connection | 5 s auth timeout (`4401`), JSON + Zod validation, 50 subscriptions and 120 messages per 10 s per connection, heartbeat every 30 s with permission revalidation, `4408` on missed heartbeats |
-| Authorization | Session or embed principal; `datasource.execute` required per subscription; embed sources must be referenced by a published dashboard inside the token scope; token variables override parameters |
-| Hub | Channels keyed by organization + query request share one poller; resume threads keyed by principal + client subscription id survive disconnect for 60 s and are taken over by a reconnect |
-| Sequences | Allocated at send time; `snapshot-then-stream` emits an authoritative snapshot per poll, `stream` emits throttled `data` (250 ms default) |
-| Replay | `ReplayBuffer` per subscription: 60 s or 1,000 events, whichever is smaller; stale `resumeFrom` or an age-out emits `gap` before the next snapshot |
-| Config | `REALTIME_POLL_INTERVAL_MS` (250–60,000, default 5,000); other knobs default from `REALTIME_DEFAULTS` and are overridable per app build |
-
-### SDK realtime clients
+### Contracts and resolution
 
 | Area | Contents |
 | --- | --- |
-| WebSocket adapter | `createWebSocketRealtimeAdapter`: one shared socket per adapter, lazy open, resubscribe on `connected`, 500 ms → 30 s exponential backoff with ±20% jitter, heartbeat send plus watchdog, duplicate/gap handling, embed token as subprotocol |
-| SSE adapter | `createSseRealtimeAdapter`: one `EventSource` per subscription, `withCredentials`, named event listeners, same sequence/duplicate/gap rules |
-| Sequence baseline | `subscribed.firstSequence` seeds the expected sequence, so the first snapshot is not mistaken for a gap; `resumeFrom` is sent after reconnect |
-| Cleanup | Unsubscribe sends the frame and closes the socket when the last subscription leaves; `close()` stops reconnection |
-| Widgets | `useWidgetQuery` subscribes only when the plugin declares `capabilities.realtime` and an adapter is injected; snapshots replace the TanStack cache, stream events go into a 500-sample buffer flushed at most every 250 ms |
-| Built-ins | KPI, line/area/bar, pie and gauge declare `realtime: true`; table stays snapshot-oriented |
+| Schema | `variables` and `filters` on `DashboardConfig`; `interaction` and `visibility` on `DashboardWidget`; `DashboardControlValues`; all validated by `parseDashboardConfig` |
+| Transfer | `exportDashboardConfig`/`importDashboardConfig` regenerate widget IDs, rewrite layout references and reject unknown schema versions |
+| Variables | `resolveControlValues` merges typed choices over declared defaults; `defaultVariables` produces the initial set |
+| Filters | `resolveDashboardFilters` resolves each filter through its `variable` or `value` binding, falling back to the filter's own value |
+| Binding | `buildControlledQueryRequest` injects variables, dashboard time range and filters into the outgoing `QueryRequest` |
+| Time range | Precedence is dashboard control, then the widget query's `timeRangeVariable` binding, then the persisted `query.timeRange` |
+| Visibility | `evaluateVisibilityCondition`/`isWidgetVisible` support `==`, `!=`, `>`, `>=`, `<`, `<=`, `contains` and `and`/`or`/`not`; comparisons and `and` bind tighter, and malformed expressions fail open |
+| Interactions | A chart selection writes its raw category value into the named variable, which every bound widget re-resolves |
 
-### Web wiring
-
-| Area | Contents |
-| --- | --- |
-| Default transport | SSE through the same-origin `/api` proxy, because Next.js rewrites stream responses but cannot proxy WebSocket upgrades |
-| WebSocket option | `NEXT_PUBLIC_NAMA_WS_URL` (for example `ws://localhost:3001`) switches to the direct `/ws/v1` gateway |
-| Editor and viewer | Both pass `realtimeAdapter` to `DashboardProvider` next to `dataAdapter` |
-
-## Delivered in M7 (unchanged summary)
+### SDK runtime
 
 | Area | Contents |
 | --- | --- |
-| Connectors | `ServerDataSourcePlugin` registry with `static` and `rest`; egress guard rejects loopback/private/metadata ranges |
-| Execution | `QueryService.execute` with 15 s / 10,000 rows / 5 MiB / 4 concurrent limits, binary-search truncation, cancellation and error mapping |
-| Endpoints | `POST /v1/queries/execute`, `POST /v1/queries/validate`, `GET /v1/data-sources/:id/schema`, `POST /v1/data-sources/:id/test` |
-| SDK adapters | `createHttpDataAdapter` and `createStaticDataAdapter` used by tests, demos and the web app |
+| Control state | `useDashboardControlsState` holds choices (not resolved values) per provider mount; `initialControls` seeds and `onControlsChange` reports resolved values |
+| Controls UI | `DashboardControls` renders time-range presets, one field per variable type, and reset; `hideTimeRange`/`hideReset` trim it; nothing is persisted |
+| Filters in queries | Dashboard filters apply only to widgets whose query `fields` name the filtered field, so a filter cannot blank an unrelated widget |
+| Visibility | Hidden widgets perform no query at all; the editor passes `ignoreVisibility` so hidden widgets stay on the board while authoring |
+| Selection | `WidgetRenderer` turns a plugin `onSelect` into `setVariable(widget.interaction.variable, value)` |
+| Entries | The editor moved to `@nama/dashboard-builder/editor`; the root entry no longer loads React Grid Layout, the store or the authoring panels |
 
-## Delivered in M6 (unchanged summary)
+### Editor authoring
 
 | Area | Contents |
 | --- | --- |
-| Persistence | PostgreSQL 17, Prisma 7.10.1, `Persistence.withTenant`, RLS with `SET LOCAL app.organization_id`, owner/runtime role split |
-| Auth | Argon2id, hashed opaque sessions, CSRF cookies, 14 permissions and five system roles, membership/role administration |
-| Dashboards | Draft/publish/restore with `If-Match` and `409 REVISION_CONFLICT`, 50-version retention, shares, scoped embed tokens |
-| Data sources | Metadata CRUD and AES-256-GCM credentials; M6 shipped the test endpoint as a `501` placeholder that M7 replaced |
-| Contracts | OpenAPI marked implemented with a route-inventory drift check; typed client and CI with a PostgreSQL service |
+| Dashboard settings | Variable and filter authoring validated against the schema before commit; adding, editing and removing entries is one undoable step each |
+| Widget settings | Per-widget visibility expression and interaction variable |
+| Store | `setVariables`, `setFilters`, `upsertVariable`, `removeVariable`, `updateWidget` and `importConfig`; renaming a variable rewrites bindings and interactions, removing one clears dependent interactions |
+| Import/export | Toolbar downloads the config as JSON and imports a file after confirmation, replacing the draft as a single undoable commit |
 
-## Decisions taken during M8
+### Web and API
+
+| Area | Contents |
+| --- | --- |
+| Templates | Two host templates (`operations`, `trend-analysis`) bound to the always-available `demo-source` connector, with desktop/tablet/mobile placements |
+| Create | The dashboard list creates a blank dashboard or one seeded from a template |
+| API | `POST /v1/dashboards` accepts a full `config` (name now optional), validates it and applies the supplied name/description; OpenAPI and `api-client` updated |
+| Viewer | The published viewer renders `DashboardControls` for the dashboard's variables |
+
+## Delivered in M8 (unchanged summary)
+
+| Area | Contents |
+| --- | --- |
+| Gateway | `/ws/v1` pre-upgrade auth, `GET /v1/stream` SSE fallback, per-subscription `datasource.execute` checks |
+| Hub | Channels shared per query, 60 s replay threads, send-time sequences, `snapshot-then-stream` and 250 ms throttled `stream` |
+| SDK | Shared-socket WebSocket adapter, per-subscription SSE adapter, `useWidgetQuery` snapshot writes into TanStack Query |
+| Web | SSE through `/api` by default; `NEXT_PUBLIC_NAMA_WS_URL` selects direct WebSocket |
+
+Earlier milestones: M7 connector plugins and query limits; M6 PostgreSQL, RLS,
+authentication, drafts/publish/versions, sharing and embed tokens; M5 built-in
+widgets; M4 editor; M3.5 web slice; M3 SDK foundation; M2 contracts; M1 workspace.
+
+## Decisions taken during M9
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| Transport inside the web app | SSE through `/api` by default | Next rewrites cannot upgrade WebSocket; cookies stay first-party and the session works without an extra origin |
-| WebSocket option | `NEXT_PUBLIC_NAMA_WS_URL` escape hatch | Hosts that can expose the API origin get true bidirectional control without changing the SDK |
-| Poll model | Re-execute the query on `REALTIME_POLL_INTERVAL_MS` | Connectors are pull-based; push/CDC needs source-specific work |
-| Snapshot semantics | `snapshot-then-stream` snapshots replace the TanStack cache | Existing widgets render live data without per-widget stream code |
-| Sequence allocation | At send time | Coalesced/dropped stream samples never produce false gaps |
-| Resume state | Hub thread retained 60 s after disconnect | Resume works without client-held buffers or a database write per event |
-| Subscription takeover | A new subscription on the same resume key closes the previous one | Reloads and editor remounts cannot leak duplicate pollers |
-| Embed auth | Token in subprotocol (WS) or Bearer (SSE), never the URL | Tokens stay out of logs and referrers |
-| Per-subscription authorization | Data source must be reachable for the principal; embed tokens scope to published dashboards | A valid token cannot widen access |
-| Stream buffer | 500 samples client-side (`REALTIME_DEFAULTS.maxBufferedSamples`) | Bounds memory while matching the protocol default |
-| Widget flush | 250 ms coalescing | Enforces the 4 updates/sec/widget ceiling |
-| Fan-out | In-process hub | Single API instance in v1 (ADR-011); Redis behind the hub when a second instance exists |
+| Where controls resolve | SDK, in `dashboard-core` | The same resolution serves any host and keeps the request contract; the server still validates the resolved request (TD-066) |
+| Control storage | Choices, resolved on read | A retyped variable falls back to its default without discarding surviving choices |
+| Filter scope | Only widgets whose query `fields` include the field | A global filter cannot blank widgets that never selected the field |
+| Time-range precedence | Control → query binding → persisted range | Explicit user choice wins without rewriting widget configs |
+| Visibility failure mode | Fail open | A typo shows a widget rather than silently hiding data |
+| Interactions | Write the selected value into a variable | Reuses one binding model; no event bus |
+| Templates' starting filter | `contains` with an empty value | Matches every timestamp, so a dashboard stays populated until the first chart click |
+| Import semantics | Whole-draft replace after confirmation | Merge semantics would need conflict rules no host has asked for (TD-065) |
+| Editor entry | `@nama/dashboard-builder/editor` | Viewer-only hosts stop paying for the authoring UI; root entry fell from 18.8 to 7.8 KiB gzipped |
+| Consumer budget | Measured over entry + chunk closure | Multi-entry builds move shared code into chunks a host still loads |
 
 ## Open decisions
 
 | Decision | Status | Blocks | Notes |
 | --- | --- | --- | --- |
-| Deployment topology | Resolved — ADR-011 Option A (self-hosted Docker) | — | Single long-lived API process hosts WS + SSE |
-| Prisma major version | Resolved — pinned 7.10.1 | — | Stable release |
-| Source push / CDC | Open | — | Realtime polls connectors; webhooks or CDC would need connector work |
-| Cross-process realtime fan-out | Open | — | Channels, replay threads and connection limits are per process |
-| SSE multiplexing | Open | — | One stream per subscription; browsers cap HTTP/1.1 connections per origin |
-| Widget stream rendering | Open | — | Built-ins update from snapshots; raw `stream.latest` is available but unused (TD-058) |
-| SQL/MQTT connectors | Open | — | Kinds are declared but return `501`; execution is not scheduled |
-| DNS pinning / egress proxy | Open | — | The guard resolves once; rebinding between resolution and connect is not prevented (TD-052) |
+| Data-source picker | Open | — | The editor lists sources but has no picker; web widgets and templates bind `demo-source` (TD-043) |
+| Server-side control state | Open | — | Filters and variables resolve client-side; the server validates the resolved request only (TD-066) |
+| Grouped visibility conditions | Open | — | No parentheses; `and` binds tighter than `or` (TD-063) |
+| Viewer/editor layout parity | Open | — | Editor uses React Grid Layout, viewer CSS grid (TD-038) |
+| Source push / CDC | Open | — | Realtime polls connectors |
+| Cross-process realtime fan-out | Open | — | Channels, replay threads and limits are per process |
+| SSE multiplexing | Open | — | One stream per subscription |
+| Widget stream rendering | Open | — | Built-ins render snapshots; `stream.latest` is unused (TD-058) |
+| SQL/MQTT connectors | Open | — | Kinds are declared but return `501` |
+| DNS pinning / egress proxy | Open | — | Guard resolves once (TD-052) |
 | Query rate limiting | Open | — | Only per-source concurrency is bounded |
 | Persian calendar library | Open | M10 | Display-only strategy decided; library selection deferred |
-| API code generation | Deferred to M12 | — | `api-client` remains hand-written; drift check covers paths |
-| Public/anonymous sharing | Deferred | — | Organization-scoped sharing only in v1 |
+| Persian digit normalization | Open | M10 | `normalizeDigits` exists but is not applied to control input (TD-062) |
+| API code generation | Deferred to M12 | — | `api-client` remains hand-written |
+| Public/anonymous sharing | Deferred | — | Organization-scoped sharing only |
 | External time-series store | Deferred | — | Telemetry stays out of Postgres |
 | Plugin sandbox/marketplace | Deferred | — | Trusted install only (ADR-006) |
-| Viewer/editor pixel parity | Open | — | Editor uses RGL; viewer canvas uses CSS grid; re-targeted to M9 |
 
-## What M9 must not assume
+## What M10 must not assume
 
-- That connectors push. Realtime re-executes queries every 5 s by default; a
-  faster interval is configuration, not a push channel.
-- That realtime state survives a restart or a second instance. Channels, replay
-  buffers and connections are in memory in one process.
-- That built-in widgets consume raw stream samples. They render snapshots; only
-  custom widgets read `data.stream.latest`.
-- That SSE multiplexes. Each subscription is its own HTTP stream and each socket
-  is limited to 50 subscriptions / 120 messages per 10 s.
-- That the web app proxies WebSocket upgrades. It uses SSE unless
-  `NEXT_PUBLIC_NAMA_WS_URL` is set.
-- That realtime subscriptions are per-view. Widgets subscribe only when the
-  plugin declares `capabilities.realtime`.
-- That SQL, MySQL or MQTT queries work; those kinds return `501`.
-- That query or realtime limits are cluster-wide; concurrency, connection and
-  rate limits are per process.
-- That the egress guard is DNS-rebinding proof; it resolves once and relies on
-  disabled redirects.
-- That there is an end-to-end browser test; realtime is covered by gateway and
-  adapter suites, not Playwright (TD-036).
-- That `dashboard-core` may import React at runtime, ECharts, a database driver
-  or Next.js.
+- That control values persist. They are provider-mount state seeded from
+  `initialControls`; a reload returns every control to its default.
+- That a filter affects every widget. It applies only to widgets whose query
+  `fields` include the filtered field.
+- That visibility expressions can be grouped. There are no parentheses and
+  malformed expressions make widgets visible.
+- That hidden widgets stop existing. The editor renders them with
+  `ignoreVisibility`; the viewer does not mount them.
+- That interactions are an event bus. They write a value into a variable; there
+  is no cross-dashboard or host-level selection channel.
+- That number and date controls accept Persian digits. They take ASCII input;
+  `normalizeDigits` is not wired into control values yet (TD-062).
+- That the SDK ships a locale or theme switcher. Locale, direction and theme are
+  host props; M10 adds in-product switching.
+- That the root entry can import editor modules. Editor surfaces live behind
+  `@nama/dashboard-builder/editor`, and both entries have separate budgets.
+- That template dashboards work against a real source. They bind the virtual
+  `demo-source` connector.
+- That the editor offers a data-source picker; it does not (TD-043).
+- That editor and viewer lay widgets out identically; the engines differ
+  (TD-038).
+- That there is an end-to-end browser test; M9 behaviour is covered by SSR,
+  store, API and template tests (TD-036, TD-064).
 
-## Verification (M8)
+## Verification (M9)
 
 All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2.
 
@@ -166,22 +176,23 @@ All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2
 | Lint | `pnpm lint` | Clean |
 | Format | `pnpm format:check` | All files match (generated Prisma output ignored) |
 | Typecheck | `pnpm typecheck` | 10 tasks successful |
-| Test | `pnpm test` | 230 passed, 6 skipped in 25 files: types 72, core 51, builder 44, api-client 14, api 49 (+6 Postgres skipped) |
+| Test | `pnpm test` | 274 passed, 6 skipped in 29 files: types 80, core 64, builder 56, api-client 14, api 53 (+6 Postgres skipped), web 7 |
 | Build | `pnpm build` | 6 tasks successful, 8 routes |
-| Consumer | `pnpm verify:consumer` | Passes: `"use client"` preserved, 12.5 KiB and 6.9 KiB gzipped (16 KiB budgets), SSR render, single React copy |
-| OpenAPI drift | `pnpm verify:openapi` | In sync: 39 served operations, 39 documented (includes `GET /v1/stream`) |
+| Consumer | `pnpm verify:consumer` | `"use client"` on all three entries; 7.8 / 17.3 / 8.1 KiB gzipped under 16 / 20 / 16 KiB; SSR render; single React copy |
+| OpenAPI drift | `pnpm verify:openapi` | In sync: 39 served operations, 39 documented |
 
-The M8 suites cover a shared socket with two subscriptions, replay after
-reconnect, `gap` on a stale resume point, the 5 s auth timeout, embed-token
-scoping and refusal, HTTP 401 for a bad token, SSE snapshot plus
-`Last-Event-ID` resume, and the heartbeat close path. Client tests cover
-connection sharing, per-subscription cleanup, reconnect with `resumeFrom`,
-duplicate and gap handling, heartbeat watchdog, embed subprotocol and revocation.
-The 6 Postgres tests still skip without `NAMA_TEST_DATABASE_URL` and always run
-in CI.
+The M9 suites cover control resolution and time-range precedence, filter
+binding through `fields`, visibility comparisons and malformed expressions,
+interaction-driven variable writes, hidden widgets skipping queries, the
+controls markup and reset, editor variable/filter authoring with rename and
+removal rewrites, import replacing the draft as one undoable commit, template
+validation against `parseDashboardConfig`, and `POST /v1/dashboards` accepting,
+renaming and rejecting configs. The 6 Postgres tests skip without
+`NAMA_TEST_DATABASE_URL` and always run in CI.
 
 ## Next action
 
-M8 is complete and awaiting acceptance. The next milestone is M9 (advanced
-dashboard capabilities): variables and filters, import/export, templates and the
-data-source picker, plus the viewer/editor parity work deferred from M4.
+M9 is complete and awaiting acceptance. The next milestone is M10
+(internationalization and themes): English and Persian messages, RTL chrome with
+the disclosed LTR canvas, light/dark/system themes, locale-aware numbers and
+dates, the Jalali display strategy, theme-aware ECharts, and visual/E2E coverage.

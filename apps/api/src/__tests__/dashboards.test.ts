@@ -90,6 +90,73 @@ describe("dashboard lifecycle", () => {
     expect(view.json().draftConfig).toBeUndefined();
   });
 
+  it("creates a dashboard from a supplied configuration", async () => {
+    const config = demoConfig("Templated monitoring");
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/dashboards",
+      headers: mutationHeaders(editor),
+      payload: { config },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const created = response.json() as { id: string; name: string };
+    expect(created.name).toBe("Templated monitoring");
+
+    const draft = await app.inject({
+      method: "GET",
+      url: `/v1/dashboards/${created.id}/draft`,
+      headers: readHeaders(editor),
+    });
+    expect(draft.statusCode).toBe(200);
+    expect(draft.json().config.widgets).toHaveLength(config.widgets.length);
+    expect(draft.json().config.metadata.title).toBe("Templated monitoring");
+  });
+
+  it("renames a supplied configuration when a name is given", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/dashboards",
+      headers: mutationHeaders(editor),
+      payload: { name: "Imported copy", config: demoConfig("Original") },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const created = response.json() as { id: string; name: string };
+    expect(created.name).toBe("Imported copy");
+
+    const draft = await app.inject({
+      method: "GET",
+      url: `/v1/dashboards/${created.id}/draft`,
+      headers: readHeaders(editor),
+    });
+    expect(draft.json().config.metadata.title).toBe("Imported copy");
+  });
+
+  it("rejects a starting configuration that fails schema validation", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/dashboards",
+      headers: mutationHeaders(editor),
+      payload: { config: { schemaVersion: 1, metadata: { title: "Broken" } } },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("requires a name or a configuration when creating", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/dashboards",
+      headers: mutationHeaders(editor),
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.code).toBe("VALIDATION_FAILED");
+  });
+
   it("saves a draft with If-Match and rejects stale revisions", async () => {
     const created = await createDashboard(app, editor, "Stale check");
 

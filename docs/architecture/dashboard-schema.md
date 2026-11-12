@@ -115,6 +115,7 @@ coordinates.
 | `config` | `Record<string, unknown>` | yes | Validated by the widget's Zod schema |
 | `query` | `QueryDefinition` | no | See [data-source-contracts.md](data-source-contracts.md) |
 | `visibility` | `object` | no | `{ enabled: boolean; condition?: string }` |
+| `interaction` | `object` | no | `{ variable: string }`; a click writes the raw category into that variable |
 
 ### `DashboardVariable`
 
@@ -141,6 +142,23 @@ coordinates.
 | `field` | `string` | Dataset field |
 | `operator` | `"eq" \| "neq" \| "in" \| "contains" \| "gt" \| "gte" \| "lt" \| "lte" \| "between"` | Comparison |
 | `value` | `unknown` | Validated against `operator` |
+
+## Control semantics (M9)
+
+- Variable values and the dashboard time range are runtime state; they are
+  never written into the configuration.
+- A `filter.value` binding resolves its filter by id first, then by field name,
+  so renaming a filter field does not silently detach a bound control.
+- Dashboard filters are applied only to widget queries whose `fields` include
+  the filtered field. A typo in a filter field leaves other widgets untouched
+  instead of blanking the dashboard.
+- Range precedence: dashboard time-range control → `query.timeRange` binding →
+  the widget's persisted `timeRange`.
+- Visibility conditions support comparisons, `and`/`or`, a bare variable and
+  `not`; parentheses are not supported. A malformed expression is treated as
+  visible. Conditions only read variables, never data.
+- `interaction.variable` must name a declared variable. The clicked value is the
+  raw category (an ISO timestamp for time series), never the formatted label.
 
 ## Layout semantics
 

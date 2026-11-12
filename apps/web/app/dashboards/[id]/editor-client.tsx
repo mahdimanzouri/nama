@@ -8,11 +8,8 @@ import type {
   DashboardView,
   SessionPayload,
 } from "@nama/api-client";
-import {
-  DashboardEditor,
-  DashboardProvider,
-  useDashboardEditor,
-} from "@nama/dashboard-builder";
+import { DashboardProvider } from "@nama/dashboard-builder";
+import { DashboardEditor, useDashboardEditor } from "@nama/dashboard-builder/editor";
 
 import { WorkspaceGate } from "@/components/workspace-gate";
 import { apiClient, dataAdapter, realtimeAdapter } from "@/lib/api";

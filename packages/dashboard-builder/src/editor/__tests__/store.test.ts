@@ -207,6 +207,80 @@ describe("editor store", () => {
     expect(isDirty(state)).toBe(false);
   });
 
+  it("rewrites widget interactions when a variable is renamed", () => {
+    const store = createStore();
+    const region = {
+      id: "0192f4c2-7a1e-7cc3-9a0e-3f5f0f6a1b31",
+      name: "region",
+      type: "string" as const,
+      defaultValue: "all",
+      bindings: [],
+    };
+
+    store.getState().upsertVariable(region);
+    store.getState().updateWidget(createKpiWidget().id, {
+      interaction: { variable: "region" },
+    });
+    store.getState().upsertVariable({ ...region, name: "market" }, "region");
+
+    const state = store.getState();
+    expect(state.config.variables).toHaveLength(1);
+    expect(state.config.variables[0]?.name).toBe("market");
+    expect(state.config.widgets[0]?.interaction).toEqual({ variable: "market" });
+  });
+
+  it("clears interactions that referenced a removed variable", () => {
+    const store = createStore();
+    const region = {
+      id: "0192f4c2-7a1e-7cc3-9a0e-3f5f0f6a1b31",
+      name: "region",
+      type: "string" as const,
+      defaultValue: "all",
+      bindings: [],
+    };
+
+    store.getState().upsertVariable(region);
+    store.getState().updateWidget(createKpiWidget().id, {
+      interaction: { variable: "region" },
+    });
+    store.getState().removeVariable(region.id);
+
+    const state = store.getState();
+    expect(state.config.variables).toHaveLength(0);
+    expect(state.config.widgets[0]?.interaction).toBeUndefined();
+  });
+
+  it("ignores removing a variable that is not in the draft", () => {
+    const store = createStore();
+    store.getState().selectWidget(createKpiWidget().id);
+    store.getState().removeVariable("0192f4c2-7a1e-7cc3-9a0e-3f5f0f6a1b99");
+
+    expect(store.getState().selectedWidgetId).toBe(createKpiWidget().id);
+  });
+
+  it("imports a configuration as one undoable commit", () => {
+    const onChange = vi.fn();
+    const store = createEditorStore({
+      config: createConfig(),
+      revision: 1,
+      registry: () => createWidgetRegistry([kpiPlugin]),
+      onChange,
+    });
+    store.getState().selectWidget(createKpiWidget().id);
+    const imported = createConfig([]);
+
+    store.getState().importConfig(imported);
+
+    expect(store.getState().config).toBe(imported);
+    expect(store.getState().selectedWidgetId).toBeNull();
+    expect(store.getState().history).toHaveLength(1);
+    expect(isDirty(store.getState())).toBe(true);
+    expect(onChange).toHaveBeenCalledWith(imported);
+
+    store.getState().undo();
+    expect(store.getState().config.widgets).toHaveLength(1);
+  });
+
   it("rebases the revision only when the draft is clean", () => {
     const store = createStore();
     store.getState().rebase(8);

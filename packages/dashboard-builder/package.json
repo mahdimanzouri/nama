@@ -14,6 +14,10 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./editor": {
+      "types": "./dist/editor.d.mts",
+      "import": "./dist/editor.mjs"
+    },
     "./widgets": {
       "types": "./dist/widgets.d.mts",
       "import": "./dist/widgets.mjs"
