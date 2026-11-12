@@ -207,5 +207,10 @@ Working rules for M12 and later:
     `organization.audit.read` and the caller's own organization, exports are
     audited, and pruning stays in the per-organization retention job
     (`AUDIT_RETENTION_DAYS`).
+38. Keep charts accessible: every series chart passes the `table` fallback to
+    `EChart` (capped at 100 rows), selectable charts keep keyboard navigation
+    and the polite live region, and text that uses warning/danger tokens for
+    meaning uses the `--nama-*-text` variants. `apps/web/e2e/accessibility.spec.ts`
+    (axe WCAG scan plus keyboard-only chart test) must stay green.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

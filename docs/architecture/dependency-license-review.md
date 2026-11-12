@@ -42,6 +42,7 @@ truth for what ships.
 | `pg` | 8.16.3 | MIT | PostgreSQL driver | Used through `@prisma/adapter-pg` in `apps/api` only |
 | `vitest` | 5.1.0 | MIT | Unit/integration tests | |
 | `@playwright/test` | 1.65.0 | Apache-2.0 | E2E | |
+| `@axe-core/playwright` | 4.14.0 | MPL-2.0 | Accessibility scans in E2E | Wraps `axe-core` (already MPL-2.0 transitively); dev-only, not shipped |
 
 ## Installed inventory (M1, 2026-11-12)
 

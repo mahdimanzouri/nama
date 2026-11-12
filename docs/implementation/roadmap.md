@@ -27,7 +27,7 @@ engineer should expect roughly 1.8× the elapsed time.
 | M10 | Internationalization and themes | 2 weeks | en/fa, RTL chrome, LTR canvas disclosed, themes | Complete |
 | M10.5 | Accessibility | 1.5 weeks | Automated checks and keyboard review pass | Deferred to M12 |
 | M11 | Plugin ecosystem | 2 weeks | Custom widget and data source via public contracts | Complete |
-| M12 | Production readiness | 2 weeks | Tests, docs, security, deployment procedures | Not started |
+| M12 | Production readiness | 2 weeks | Tests, docs, security, deployment procedures | In progress |
 
 Total: roughly 32 engineer-weeks, excluding review latency and scope changes.
 
@@ -370,7 +370,8 @@ browser job from M12.
 
 ## M10.5 — Accessibility
 
-**Status:** Not started; deferred into M12.
+**Status:** Chart, focus and automated-check work delivered in M12 (2026-11-13);
+menu/dialog and notification review remains open (TD-014).
 
 **Tasks:** keyboard navigation and focus management; accessible menus, dialogs
 and settings; a table/summary alternative for every chart; screen-reader labels
@@ -380,7 +381,12 @@ LTR canvas limitation for assistive technology.
 **Acceptance:** core flows pass automated checks and a keyboard-only review.
 Charts expose equivalent data to non-visual users.
 
-The deferred work is tracked as TD-014, TD-016 and TD-042.
+**Delivered in M12:** widgets are labelled articles; selectable charts are
+keyboard operable with live announcements; series charts ship a collapsed data
+table capped at 100 rows; table scroll regions and chart surfaces show the shared
+focus outline; warning/danger text tokens meet AA contrast; an axe WCAG 2.0/2.1
+A+AA scan of the published viewer and a keyboard-only chart test run in the
+browser suite. The remaining deferred items stay tracked as TD-014.
 
 ## M11 — Plugin ecosystem
 
@@ -414,6 +420,8 @@ registration after provider mount remains unsupported (TD-033); no plugin
 sandbox or marketplace (TD-007, ADR-006).
 
 ## M12 — Production readiness
+
+**Status:** In progress (2026-11-13).
 
 **Tasks:** complete unit/integration/E2E coverage; consumer tests; Storybook;
 performance tests against budgets; security review; deployment, migration,

@@ -15,8 +15,7 @@ end so IDs stay stable.
 | TD-007 | No plugin sandbox, marketplace or remote loading | Third-party plugins are trusted code | Security | Future ADR |
 | TD-009 | `docs/guides/` absent despite the planning tree | No step-by-step operator/developer guides yet | Docs | M12 |
 | TD-013 | Raw SQL remains available to `datasource.admin` | High-impact capability; relies on audit and read-only credentials | Security | Review each release |
-| TD-014 | No performance or accessibility measurements yet | Budgets are documented but unproven | QA | M12 |
-| TD-016 | LTR-only canvas is a documented accessibility limitation | Assistive-technology users get a non-mirrored grid | Accessibility | M12 documentation |
+| TD-014 | No performance measurements yet | Budgets are documented but unproven; accessibility is now exercised by an axe WCAG scan and a keyboard-only browser test | QA | M12 |
 | TD-017 | `dev` builds package dependencies once and does not watch them | Editing `dashboard-core` during `dev` requires a rebuild or restart; M4 did not change this | Tooling | Revisit when package iteration slows development |
 | TD-020 | `docs/` and the planning document are excluded from Prettier | Documentation formatting drifts from code formatting | Docs | When docs are stabilised |
 | TD-022 | Linting and formatting run only from the repository root | No per-package `lint` script; editor integration depends on the root config | Tooling | Revisit if a package needs its own rules |
@@ -32,7 +31,6 @@ end so IDs stay stable.
 | TD-039 | The grid and resize rules from React Grid Layout are reproduced in the SDK stylesheet instead of importing the package CSS | RGL upgrades can silently break drag/resize styling | SDK | Every RGL upgrade |
 | TD-040 | Every built-in chart renders a single series; there is no groupBy, multi-series, stacked or combo chart support | Users cannot compare categories on one chart; the demo dataset has no grouping | Product/Frontend | When a grouped dataset exists |
 | TD-041 | Canvas charts stay LTR inside RTL chrome: axes, legends and tooltips are not mirrored, only text is locale-formatted | Persian dashboards read chart axes left-to-right; disclosed alongside the LTR canvas | Product/UX | Same review as TD-001 |
-| TD-042 | Charts expose only `role="img"` with the widget title; there is no data-table fallback or keyboard interaction | Screen-reader users cannot inspect chart values | Accessibility | M12 |
 | TD-043 | `apps/web` still hard-codes a demo query per built-in type, and the editor lists registered data sources but offers no picker; the built-in templates also bind to `demo-source` | Real sources cannot be attached without code changes; template dashboards only work against the demo connector | Frontend | When a data-source catalog UI is scheduled |
 | TD-052 | The egress guard resolves DNS once and relies on disabled redirects; the connect address is not pinned | A hostile DNS answer could rebind between resolution and connect (SSRF) | Security | M12 hardening |
 | TD-053 | `postgres`, `mysql` and `mqtt` data-source kinds are accepted by metadata CRUD but no connector exists; execution returns `501 NOT_IMPLEMENTED` | Users can register sources that cannot run queries | Backend | When SQL/MQTT connectors are scheduled |
@@ -72,6 +70,8 @@ end so IDs stay stable.
 | TD-029 | The SDK editor owns the draft and bridges `onSave`/`onPublish`/`onConflict`; `apps/web` passes those callbacks to the provider | M4 |
 | TD-031 | React Grid Layout 2.3.0 canvas with drag, resize, container-width measurement, selection and per-breakpoint editing; covered by `grid.test.tsx` and a browser walkthrough | M4 |
 | TD-037 | Widget settings validate every commit through the plugin `configSchema`, show field-level Zod issues and keep invalid values out of the draft; covered by `widgets.test.tsx`, a builder test and a browser walkthrough | M5 |
+| TD-016 | LTR canvas documented as an assistive-technology limitation: the RTL notice is a `note` landmark and both i18n-theme and sdk-api describe the non-mirrored reading order | M12 |
+| TD-042 | Selectable charts are keyboard operable (arrows, Home/End, Enter/Space, Escape, live announcements) and every series chart ships a <=100-row data table; axe and keyboard E2E cover it | M12 |
 | TD-005 | ADR-011 accepted Option A (self-hosted Docker); backend and security docs updated to match | M6 |
 | TD-010 | Prisma pinned to stable 7.10.1 with `@prisma/adapter-pg`; migrations and seed verified against PostgreSQL 17 | M6 |
 | TD-012 | `pnpm verify:openapi` compares every served Fastify route with `docs/api/openapi.yaml` and fails on drift; code generation remains tracked as TD-045 | M6 |

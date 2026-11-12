@@ -8,6 +8,7 @@ import {
   gaugeConfigSchema,
   kpiConfigSchema,
   kpiWidget,
+  lineWidget,
   NAMA_WIDGETS,
   tableConfigSchema,
   tableWidget,
@@ -19,6 +20,7 @@ import {
   buildPieOption,
 } from "../widgets/chart-options";
 import { latestValue, toSeries, type ChartColors } from "../widgets/chart-data";
+import { keyboardPointIndex } from "../widgets/echarts";
 
 const COLORS: ChartColors = {
   text: "#111111",
@@ -227,5 +229,81 @@ describe("built-in widget rendering", () => {
     expect(html).toContain("Recent metrics");
     expect(html).toContain(">value<");
     expect(html).toContain("150");
+  });
+
+  it("keeps a scrollable table reachable from the keyboard", () => {
+    const html = renderToStaticMarkup(
+      <tableWidget.component
+        widget={{ ...WIDGET, type: "table", title: "Recent metrics" }}
+        config={{ maxRows: 25 }}
+        data={{
+          status: "ready",
+          result: SERIES_RESULT,
+          lastUpdated: "2026-11-12T10:00:00.000Z",
+        }}
+        locale={LOCALE}
+        theme={THEME}
+        width={400}
+        height={300}
+        filters={{}}
+      />,
+    );
+
+    expect(html).toContain('class="nama-table-wrap" tabindex="0"');
+  });
+});
+
+describe("chart accessibility", () => {
+  const lineProps = {
+    widget: { ...WIDGET, type: "line", title: "Trend" },
+    config: { seriesLabel: "Value", smooth: false, area: false },
+    data: {
+      status: "ready" as const,
+      result: SERIES_RESULT,
+      lastUpdated: "2026-11-12T10:00:00.000Z",
+    },
+    locale: LOCALE,
+    theme: THEME,
+    width: 500,
+    height: 300,
+    filters: {},
+  };
+
+  it("steps through points with arrows, Home and End", () => {
+    expect(keyboardPointIndex(null, "ArrowRight", 3)).toBe(0);
+    expect(keyboardPointIndex(null, "ArrowLeft", 3)).toBe(2);
+    expect(keyboardPointIndex(1, "ArrowRight", 3)).toBe(2);
+    expect(keyboardPointIndex(2, "ArrowRight", 3)).toBe(2);
+    expect(keyboardPointIndex(0, "ArrowLeft", 3)).toBe(0);
+    expect(keyboardPointIndex(1, "Home", 3)).toBe(0);
+    expect(keyboardPointIndex(1, "End", 3)).toBe(2);
+    expect(keyboardPointIndex(1, "a", 3)).toBeUndefined();
+    expect(keyboardPointIndex(0, "ArrowRight", 0)).toBeUndefined();
+  });
+
+  it("exposes the painted values as a data table", () => {
+    const html = renderToStaticMarkup(
+      <lineWidget.component {...lineProps} onSelect={() => {}} />,
+    );
+
+    expect(html).toContain("<caption>Trend data</caption>");
+    expect(html).toContain("Data table");
+    expect(html).toContain(">120<");
+    expect(html).toContain(">150<");
+  });
+
+  it("makes only selectable charts focusable, with keyboard instructions", () => {
+    const interactive = renderToStaticMarkup(
+      <lineWidget.component {...lineProps} onSelect={() => {}} />,
+    );
+    const readOnly = renderToStaticMarkup(<lineWidget.component {...lineProps} />);
+
+    expect(interactive).toContain('role="group"');
+    expect(interactive).toContain('tabindex="0"');
+    expect(interactive).toContain("Interactive chart.");
+    expect(readOnly).toContain('role="img"');
+    expect(readOnly).not.toContain("Interactive chart.");
+    expect(readOnly).not.toMatch(/role="img"[^>]*tabindex/u);
+    expect(readOnly).toContain("<caption>Trend data</caption>");
   });
 });

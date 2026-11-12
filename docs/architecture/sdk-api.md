@@ -291,6 +291,37 @@ A single shared realtime connection serves all subscriptions.
 - The canvas is LTR-only; the SDK exposes this limitation through a localized
   notice and documentation, not through a broken mirrored interaction.
 
+## Accessibility
+
+Canvas charts are pixels, so every built-in chart publishes a text equivalent.
+
+- Each widget renders as an `<article>` whose accessible name is its header, so
+  screen readers announce widget boundaries and titles.
+- Read-only charts expose `role="img"` with the widget title. The gauge extends
+  the label with its formatted value and unit, because a single value needs no
+  table.
+- Selectable charts (widgets with `interaction.variable`) expose `role="group"`,
+  `tabIndex=0` and `aria-describedby` pointing at localized keyboard
+  instructions. Arrow keys move between points, `Home`/`End` jump to the first
+  and last point, `Enter`/`Space` select the active point (writing the variable),
+  and `Escape` clears the active point. Each move updates a polite live region
+  with the point label and formatted value.
+- Every series chart renders a collapsed `<details>` data table with a caption,
+  category and value headers, and at most 100 rows. Longer series render a
+  localized truncation note. The table is the fallback for screen readers and
+  for users who cannot use the canvas.
+- The table fallback, the chart surface, table scroll regions and
+  `<summary>` toggles show the same `:focus-visible` outline as buttons.
+- Scrollable tables are reachable with `tabIndex=0`, so keyboard users can pan
+  overflow content.
+- Contrast is checked with axe: warning and danger *text* use darker tokens than
+  the corresponding border/fill tokens (`--nama-warning-text`,
+  `--nama-danger-text`).
+- The LTR-only canvas is a disclosed limitation, including for assistive
+  technology; see [i18n-theme.md](i18n-theme.md#rtl-rules).
+- `apps/web/e2e/accessibility.spec.ts` runs an axe WCAG 2.0/2.1 A+AA scan of the
+  published viewer and a keyboard-only chart navigation test.
+
 ## Example
 
 ```tsx

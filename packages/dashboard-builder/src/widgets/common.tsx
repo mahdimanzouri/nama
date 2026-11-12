@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import type { DashboardI18n } from "@nama/dashboard-core";
 
 import { joinClassNames } from "../classnames";
+import type { SeriesPoint } from "./chart-data";
+import type { EChartTable } from "./echarts";
 
 export function WidgetStateMessage({
   children,
@@ -50,6 +52,40 @@ export function formatCategory(locale: DashboardI18n, value: unknown): string {
 
 export function formatChartValue(locale: DashboardI18n): (value: number) => string {
   return (value) => locale.formatNumber(value, { maximumFractionDigits: 1 });
+}
+
+/** Long series are summarised; the table exists for inspection, not bulk reading. */
+const MAX_TABLE_ROWS = 100;
+
+/**
+ * Builds the table fallback for a chart. Screen readers get the same values the
+ * canvas paints, without depending on the canvas or on pointer interaction.
+ */
+export function chartTable(
+  locale: DashboardI18n,
+  title: string,
+  points: readonly SeriesPoint[],
+  formatValue: (value: number) => string,
+): EChartTable {
+  const rows = points
+    .slice(0, MAX_TABLE_ROWS)
+    .map((point) => ({ label: point.label, value: formatValue(point.value) }));
+
+  return {
+    summary: locale.translate("widget.chart.dataTable"),
+    caption: locale.translate("widget.chart.dataTableCaption", { title }),
+    categoryHeader: locale.translate("widget.chart.categoryHeader"),
+    valueHeader: locale.translate("widget.chart.valueHeader"),
+    rows,
+    ...(points.length > MAX_TABLE_ROWS
+      ? {
+          note: locale.translate("widget.chart.dataTableTruncated", {
+            count: MAX_TABLE_ROWS,
+            total: points.length,
+          }),
+        }
+      : {}),
+  };
 }
 
 export function TruncatedNote({ locale }: { locale: DashboardI18n }) {

@@ -10,6 +10,7 @@ import { useDashboardLocale } from "../hooks";
 import { buildPieOption } from "./chart-options";
 import { toSeries, type ChartColors, type SeriesPoint } from "./chart-data";
 import {
+  chartTable,
   formatCategory,
   formatChartValue,
   TruncatedNote,
@@ -60,6 +61,14 @@ function PieWidget({
     [onSelect, points],
   );
 
+  const table = useMemo(
+    () =>
+      points.length === 0
+        ? undefined
+        : chartTable(locale, widget.title, points, formatChartValue(locale)),
+    [locale, widget.title, points],
+  );
+
   const buildOption = useCallback(
     (colors: ChartColors, animation: boolean) =>
       buildPieOption(
@@ -90,6 +99,10 @@ function PieWidget({
     <div className="nama-chart-frame">
       <EChart
         ariaLabel={widget.title}
+        ariaDescription={
+          onSelect ? locale.translate("widget.chart.keyboardHint") : undefined
+        }
+        table={table}
         theme={theme}
         buildOption={buildOption}
         onSelect={onSelect ? selectPoint : undefined}

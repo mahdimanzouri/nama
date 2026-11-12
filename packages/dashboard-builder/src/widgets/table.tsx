@@ -59,7 +59,7 @@ function TableWidget({ widget, config, data, locale }: WidgetRenderProps<TableCo
 
   return (
     <div className="nama-chart-frame">
-      <div className="nama-table-wrap">
+      <div className="nama-table-wrap" tabIndex={0}>
         <table className="nama-table" aria-label={widget.title}>
           <thead>
             <tr>

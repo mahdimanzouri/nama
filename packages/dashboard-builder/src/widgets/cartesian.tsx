@@ -11,6 +11,7 @@ import { useDashboardLocale } from "../hooks";
 import { buildBarOption, buildLineOption } from "./chart-options";
 import { toSeries, type SeriesPoint } from "./chart-data";
 import {
+  chartTable,
   formatCategory,
   formatChartValue,
   TruncatedNote,
@@ -71,6 +72,14 @@ function CartesianWidget({
     [onSelect, points],
   );
 
+  const table = useMemo(
+    () =>
+      points.length === 0
+        ? undefined
+        : chartTable(locale, widget.title, points, formatChartValue(locale)),
+    [locale, widget.title, points],
+  );
+
   const buildOption = useCallback(
     (colors: Parameters<typeof buildLineOption>[1]["colors"], animation: boolean) => {
       const input = {
@@ -113,6 +122,10 @@ function CartesianWidget({
     <div className="nama-chart-frame">
       <EChart
         ariaLabel={widget.title}
+        ariaDescription={
+          onSelect ? locale.translate("widget.chart.keyboardHint") : undefined
+        }
+        table={table}
         theme={theme}
         buildOption={buildOption}
         onSelect={onSelect ? selectPoint : undefined}

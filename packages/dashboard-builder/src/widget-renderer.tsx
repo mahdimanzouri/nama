@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   isWidgetVisible,
   resolveDashboardFilters,
@@ -57,9 +57,17 @@ interface WidgetFrameProps {
 }
 
 function WidgetFrame({ title, type, className, children }: WidgetFrameProps) {
+  const headingId = useId();
+
   return (
-    <article className={joinClassNames("nama-widget", className)} data-widget-type={type}>
-      <header className="nama-widget__header">{title}</header>
+    <article
+      className={joinClassNames("nama-widget", className)}
+      data-widget-type={type}
+      aria-labelledby={headingId}
+    >
+      <header id={headingId} className="nama-widget__header">
+        {title}
+      </header>
       {children}
     </article>
   );

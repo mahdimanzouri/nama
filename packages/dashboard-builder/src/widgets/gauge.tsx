@@ -71,9 +71,15 @@ function GaugeWidget({
     return <WidgetStateMessage>{locale.translate("widget.empty")}</WidgetStateMessage>;
   }
 
+  const readout = `${formatChartValue(locale)(value)}${config.unit ? ` ${config.unit}` : ""}`;
+
   return (
     <div className="nama-chart-frame">
-      <EChart ariaLabel={widget.title} theme={theme} buildOption={buildOption} />
+      <EChart
+        ariaLabel={`${widget.title}: ${readout}`}
+        theme={theme}
+        buildOption={buildOption}
+      />
       {data.truncated ? <TruncatedNote locale={locale} /> : null}
     </div>
   );

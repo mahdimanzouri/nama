@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from "react";
 
 import { BarChart, GaugeChart, LineChart, PieChart } from "echarts/charts";
 import { GridComponent, TooltipComponent } from "echarts/components";
@@ -82,8 +91,58 @@ function useResolvedColors(
   return useSyncExternalStore(subscribe, getSnapshot, () => null);
 }
 
+export interface EChartTableRow {
+  label: string;
+  value: string;
+}
+
+/**
+ * Tabular equivalent of the painted series. The table is the fallback for
+ * assistive technology: canvas output is invisible to screen readers.
+ */
+export interface EChartTable {
+  summary: string;
+  caption: string;
+  categoryHeader: string;
+  valueHeader: string;
+  rows: readonly EChartTableRow[];
+  /** Set when `rows` omits values. */
+  note?: string;
+}
+
+/**
+ * Maps a navigation key to the next data index. Returns `undefined` for keys
+ * the chart does not handle, so the browser keeps its own behaviour.
+ */
+export function keyboardPointIndex(
+  current: number | null,
+  key: string,
+  length: number,
+): number | undefined {
+  if (length === 0) return undefined;
+
+  switch (key) {
+    case "ArrowRight":
+    case "ArrowDown":
+      return current === null ? 0 : Math.min(current + 1, length - 1);
+    case "ArrowLeft":
+    case "ArrowUp":
+      return current === null ? length - 1 : Math.max(current - 1, 0);
+    case "Home":
+      return 0;
+    case "End":
+      return length - 1;
+    default:
+      return undefined;
+  }
+}
+
 export interface EChartProps {
   ariaLabel: string;
+  /** Keyboard instructions, rendered visually hidden and linked by `aria-describedby`. */
+  ariaDescription?: string;
+  /** Table fallback for assistive technology. */
+  table?: EChartTable;
   theme: ThemeTokens;
   /** Must be stable across renders; build it with `useCallback`. */
   buildOption: (colors: ChartColors, animation: boolean) => EChartsCoreOption;
@@ -95,9 +154,13 @@ export interface EChartProps {
 /**
  * Canvas host for the built-in chart widgets. Initialisation is deferred until
  * the container has a measurable size, which keeps grid layouts and SSR safe.
+ * Selectable charts also expose keyboard navigation and a data table, because
+ * canvas pixels are not reachable for assistive technology.
  */
 export function EChart({
   ariaLabel,
+  ariaDescription,
+  table,
   theme,
   buildOption,
   className,
@@ -109,10 +172,66 @@ export function EChart({
   const onSelectRef = useRef(onSelect);
   const colors = useResolvedColors(theme, element);
   const reducedMotion = usePrefersReducedMotion();
+  const descriptionId = useId();
+  // Selection carries the table it was made against, so new data resets the
+  // active point without a state-synchronising effect.
+  const [selection, setSelection] = useState<{
+    table: EChartTable | undefined;
+    index: number | null;
+    announcement: string;
+  }>({ table: undefined, index: null, announcement: "" });
+  const rows = useMemo(() => table?.rows ?? [], [table]);
+  const selectable = Boolean(onSelect) && rows.length > 0;
+  const activeIndex = selection.table === table ? selection.index : null;
+  const announcement = selection.table === table ? selection.announcement : "";
 
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !selectable) return;
+
+    chart.dispatchAction({ type: "downplay", seriesIndex: 0 });
+    if (activeIndex !== null) {
+      chart.dispatchAction({ type: "highlight", seriesIndex: 0, dataIndex: activeIndex });
+    }
+  }, [activeIndex, selectable]);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (!selectable) return;
+
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        const index = activeIndex ?? 0;
+        setSelection({
+          table,
+          index,
+          announcement: `${rows[index]?.label ?? ""}: ${rows[index]?.value ?? ""}`,
+        });
+        onSelectRef.current?.(index);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        setSelection({ table, index: null, announcement: "" });
+        return;
+      }
+
+      const next = keyboardPointIndex(activeIndex, event.key, rows.length);
+      if (next === undefined) return;
+
+      event.preventDefault();
+      setSelection({
+        table,
+        index: next,
+        announcement: `${rows[next]?.label ?? ""}: ${rows[next]?.value ?? ""}`,
+      });
+    },
+    [selectable, table, activeIndex, rows],
+  );
 
   const attach = useCallback((node: HTMLDivElement | null) => {
     setElement(node);
@@ -159,12 +278,52 @@ export function EChart({
   }, [buildOption, colors, reducedMotion]);
 
   return (
-    <div
-      ref={attach}
-      className={joinClassNames("nama-chart", className)}
-      role="img"
-      aria-label={ariaLabel}
-      data-selectable={onSelect ? "true" : undefined}
-    />
+    <>
+      <div
+        ref={attach}
+        className={joinClassNames("nama-chart", className)}
+        role={selectable ? "group" : "img"}
+        aria-label={ariaLabel}
+        aria-describedby={selectable && ariaDescription ? descriptionId : undefined}
+        tabIndex={selectable ? 0 : undefined}
+        data-selectable={onSelect ? "true" : undefined}
+        onKeyDown={selectable ? handleKeyDown : undefined}
+      />
+      {selectable && ariaDescription ? (
+        <p id={descriptionId} className="nama-visually-hidden">
+          {ariaDescription}
+        </p>
+      ) : null}
+      {selectable ? (
+        <p className="nama-visually-hidden" role="status">
+          {announcement}
+        </p>
+      ) : null}
+      {table && table.rows.length > 0 ? (
+        <details className="nama-chart-data">
+          <summary>{table.summary}</summary>
+          <div className="nama-table-wrap" tabIndex={0}>
+            <table className="nama-table">
+              <caption>{table.caption}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{table.categoryHeader}</th>
+                  <th scope="col">{table.valueHeader}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {table.rows.map((row, index) => (
+                  <tr key={`${row.label}:${index}`}>
+                    <td>{row.label}</td>
+                    <td>{row.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {table.note ? <p className="nama-chart-frame__note">{table.note}</p> : null}
+        </details>
+      ) : null}
+    </>
   );
 }

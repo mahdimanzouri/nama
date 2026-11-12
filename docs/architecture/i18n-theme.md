@@ -67,6 +67,8 @@ Sample Persian copy used by the SDK:
 | `builder.conflict.title` | This dashboard changed elsewhere | این داشبورد جای دیگری تغییر کرده است |
 | `builder.canvas.ltrNotice` | The canvas only supports left-to-right editing in this version | ویرایشگر داشبورد در این نسخه فقط از چیدمان چپ‌به‌راست پشتیبانی می‌کند |
 | `widget.empty` | No data | داده‌ای برای نمایش نیست |
+| `widget.chart.dataTable` | Data table | جدول داده |
+| `widget.chart.keyboardHint` | Interactive chart. Use the arrow keys… | نمودار تعاملی. با کلیدهای جهت… |
 
 ## Web chrome vocabulary
 
@@ -112,6 +114,12 @@ Sample Persian copy used by the SDK:
 - The dashboard canvas stays **LTR-only**. The editor displays
   `builder.canvas.ltrNotice` when the locale direction is RTL, and documentation
   states the limitation. Drag/resize handles are verified in LTR only.
+- The LTR canvas is a limitation for assistive technology as well: the grid
+  order does not mirror in RTL, so screen-reader reading order follows the
+  left-to-right canvas while chrome follows the document direction. The notice is
+  rendered as a `note` landmark so it is announced, and
+  [sdk-api.md](sdk-api.md#accessibility) documents the chart keyboard and table
+  fallbacks that do not depend on canvas geometry.
 - Use logical CSS properties (`margin-inline-start`, `inset-inline-end`) rather
   than hardcoded `left`/`right`.
 - Icons that imply direction (arrows, chevrons) mirror; icons that do not (play,
