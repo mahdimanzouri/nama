@@ -40,6 +40,35 @@ M1 installs and re-verifies licenses and peer compatibility.
 | `vitest` | 5.1.0 | MIT | Unit/integration tests | |
 | `@playwright/test` | 1.65.0 | Apache-2.0 | E2E | |
 
+## Installed inventory (M1, 2026-11-12)
+
+`pnpm licenses list` over the M1 lockfile (423 package records) returned:
+
+| License | Packages |
+| --- | --- |
+| MIT | 367 |
+| Apache-2.0 | 21 |
+| ISC | 14 |
+| BSD-2-Clause | 7 |
+| BSD-3-Clause | 5 |
+| MPL-2.0 | 3 (`axe-core`, `lightningcss`, `lightningcss-linux-x64-gnu`) |
+| LGPL-3.0-or-later | 1 (`@img/sharp-libvips-linux-x64`) |
+| CC-BY-4.0 | 1 (`caniuse-lite`) |
+| CC0-1.0, 0BSD, BlueOak-1.0.0, Python-2.0 | 1 each |
+
+Assessment:
+
+- MPL-2.0 (`lightningcss`, `axe-core`) is used unmodified as a build-time or
+  lint-time dependency. File-level copyleft obligations are not triggered by
+  linking; no source disclosure is required.
+- LGPL-3.0-or-later applies to the prebuilt libvips binary behind `sharp`, which
+  Next.js uses for image optimisation. It runs as a separate native library and
+  is not statically linked into the SDK or the application bundle.
+- CC-BY-4.0 (`caniuse-lite`) is build-time browser data; attribution is not
+  surfaced to end users and no redistribution occurs.
+- No copyleft dependency exists in the shipped SDK surface. Re-run the scan on
+  every lockfile change.
+
 ## Not yet verified (verify at M1)
 
 | Candidate | Purpose | Status |

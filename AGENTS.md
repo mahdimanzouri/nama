@@ -62,14 +62,20 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M0 (architecture and decisions) is recorded in `docs/`. Do not start M1 until the
-M0 gate is approved. When M1 begins:
+M1 (monorepo foundation) is implemented and awaiting acceptance. The workspace
+contains `apps/web`, `apps/api` and exactly four packages:
+`@nama/dashboard-types`, `@nama/dashboard-core`, `@nama/dashboard-builder`,
+`@nama/api-client`. Do not create the target-only packages listed in
+`docs/architecture/package-dependencies.md`.
 
-1. Create the pnpm + Turborepo workspace.
-2. Move the existing Next.js app to `apps/web`.
-3. Create `apps/api` and exactly four packages: `@nama/dashboard-types`,
-   `@nama/dashboard-core`, `@nama/dashboard-builder`, `@nama/api-client`.
-4. Do not create the target-only packages listed in
-   `docs/architecture/package-dependencies.md`.
+Working rules for M1 and later:
+
+1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
+   `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`).
+2. Package entry points resolve to `dist`; build before typechecking or running
+   a dependent app.
+3. Do not add cross-package imports outside the approved graph; the boundary
+   script fails the build.
+4. Do not implement M2 contracts or SDK APIs while closing M1.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

@@ -1,75 +1,113 @@
 # Current Phase
 
-**Current milestone:** M0 — Architecture and decisions
-**Status:** Complete pending architecture approval
+**Current milestone:** M1 — Monorepo foundation
+**Status:** Implemented, awaiting acceptance
 **Date:** 2026-11-12
+
+## What the repository looks like now
+
+```text
+nama/
+├── apps/
+│   ├── web/                    # Next.js 16 app (moved from the repository root)
+│   └── api/                    # Fastify 5 service, /healthz only
+├── packages/
+│   ├── dashboard-types/        # platform constants; Zod schemas land in M2
+│   ├── dashboard-core/         # empty entry point; public API lands in M3
+│   ├── dashboard-builder/      # empty entry point; public API lands in M3
+│   └── api-client/             # empty entry point; generated client lands in M6
+├── scripts/verify-workspace.mjs
+├── docs/                       # M0 architecture and decisions
+├── turbo.json
+├── tsconfig.base.json
+├── eslint.config.mjs           # single root config for the whole workspace
+├── .github/workflows/ci.yml
+└── pnpm-workspace.yaml
+```
 
 ## Deliverables
 
-- [x] [Architecture overview](../architecture/overview.md)
-- [x] [Package dependencies](../architecture/package-dependencies.md)
-- [x] [SDK API proposal](../architecture/sdk-api.md)
-- [x] [Dashboard configuration schema](../architecture/dashboard-schema.md)
-- [x] [Data model and ERD](../architecture/data-model.md)
-- [x] [Data flow](../architecture/data-flow.md)
-- [x] [Data source contracts](../architecture/data-source-contracts.md)
-- [x] [Realtime protocol](../architecture/realtime-protocol.md)
-- [x] [Backend architecture](../architecture/backend-architecture.md)
-- [x] [Plugin system](../architecture/plugin-system.md)
-- [x] [Security risk assessment](../architecture/security.md)
-- [x] [i18n and theme strategy](../architecture/i18n-theme.md)
-- [x] [Dependency license review](../architecture/dependency-license-review.md)
-- [x] ADR-001..011 in [decisions/](../architecture/decisions/)
-- [x] [Widget plugin contract](../plugins/widget-plugin-contract.md)
-- [x] [Data-source plugin contract](../plugins/data-source-plugin-contract.md)
-- [x] [Plugin authoring guide](../plugins/plugin-authoring.md)
-- [x] [OpenAPI proposal](../api/openapi.yaml) and [API conventions](../api/README.md)
-- [x] [Roadmap](roadmap.md)
-- [x] [Technical debt](technical-debt.md)
-- [x] Root `AGENTS.md` project rules appended
-- [x] Root `README.md` updated to point at the docs
+- [x] pnpm workspace (`apps/*`, `packages/*`) with a single root lockfile
+- [x] Existing Next.js app moved to `apps/web` with `turbopack.root` pointed at
+      the workspace root
+- [x] `apps/api` Fastify skeleton with a Zod-validated environment and `GET /healthz`
+- [x] Turborepo task graph for `build`, `dev`, `typecheck`, `test`, `clean`
+- [x] Strict shared TypeScript config (`strict`, `noImplicitAny`,
+      `noUncheckedIndexedAccess`, `verbatimModuleSyntax`)
+- [x] ESLint 9 flat config at the root covering every workspace member
+- [x] Prettier configuration and `format` / `format:check` scripts
+- [x] Exactly four `@nama/*` packages with `workspace:*` links, `tsdown` builds
+      (ESM plus declarations) and React as a peer dependency
+- [x] `scripts/verify-workspace.mjs` enforcing the approved dependency graph,
+      host-agnostic SDK rule and a single React version
+- [x] GitHub Actions workflow running boundaries, lint, format, typecheck, test
+      and build
+- [x] Pre-monorepo root build artifacts removed (`.next/`, `next-env.d.ts`,
+      the root Next.js manifest)
+
+## Decisions taken during M1
+
+| Decision | Choice | Why |
+| --- | --- | --- |
+| TypeScript major | `^5.9.3` | Next 16.4.6 and tsdown 0.23.7 support 7.x, but `typescript-eslint@8.72.2` (pinned by `eslint-config-next`) does not, so lint would break |
+| ESLint major | `^9.39.5` | `eslint-config-next@16.4.6` allows 10, but `typescript-eslint@8` peers on `^8 \|\| ^9` |
+| ESLint layout | one root config | Avoids per-package config duplication and keeps `eslint .` authoritative; `settings.next.rootDir` points at `apps/web` |
+| Package entry points | `dist` only | Source-condition exports would need host bundler configuration the SDK cannot assume |
+| `dev` task | `dependsOn: ["^build"]` | After `pnpm clean`, `next dev` must not fail on a missing package `dist` |
+| API build | `tsc` (not a bundler) | A Node service should keep its dependencies external |
+| API dev | `tsx watch` | Runs TypeScript directly without a separate compiler process |
+| API runtime deps | `fastify`, `zod` | Health endpoint plus environment validation; no database or auth yet |
 
 ## Open decisions
 
 | Decision | Status | Blocks | Notes |
 | --- | --- | --- | --- |
 | Deployment topology | **Unresolved** | M6, M8 | ADR-011 recommends self-hosted Docker; options and trade-offs recorded |
-| Prisma major version | Open | M6 | Latest registry version is a release candidate; pin newest stable at M1 |
-| TypeScript major | Open | M1 | Latest is 7.0.2; repo uses ^5; verify Next/tsdown/ESLint support |
+| Prisma major version | Open | M6 | Latest registry version is a release candidate; pin newest stable at M6 |
 | Persian calendar library | Open | M10 | Display-only strategy decided; library selection deferred |
 | Raw SQL for non-admin users | Deferred | — | Not supported in v1 (ADR-010) |
 | Public/anonymous sharing | Deferred | — | Organization-scoped sharing only in v1 |
 | External time-series store | Deferred | — | Telemetry stays out of Postgres; product selection later |
 | Plugin sandbox/marketplace | Deferred | — | Trusted install only (ADR-006) |
-| OpenAPI code generation | Deferred to M6 | M6 | Spec is hand-written in M0 |
+| OpenAPI code generation | Deferred to M6 | M6 | Spec is hand-written; the API is not generated from it yet |
 
-## What M1 must not assume
+## What M2 must not assume
 
-- That `apps/` or `packages/` already exist; M1 creates them.
-- That the SDK can import Next.js, read cookies, or access the database.
-- That deployment is serverless or containerized; ADR-011 is still open.
-- That ECharts, React Grid Layout or Prisma versions are final; re-verify at
-  install.
-- That the 15 existing target packages should be scaffolded; only four initial
-  packages are created.
-- That the canvas supports RTL; it does not in v1.
+- That `dashboard-core`, `dashboard-builder` or `api-client` export anything; all
+  three are empty modules until M3/M6.
+- That the API serves anything other than `/healthz`; there is no database,
+  session handling or agent-based authorisation yet.
+- That the web application renders dashboards; it renders a single static page
+  that imports `@nama/dashboard-types`.
+- That package builds are watched during `dev`; `dev` builds dependencies once.
+  Source-change watch mode is added when SDK code lands.
+- That deployment is serverless or containerised; ADR-011 is still open.
+- That Zod is available in packages other than `apps/api`; it is introduced to
+  `dashboard-types` in M2 with the first schema.
 
-## Verification (M0)
+## Verification (M1)
 
-| Check | Result |
-| --- | --- |
-| All §18.4 and §19 artifacts exist | see [../README.md](../README.md) coverage matrix |
-| ADR template completeness | 11 ADRs, eight headings each |
-| Cross-document invariants | recorded once in [../README.md](../README.md) and quoted |
-| OpenAPI parses | 21 paths, 34 operations, 56 schemas |
-| Application code unchanged | verified with `git status` / `git diff --stat` |
-| No monorepo scaffolding created | no `apps/`, `packages/`, `turbo.json` |
-| Build/test/`next dev` | not run; not required for a docs-only milestone |
+All commands were run from the repository root on Node 24.13.0 with pnpm 10.33.2.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Install | `pnpm install` | 6 workspace projects linked, single lockfile |
+| Boundaries | `pnpm verify:workspace` | Passes; a planted `import "next/server"` in `dashboard-core` correctly fails with exit code 1 |
+| Lint | `pnpm lint` | Clean, no warnings |
+| Format | `pnpm format:check` | All files match |
+| Typecheck | `pnpm typecheck` | 8 tasks successful (4 packages, web, api) |
+| Test | `pnpm test` | 9 tests pass (5 platform invariants, 4 API/env) |
+| Build | `pnpm build` | 6 tasks successful; `apps/web` prerenders `/` and `/_not-found` |
+| Dev servers | `pnpm dev` | Web on :3000 (HMR connected), API on :3001 |
+| API health | `curl :3001/healthz` | `{"status":"ok","version":"0.1.0"}` |
+| API production build | `node apps/api/dist/index.js` | Serves `/healthz` on the configured port |
+| Web workspace import | browser at `localhost:3000` | Renders values from `@nama/dashboard-types`; no console errors |
+| Clean | `pnpm clean` | Removes `dist/`, `.next/` and build info |
+| React copies | `pnpm verify:workspace` | One React version in the virtual store |
 
 ## Next action
 
-1. Review ADR-001..011, the SDK API proposal, the dashboard schema, the plugin
-   contracts and the authorization model.
-2. Resolve ADR-011 (deployment) before M6/M8.
-3. On approval, start M1 (monorepo foundation). Do not implement product features
-   before the M0 gate is accepted.
+1. Review the M1 workspace layout, task graph and boundary script.
+2. On acceptance, start M2 (shared contracts and schemas): public types, Zod
+   dashboard/widget/layout/query schemas, plugin manifests, migration interface
+   and schema tests.

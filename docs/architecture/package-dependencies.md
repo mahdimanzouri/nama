@@ -13,6 +13,8 @@
 
 Rules:
 
+- Runtime dependencies listed for `dashboard-core` are introduced with the code
+  that uses them (M3–M5); M1 installs only what the foundation needs.
 - React and React DOM are **peer dependencies** of every React package to avoid
   duplicate React copies.
 - No package imports from `apps/web` or `apps/api`.
@@ -71,30 +73,36 @@ graph TD
 ## Workspace configuration
 
 ```yaml
-# pnpm-workspace.yaml (target, M1)
+# pnpm-workspace.yaml (M1)
 packages:
   - "apps/*"
   - "packages/*"
-  - "tooling/*"
 ```
+
+Shared TypeScript (`tsconfig.base.json`) and ESLint (`eslint.config.mjs`) live at
+the repository root rather than in `tooling/*` packages, so the workspace keeps
+exactly four internal packages. A `tooling/*` package is created only if a
+configuration needs to be consumed outside this repository.
 
 - Internal dependencies use `workspace:*`.
 - Turborepo tasks: `build`, `dev`, `lint`, `typecheck`, `test`, `clean`.
+  `lint` runs once at the root over every workspace file.
 - `build` depends on upstream package builds (`dependsOn: ["^build"]`).
-- `typecheck` depends on `^build` when packages consume generated declarations.
-- The Next.js bundler workspace root is configured explicitly so dependencies
-  resolve from the workspace root in the monorepo.
+- `dev` also depends on `^build`, so a cleaned workspace starts without missing
+  package output.
+- `typecheck` and `test` depend on `^build` because packages resolve to `dist`.
+- The Next.js bundler workspace root is configured explicitly
+  (`turbopack.root`) so dependencies resolve from the workspace root.
 
-Suggested task graph:
+Task graph as implemented in `turbo.json`:
 
 ```json
 {
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**"] },
-    "dev": { "cache": false, "persistent": true },
-    "lint": { "dependsOn": ["^build"] },
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "!.next/cache/**"] },
+    "dev": { "dependsOn": ["^build"], "cache": false, "persistent": true },
     "typecheck": { "dependsOn": ["^build"] },
-    "test": { "dependsOn": ["^build"], "outputs": ["coverage/**"] },
+    "test": { "dependsOn": ["^build"] },
     "clean": { "cache": false }
   }
 }

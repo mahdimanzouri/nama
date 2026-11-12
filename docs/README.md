@@ -1,8 +1,8 @@
-# Nama Dashboard Platform — Architecture Package (M0)
+# Nama Dashboard Platform — Architecture Package
 
-**Status:** Proposed — awaiting architecture approval
+**Status:** M0 approved; M1 implemented ([current phase](implementation/current-phase.md))
 **Date:** 2026-11-12
-**Scope:** Milestone M0 only. No product code, no monorepo restructure.
+**Scope:** Architecture and decisions; product features are not implemented.
 **Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)
 
 ## Purpose
@@ -13,16 +13,16 @@ evolve independently without re-deciding fundamentals or requiring a rewrite.
 
 ## Current repository state
 
-The repository is a single Create Next App project at the root:
+M1 created the monorepo this package describes:
 
-- Next.js 16.4.6, React 19.3.0, TypeScript 5.x, Tailwind CSS 4.3.3
-- `cacheComponents: true` in `next.config.ts`
-- `app/` at the root, `pnpm-workspace.yaml` present but only for ignored build dependencies
-- No `apps/`, `packages/`, `turbo.json`, or `docs/` (before M0)
+- `apps/web` — the Next.js 16.4.6 application (moved from the repository root)
+- `apps/api` — Fastify 5 service with `GET /healthz` only
+- `packages/{dashboard-types,dashboard-core,dashboard-builder,api-client}`
+- pnpm workspace, Turborepo task graph, shared strict TypeScript and ESLint
 
-The target monorepo described in these documents **does not exist yet**. M1
-performs the restructure. Any document that describes `apps/web`, `apps/api` or
-`packages/*` is describing the target state.
+The SDK packages build and link but export nothing yet; their public APIs arrive
+in M3 (core, builder) and M6 (api-client). Documents describing target-only
+packages list them as such.
 
 ## Status legend
 

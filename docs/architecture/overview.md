@@ -26,22 +26,24 @@ system themes. The dashboard canvas is LTR-only in v1 (ADR-005).
 3. **Backend API** — Fastify modular monolith: persistence, authorization,
    data-source management, query execution, realtime gateway, audit.
 
-## Current repository state (before M1)
+## Current repository state (after M1)
 
-The repository is a single Next.js 16.4.6 application at the root:
+The monorepo now matches the target structure below:
 
 ```text
 nama/
-├── app/                 # Next.js App Router pages
-├── public/
-├── next.config.ts       # cacheComponents: true, Tailwind Turbopack loader
-├── package.json         # next, react, react-dom, tailwindcss, eslint, typescript
-├── pnpm-workspace.yaml  # ignoredBuiltDependencies only
-└── tsconfig.json        # strict, paths: @/* -> ./*
+├── apps/
+│   ├── web/             # Next.js 16.4.6, cacheComponents, Tailwind Turbopack loader
+│   └── api/             # Fastify 5, zod-validated env, GET /healthz
+├── packages/            # four @nama/* packages, tsdown ESM + declarations
+├── scripts/             # workspace boundary verification
+├── turbo.json           # build, dev, typecheck, test, clean
+├── tsconfig.base.json   # strict shared compiler options
+└── pnpm-workspace.yaml  # apps/*, packages/*
 ```
 
-There is no `apps/`, `packages/` or `turbo.json`. **M1 performs the
-restructure.** Documents describing those paths describe the target state.
+The SDK packages (`dashboard-core`, `dashboard-builder`, `api-client`) build and
+link but export nothing until M3/M6. Target-only packages are still absent.
 
 ## Target monorepo structure
 

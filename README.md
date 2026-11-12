@@ -7,13 +7,22 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M0 (architecture and decisions) is complete pending approval.**
-No product code or monorepo restructuring has been implemented yet.
+**Milestone M1 (monorepo foundation) is implemented and awaiting acceptance.**
 
-The repository currently contains the original Next.js application at the root
-(Next.js 16.4.6, React 19.3.0, Tailwind CSS 4.3.3). The target monorepo —
-`apps/web`, `apps/api` and the four initial `@nama/*` packages — is created in
-M1.
+The workspace contains:
+
+```text
+apps/web                 Next.js 16 application
+apps/api                 Fastify 5 service (health endpoint only)
+packages/dashboard-types public constants and types (Zod schemas in M2)
+packages/dashboard-core  dashboard runtime (public API in M3)
+packages/dashboard-builder public React API (public API in M3)
+packages/api-client      typed API client (generated in M6)
+```
+
+The three SDK packages build and link but intentionally export nothing yet. The
+dashboard itself is specified, not implemented — see the
+[roadmap](docs/implementation/roadmap.md).
 
 ## Architecture documentation
 
@@ -28,14 +37,25 @@ Start at [docs/README.md](docs/README.md):
 - [API contract](docs/api/openapi.yaml)
 - [Roadmap](docs/implementation/roadmap.md) and [current phase](docs/implementation/current-phase.md)
 
-## Run the current application
+## Development
+
+Requires Node 24 and pnpm 10.33.2 (both pinned by `engines` and `packageManager`).
 
 ```bash
 pnpm install
-pnpm dev
+
+pnpm dev               # web on :3000, API on :3001
+pnpm build             # packages, web and API
+pnpm typecheck
+pnpm test
+pnpm lint              # ESLint over the whole workspace
+pnpm format            # Prettier
+pnpm verify:workspace  # package boundaries and single React version
+pnpm clean
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+The API reads `HOST`, `PORT`, `NODE_ENV` and `LOG_LEVEL`; see
+`apps/api/.env.example`. `GET /healthz` returns the service status.
 
 ## Architectural rules (summary)
 
