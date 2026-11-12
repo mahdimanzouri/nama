@@ -18,6 +18,7 @@ import type {
   TenantScope,
 } from "../../infrastructure/persistence/types.ts";
 import type { AuthContext, AuthHooks } from "../../http/auth.ts";
+import type { IdempotencyHooks } from "../../http/idempotency.ts";
 import { callerFromAuth, type QueryService } from "../queries/service.ts";
 
 const KIND = z.enum(["postgres", "mysql", "rest", "mqtt", "static"]);
@@ -73,6 +74,7 @@ export interface DataSourceRouteDeps {
   hooks: AuthHooks;
   credentialCipher: CredentialCipher | null;
   service: QueryService;
+  idempotency?: IdempotencyHooks;
 }
 
 function requireAuth(request: FastifyRequest): AuthContext {
@@ -109,7 +111,14 @@ function encryptCredentials(
 
 export function registerDataSourceRoutes(
   app: FastifyInstance,
-  { persistence, now, hooks, credentialCipher, service }: DataSourceRouteDeps,
+  {
+    persistence,
+    now,
+    hooks,
+    credentialCipher,
+    service,
+    idempotency,
+  }: DataSourceRouteDeps,
 ): void {
   app.get(
     "/v1/data-sources",
@@ -143,6 +152,7 @@ export function registerDataSourceRoutes(
         hooks.authenticate,
         hooks.requireCsrf,
         hooks.requirePermission("datasource.create"),
+        ...(idempotency ? [idempotency.enforce] : []),
       ],
     },
     async (request, reply) => {

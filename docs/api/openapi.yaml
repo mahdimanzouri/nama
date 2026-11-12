@@ -13,7 +13,8 @@ info:
     - All configuration writes carry `If-Match` with the last known revision.
     - Stale writes return `409` with the current revision.
     - Mutating cookie-authenticated requests carry `X-CSRF-Token`.
-    - Retryable POST endpoints accept `Idempotency-Key`.
+    - Retryable POST endpoints accept `Idempotency-Key`; a replay returns the
+      stored response and a reused key with a different payload returns 409.
     - Timestamps are UTC ISO-8601. IDs are UUIDv7.
     - Errors use the ErrorEnvelope with a stable code and request ID.
 
@@ -38,6 +39,7 @@ tags:
   - name: Realtime
   - name: Organizations
   - name: Roles
+  - name: Audit
   - name: Preferences
 
 paths:
@@ -965,6 +967,101 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/InternalError' }
 
+  /v1/organizations/{id}/audit-events:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Audit]
+      operationId: listAuditEvents
+      summary: List audit events (requires organization.audit.read)
+      x-m0-status: implemented
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: action
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: resourceType
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: resourceId
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: actorId
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: from
+          in: query
+          description: Inclusive lower bound.
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: Inclusive upper bound.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Audit events, newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventList'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /v1/organizations/{id}/audit-events/export:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [Audit]
+      operationId: exportAuditEvents
+      summary: Export audit events as CSV (requires organization.audit.read)
+      description: |
+        Exports up to 10,000 newest matching events. Each export records an
+        `audit.export` event. `x-audit-export-truncated` reports whether the
+        filter matched more rows than were exported.
+      x-m0-status: implemented
+      parameters:
+        - name: action
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: resourceType
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: resourceId
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: actorId
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: format
+          in: query
+          schema: { type: string, enum: [csv], default: csv }
+      responses:
+        '200':
+          description: CSV export
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            x-audit-export-truncated:
+              schema: { type: string, enum: ['true', 'false'] }
+          content:
+            text/csv:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
   /v1/me/preferences:
     get:
       tags: [Preferences]
@@ -1096,7 +1193,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     Conflict:
-      description: Stale revision, duplicate resource or idempotency mismatch
+      description: Stale revision, duplicate resource, idempotency mismatch or key still in flight
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -1754,6 +1851,37 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/Member' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    AuditEvent:
+      type: object
+      required:
+        - id
+        - actorType
+        - actorId
+        - action
+        - resourceType
+        - resourceId
+        - metadata
+        - requestId
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        actorType: { type: string, enum: [user, embed, system] }
+        actorId: { type: string }
+        action: { type: string, example: dashboard.publish }
+        resourceType: { type: string, example: dashboard }
+        resourceId: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+        requestId: { type: string }
+        createdAt: { type: string, format: date-time }
+    AuditEventList:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AuditEvent' }
         pagination: { $ref: '#/components/schemas/Pagination' }
 
     Role:

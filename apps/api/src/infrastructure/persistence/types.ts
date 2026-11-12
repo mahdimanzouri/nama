@@ -139,6 +139,48 @@ export interface AuditEventInput {
   requestId: string;
 }
 
+export interface AuditLogRecord {
+  id: PlatformId;
+  organizationId: PlatformId;
+  actorType: "user" | "embed" | "system";
+  actorId: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  metadata: Record<string, unknown>;
+  requestId: string;
+  createdAt: string;
+}
+
+export interface AuditFilter {
+  action?: string;
+  resourceType?: string;
+  resourceId?: string;
+  actorId?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface IdempotencyRecord {
+  organizationId: PlatformId;
+  principalId: PlatformId;
+  key: string;
+  fingerprint: string;
+  method: string;
+  path: string;
+  status: "in-flight" | "completed";
+  statusCode: number | null;
+  responseBody: unknown;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export type IdempotencyBeginResult =
+  | { status: "reserved" }
+  | { status: "completed"; record: IdempotencyRecord }
+  | { status: "in-flight" }
+  | { status: "mismatch" };
+
 export interface AuthMembership {
   membership: MembershipRecord;
   roleNames: string[];
@@ -186,6 +228,8 @@ export interface SessionRepository {
 
 export interface OrganizationRepository {
   findById(id: PlatformId): Promise<OrganizationRecord | null>;
+  /** Global table; used by scheduled jobs that must run once per tenant. */
+  listAll(): Promise<OrganizationRecord[]>;
   create(record: OrganizationRecord): Promise<void>;
 }
 
@@ -340,6 +384,45 @@ export interface DataSourceRepository {
 
 export interface AuditRepository {
   record(event: AuditEventInput): Promise<void>;
+  list(
+    organizationId: PlatformId,
+    filter: AuditFilter,
+    page: PageRequest,
+  ): Promise<{ items: AuditLogRecord[]; total: number }>;
+  /** Deletes events created before `before`; returns the removed count. */
+  prune(organizationId: PlatformId, before: string): Promise<number>;
+}
+
+/**
+ * One row per `Idempotency-Key` per principal. `begin` reserves the key
+ * atomically; `complete` stores the response; `release` frees it after a
+ * failure so the client can retry.
+ */
+export interface IdempotencyRepository {
+  begin(input: {
+    organizationId: PlatformId;
+    principalId: PlatformId;
+    key: string;
+    fingerprint: string;
+    method: string;
+    path: string;
+    now: string;
+    expiresAt: string;
+  }): Promise<IdempotencyBeginResult>;
+  complete(input: {
+    organizationId: PlatformId;
+    principalId: PlatformId;
+    key: string;
+    statusCode: number;
+    responseBody: unknown;
+  }): Promise<void>;
+  release(
+    organizationId: PlatformId,
+    principalId: PlatformId,
+    key: string,
+  ): Promise<void>;
+  /** Deletes reservations whose `expiresAt` is before `before`. */
+  prune(before: string): Promise<number>;
 }
 
 /** Persistence facade used by every module. */
@@ -355,6 +438,7 @@ export interface Persistence {
   embedTokens: EmbedTokenRepository;
   dataSources: DataSourceRepository;
   audit: AuditRepository;
+  idempotency: IdempotencyRepository;
   permissions(): Promise<PermissionRecord[]>;
   /** Probes the backing store for `/readyz`; throws or resolves false. */
   ready(): Promise<boolean>;

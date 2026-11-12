@@ -276,6 +276,38 @@ export interface PermissionList {
   items: Permission[];
 }
 
+export interface AuditEvent {
+  id: string;
+  actorType: "user" | "embed" | "system";
+  actorId: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  metadata: Record<string, unknown>;
+  requestId: string;
+  createdAt: string;
+}
+
+export interface AuditEventFilter {
+  action?: string;
+  resourceType?: string;
+  resourceId?: string;
+  actorId?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface AuditEventList {
+  items: AuditEvent[];
+  pagination: { page: number; pageSize: number; total: number };
+}
+
+export interface AuditExport {
+  csv: string;
+  truncated: boolean;
+  filename: string | null;
+}
+
 export interface ApiErrorBody {
   code: string;
   message: string;

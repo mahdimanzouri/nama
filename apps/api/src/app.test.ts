@@ -33,6 +33,8 @@ describe("loadEnv", () => {
       REALTIME_MAX_CONNECTIONS: 500,
       LOGIN_RATE_LIMIT: 30,
       QUERY_RATE_LIMIT: 300,
+      AUDIT_RETENTION_DAYS: 365,
+      IDEMPOTENCY_TTL_HOURS: 24,
       DEMO_EDITOR_EMAIL: "demo@nama.local",
       DEMO_EDITOR_PASSWORD: "nama-demo-123",
       DEMO_VIEWER_EMAIL: "viewer@nama.local",

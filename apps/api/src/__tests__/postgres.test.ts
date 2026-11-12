@@ -179,6 +179,9 @@ describe.skipIf(!DATABASE_URL)("postgres persistence", () => {
         await sql.query("DELETE FROM audit_logs WHERE organization_id = $1", [
           organizationId,
         ]);
+        await sql.query("DELETE FROM idempotency_keys WHERE organization_id = $1", [
+          organizationId,
+        ]);
         await sql.query(
           "DELETE FROM membership_roles WHERE membership_id IN (SELECT id FROM memberships WHERE organization_id = $1)",
           [organizationId],
@@ -431,5 +434,74 @@ describe.skipIf(!DATABASE_URL)("postgres persistence", () => {
     expect(actions.get("dashboard.publish")).toBeGreaterThanOrEqual(2);
     expect(actions.get("embed_token.issue")).toBeGreaterThanOrEqual(1);
     expect(actions.get("datasource.create")).toBeGreaterThanOrEqual(1);
+  });
+
+  it("persists idempotent creates and serves the audit trail", async () => {
+    const key = `pg-idempotent-${createId()}`;
+    const request = () =>
+      app.inject({
+        method: "POST",
+        url: "/v1/dashboards",
+        headers: { ...asTenant(adminTenant), "idempotency-key": key },
+        payload: { name: "Postgres idempotent" },
+      });
+
+    const first = await request();
+    expect(first.statusCode).toBe(201);
+
+    const replay = await request();
+    expect(replay.statusCode).toBe(201);
+    expect(replay.headers["idempotent-replayed"]).toBe("true");
+    expect(replay.json().id).toBe(first.json().id);
+
+    const stored = await inTenant(adminTenant.organizationId, () =>
+      sql.query(
+        "SELECT status, status_code FROM idempotency_keys WHERE organization_id = $1 AND key = $2",
+        [adminTenant.organizationId, key],
+      ),
+    );
+    expect(stored.rows).toHaveLength(1);
+    expect(stored.rows[0]).toMatchObject({ status: "completed", status_code: 201 });
+
+    const listed = await app.inject({
+      method: "GET",
+      url: `/v1/organizations/${adminTenant.organizationId}/audit-events?action=dashboard.create&pageSize=1`,
+      headers: asTenant(adminTenant),
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().pagination.total).toBeGreaterThanOrEqual(3);
+
+    const exported = await app.inject({
+      method: "GET",
+      url: `/v1/organizations/${adminTenant.organizationId}/audit-events/export`,
+      headers: asTenant(adminTenant),
+    });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.headers["content-type"]).toContain("text/csv");
+    expect(exported.body).toContain("dashboard.create");
+
+    const crossTenant = await app.inject({
+      method: "GET",
+      url: `/v1/organizations/${otherTenant.organizationId}/audit-events`,
+      headers: asTenant(adminTenant),
+    });
+    expect(crossTenant.statusCode).toBe(404);
+  });
+
+  it("keeps idempotency keys behind row-level security", async () => {
+    const withoutContext = await sql.query(
+      "SELECT count(*)::int AS count FROM idempotency_keys",
+    );
+    expect(withoutContext.rows[0].count).toBe(0);
+
+    const foreign = await inTenant(otherTenant.organizationId, () =>
+      sql.query("SELECT count(*)::int AS count FROM idempotency_keys"),
+    );
+    expect(foreign.rows[0].count).toBe(0);
+
+    const own = await inTenant(adminTenant.organizationId, () =>
+      sql.query("SELECT count(*)::int AS count FROM idempotency_keys"),
+    );
+    expect(own.rows[0].count).toBeGreaterThanOrEqual(1);
   });
 });

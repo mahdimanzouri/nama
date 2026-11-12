@@ -3,9 +3,9 @@
 **Status:** Implemented in part (M7, extended at M12): authentication, RBAC,
 tenant isolation, credential encryption, SSRF range blocking, per-source query
 limits, login/query rate limiting, the realtime connection cap, readiness and
-metrics endpoints, request IDs and log redaction are live. DNS pinning, audit
-read access and the production review remain open (see technical debt). Reviewed
-again before production.
+metrics endpoints, request IDs and log redaction, enforced idempotency keys and
+an authorized audit read/export API are live. DNS pinning and the production
+review remain open (see technical debt). Reviewed again before production.
 
 ## Trust boundaries
 
@@ -52,6 +52,8 @@ the query/realtime path.
 | 13 | Token in logs/referrers | URLs, error payloads | Token replay | Tokens in headers/first message, never URL; redaction; audit references token ID only |
 | 14 | Supply-chain dependency | Malicious npm package | Broad compromise | License/compat review, pinned versions, lockfile, review of new dependencies |
 | 15 | Secret mishandling | Committed env files, migration scripts | Production compromise | Validated env config, secrets injected at deploy, no `.env` commits, key rotation procedure |
+| 16 | Duplicate mutation on retry | Client or proxy retries a timed-out create | Duplicated dashboards, sources, members or roles | `Idempotency-Key` reservation with body fingerprint; replay returns the stored response, mismatches return `409`, failures release the key |
+| 17 | Audit trail exposure or tampering | Unauthorized read/export or retention abuse | Covering tracks, leaking actor activity | `organization.audit.read` permission, tenant-only paths, RLS, export audited, retention limited to a background job |
 
 ## Control matrix (planning §15.1)
 
@@ -62,7 +64,8 @@ the query/realtime path.
 | Resource-level authorization | RBAC in module services |
 | Server-side validation | Zod route + domain schemas |
 | Rate limiting | In-process fixed-window limiter on login (per IP + account) and query execution (per user); `429 RATE_LIMITED` with `Retry-After` |
-| Audit logs for sensitive actions | `modules/audit` |
+| Audit logs for sensitive actions | `modules/audit`; writes on sensitive routes, reads/exports gated by `organization.audit.read` |
+| Duplicate-request protection | `Idempotency-Key` reservations with body fingerprint and stored responses (`IDEMPOTENCY_TTL_HOURS`) |
 | Encrypted credentials with rotation | `data_source_credentials`, key store |
 | No secrets in dashboard config | Schema rules + validation |
 | Embed tokens narrowed and checked per subscription | ADR-009, realtime gateway |
@@ -93,8 +96,12 @@ dashboard.read, dashboard.create, dashboard.update, dashboard.delete,
 dashboard.share, dashboard.publish
 datasource.read, datasource.create, datasource.update, datasource.test,
 datasource.execute, datasource.admin
-organization.members.manage, organization.roles.manage
+organization.members.manage, organization.roles.manage,
+organization.audit.read
 ```
+
+`organization.audit.read` is granted to owner and administrator roles and to no
+default role below them; it covers both the list and CSV export endpoints.
 
 ## Audit events
 
@@ -102,6 +109,12 @@ At minimum: login success/failure, logout, session revocation, member invite/
 remove, role change, dashboard create/delete, draft save (metadata), publish,
 version restore, share change, embed-token issue/revoke, data-source create/
 update/delete/test, raw SQL execution, permission denial on sensitive routes.
+
+The trail is readable and exportable through the API (see
+[api/README.md](../api/README.md)). Both routes require
+`organization.audit.read`, only accept the caller's organization ID, and record
+`audit.export` with the requested format and counts. Retention is enforced by a
+daily job (`AUDIT_RETENTION_DAYS`, default 365); routes cannot delete events.
 
 Audit metadata excludes credentials, token values and full query results; it may
 include a query hash and row count.

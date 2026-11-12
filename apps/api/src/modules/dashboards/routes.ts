@@ -25,6 +25,7 @@ import type {
   TenantScope,
 } from "../../infrastructure/persistence/types.ts";
 import type { AuthContext, AuthHooks } from "../../http/auth.ts";
+import type { IdempotencyHooks } from "../../http/idempotency.ts";
 import { parseIfMatch, toDraft, toSummary, toVersionSummary, toView } from "./service.ts";
 
 const createSchema = z
@@ -76,6 +77,7 @@ export interface DashboardRouteDeps {
   persistence: Persistence;
   now: () => Date;
   hooks: AuthHooks;
+  idempotency?: IdempotencyHooks;
 }
 
 function requireAuth(request: FastifyRequest): AuthContext {
@@ -107,7 +109,7 @@ function unwrapWrite(result: RevisionWriteResult): DashboardRecord {
 
 export function registerDashboardRoutes(
   app: FastifyInstance,
-  { persistence, now, hooks }: DashboardRouteDeps,
+  { persistence, now, hooks, idempotency }: DashboardRouteDeps,
 ): void {
   app.get(
     "/v1/dashboards",
@@ -141,6 +143,7 @@ export function registerDashboardRoutes(
         hooks.authenticate,
         hooks.requireCsrf,
         hooks.requirePermission("dashboard.create"),
+        ...(idempotency ? [idempotency.enforce] : []),
       ],
     },
     async (request, reply) => {

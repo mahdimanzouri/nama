@@ -3,6 +3,9 @@ import type { QueryRequest, QueryResult } from "@nama/dashboard-types";
 import { ApiError, RevisionConflictError } from "./errors.ts";
 import type {
   ApiErrorBody,
+  AuditEventFilter,
+  AuditEventList,
+  AuditExport,
   CreateDashboardRequest,
   DashboardDraft,
   DashboardList,
@@ -47,12 +50,20 @@ export interface ApiClientOptions {
 
 export interface RequestOptions {
   signal?: AbortSignal;
+  /**
+   * Sent as `Idempotency-Key` on unsafe requests. Repeat the same key when
+   * retrying so the API replays the stored response instead of repeating the
+   * effect.
+   */
+  idempotencyKey?: string;
 }
 
 export interface ListOptions extends RequestOptions {
   page?: number;
   pageSize?: number;
 }
+
+export interface AuditEventListOptions extends ListOptions, AuditEventFilter {}
 
 export type ListDashboardsOptions = ListOptions;
 
@@ -165,6 +176,14 @@ export interface ApiClient {
     organizationId: string,
     options?: RequestOptions,
   ): Promise<PermissionList>;
+  listAuditEvents(
+    organizationId: string,
+    options?: AuditEventListOptions,
+  ): Promise<AuditEventList>;
+  exportAuditEvents(
+    organizationId: string,
+    options?: AuditEventFilter & RequestOptions,
+  ): Promise<AuditExport>;
   getPreferences(options?: RequestOptions): Promise<Preferences>;
   updatePreferences(
     input: PreferencesUpdate,
@@ -196,6 +215,20 @@ function fallbackBody(status: number): ApiErrorBody {
   };
 }
 
+function toApiError(status: number, payload: unknown): ApiError | RevisionConflictError {
+  const body =
+    (payload as { error?: ApiErrorBody } | undefined)?.error ?? fallbackBody(status);
+
+  if (status === 409 && body.code === "REVISION_CONFLICT") {
+    return new RevisionConflictError(409, {
+      ...body,
+      currentRevision: body.currentRevision ?? 0,
+    });
+  }
+
+  return new ApiError(status, body);
+}
+
 export function createApiClient(options: ApiClientOptions = {}): ApiClient {
   const baseUrl = (options.baseUrl ?? "/api").replace(/\/$/u, "");
   const fetchImpl = options.fetch ?? globalThis.fetch;
@@ -207,6 +240,9 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
     if (init.body !== undefined) headers["content-type"] = "application/json";
     if (init.revision !== undefined) headers["if-match"] = `"${init.revision}"`;
+    if (init.idempotencyKey !== undefined) {
+      headers["idempotency-key"] = init.idempotencyKey;
+    }
 
     if (method !== "GET") {
       const token = await csrfToken();
@@ -225,22 +261,34 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
     const payload: unknown = await response.json().catch(() => undefined);
 
-    if (!response.ok) {
-      const body =
-        (payload as { error?: ApiErrorBody } | undefined)?.error ??
-        fallbackBody(response.status);
-
-      if (response.status === 409 && body.code === "REVISION_CONFLICT") {
-        throw new RevisionConflictError(409, {
-          ...body,
-          currentRevision: body.currentRevision ?? 0,
-        });
-      }
-
-      throw new ApiError(response.status, body);
-    }
+    if (!response.ok) throw toApiError(response.status, payload);
 
     return payload as T;
+  }
+
+  async function requestText(
+    path: string,
+    init: RequestInitOptions = {},
+  ): Promise<{ body: string; headers: Headers }> {
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method: init.method ?? "GET",
+      headers: { accept: "text/csv" },
+      credentials: "include",
+      ...(init.signal ? { signal: init.signal } : {}),
+    });
+
+    if (!response.ok) {
+      const payload: unknown = await response.json().catch(() => undefined);
+      throw toApiError(response.status, payload);
+    }
+
+    return { body: await response.text(), headers: response.headers };
+  }
+
+  function filenameFromDisposition(disposition: string | null): string | null {
+    if (!disposition) return null;
+    const match = /filename="?([^";]+)"?/u.exec(disposition);
+    return match ? match[1]! : null;
   }
 
   function dashboardPath(id: string, suffix = ""): string {
@@ -257,6 +305,25 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     if (options.pageSize !== undefined) {
       params.set("pageSize", String(options.pageSize));
     }
+    return params.size > 0 ? `?${params.toString()}` : "";
+  }
+
+  function auditQuery(filter: AuditEventFilter & ListOptions): string {
+    const params = new URLSearchParams();
+    if (filter.page !== undefined) params.set("page", String(filter.page));
+    if (filter.pageSize !== undefined) {
+      params.set("pageSize", String(filter.pageSize));
+    }
+    if (filter.action !== undefined) params.set("action", filter.action);
+    if (filter.resourceType !== undefined) {
+      params.set("resourceType", filter.resourceType);
+    }
+    if (filter.resourceId !== undefined) {
+      params.set("resourceId", filter.resourceId);
+    }
+    if (filter.actorId !== undefined) params.set("actorId", filter.actorId);
+    if (filter.from !== undefined) params.set("from", filter.from);
+    if (filter.to !== undefined) params.set("to", filter.to);
     return params.size > 0 ? `?${params.toString()}` : "";
   }
 
@@ -518,6 +585,29 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       return request<PermissionList>(organizationPath(organizationId, "/permissions"), {
         ...requestOptions,
       });
+    },
+
+    listAuditEvents(organizationId, auditOptions = {}) {
+      return request<AuditEventList>(
+        organizationPath(organizationId, `/audit-events${auditQuery(auditOptions)}`),
+        auditOptions.signal ? { signal: auditOptions.signal } : {},
+      );
+    },
+
+    async exportAuditEvents(organizationId, exportOptions = {}) {
+      const { body, headers } = await requestText(
+        organizationPath(
+          organizationId,
+          `/audit-events/export${auditQuery(exportOptions)}`,
+        ),
+        exportOptions.signal ? { signal: exportOptions.signal } : {},
+      );
+
+      return {
+        csv: body,
+        truncated: headers.get("x-audit-export-truncated") === "true",
+        filename: filenameFromDisposition(headers.get("content-disposition")),
+      };
     },
 
     getPreferences(requestOptions) {

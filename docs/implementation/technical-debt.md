@@ -1,6 +1,6 @@
 # Technical Debt
 
-**Status:** Updated at M12 (in progress, 2026-11-12)
+**Status:** Updated at M12 (in progress, 2026-11-13)
 
 Debt is recorded honestly with impact, owner and target milestone. Items are
 removed only when the fix is merged and verified; closed items are listed at the
@@ -41,10 +41,8 @@ end so IDs stay stable.
 | TD-056 | The REST connector has no schema discovery; `GET /v1/data-sources/:id/schema` returns `501` for it | Hosts cannot list REST fields before writing a query | Backend | M9 or when the data-source picker needs it |
 | TD-044 | ECharts modules are registered manually in `registerModules`; adding a chart type requires an SDK code change | A host cannot add an ECharts chart type without forking the built-ins | SDK | When a third-party chart plugin is requested |
 | TD-045 | `api-client` is still hand-written; `verify:openapi` compares routes only | Request/response shapes can drift from the spec without detection | Backend | M12 |
-| TD-046 | `Idempotency-Key` is accepted but not enforced | A retried `POST` can duplicate an effect | Backend | M12 |
-| TD-048 | RLS covers tenant tables only; global tables (`users`, `permissions`, `sessions`) rely on application scoping | A repository bug on a global table is not caught by the database | Backend/Security | M12 security review |
-| TD-049 | Audit rows are write-only; there is no read/export endpoint or retention policy | Operators cannot query the audit trail yet | Backend | M12 |
-| TD-050 | The Postgres integration suite skips unless `NAMA_TEST_DATABASE_URL` is set | Isolation regressions are caught in CI but not by a plain local `pnpm test` | QA | M12 CI hardening |
+| TD-048 | RLS covers tenant tables only; global tables (`users`, `permissions`, `sessions`) rely on application scoping | Reviewed at M12: `idempotency_keys` is RLS-protected and tenant-pruned; a repository bug on a global table is still not caught by the database | Backend/Security | Accepted; review when a global table gains tenant data |
+| TD-050 | The Postgres integration suite skips unless `NAMA_TEST_DATABASE_URL` is set | CI's dedicated job sets it and runs migrations, seed and the suite; a plain local `pnpm test` still skips the integration file | QA | Accepted; document the local Postgres workflow |
 | TD-057 | Realtime re-executes each subscribed query on a timer (`REALTIME_POLL_INTERVAL_MS`, default 5 s); connectors have no push, webhook or CDC path | Live data lags by up to one poll interval and each subscription costs a query per tick | Backend | When a connector gains push support |
 | TD-058 | Built-in widgets render `snapshot-then-stream` snapshots; none consume `data.stream.latest` | Raw `stream` mode is only useful to custom widgets, and the 500-sample client buffer is currently write-only for built-ins | SDK | M9 or when a high-frequency widget is requested |
 | TD-059 | Realtime channels, replay threads and connection limits live in one API process; fan-out to other replicas needs Redis or sticky routing | A second replica would not share subscriptions, exceed per-process limits, and lose the 60 s resume window on failover | Backend | When a second instance exists |
@@ -84,6 +82,8 @@ end so IDs stay stable.
 | TD-019 | Vitest v8 coverage with lcov + text-summary, per-package ratcheted thresholds, `pnpm test:coverage` and a CI artifact upload | M12 |
 | TD-032 | The CI verify job installs the lockfile (priming the pnpm store) before `pnpm verify:consumer`, which runs offline | M12 |
 | TD-036 | CI gained a dedicated `browser` job: install Chromium with dependencies, build, run `pnpm test:e2e`, upload reports on failure | M12 |
+| TD-046 | `Idempotency-Key` is enforced on create endpoints: `idempotency_keys` table with RLS, body fingerprint, stored response replay (`idempotent-replayed`), `409` mismatch/in-flight and release on failure; covered by API and Postgres tests | M12 |
+| TD-049 | `modules/audit` exposes a filterable, paginated read route and a 10,000-row CSV export behind `organization.audit.read`; exports are audited and `AUDIT_RETENTION_DAYS` drives a per-organization pruning job | M12 |
 
 ## Process
 

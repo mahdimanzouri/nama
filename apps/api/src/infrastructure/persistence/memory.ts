@@ -4,10 +4,13 @@ import { createId } from "@nama/dashboard-types";
 import type { Env } from "../../env.ts";
 import { PERMISSIONS, SYSTEM_ROLES } from "../rbac.ts";
 import type {
+  AuditFilter,
+  AuditLogRecord,
   AuthMembership,
   DashboardRecord,
   DataSourceRecord,
   EmbedTokenRecord,
+  IdempotencyRecord,
   MemberWithUser,
   MembershipRecord,
   OrganizationRecord,
@@ -67,7 +70,8 @@ interface MemoryState {
       rotatedAt: string | null;
     }
   >;
-  audit: unknown[];
+  audit: AuditLogRecord[];
+  idempotency: Map<string, IdempotencyRecord>;
 }
 
 function seedState(env: Env): MemoryState {
@@ -157,6 +161,7 @@ function seedState(env: Env): MemoryState {
     dataSources: new Map(),
     credentials: new Map(),
     audit: [],
+    idempotency: new Map(),
     membershipRoles,
   };
 }
@@ -262,6 +267,9 @@ export function createMemoryPersistence(env: Env): Persistence {
   const organizations = {
     async findById(id: string): Promise<OrganizationRecord | null> {
       return state.organizations.get(id) ?? null;
+    },
+    async listAll(): Promise<OrganizationRecord[]> {
+      return [...state.organizations.values()];
     },
     async create(record: OrganizationRecord): Promise<void> {
       state.organizations.set(record.id, record);
@@ -684,8 +692,142 @@ export function createMemoryPersistence(env: Env): Persistence {
   };
 
   const audit = {
-    async record(): Promise<void> {
-      // Auditing is a Postgres concern; the in-memory adapter keeps no trail.
+    async record(event: {
+      organizationId: string;
+      actorType: "user" | "embed" | "system";
+      actorId: string;
+      action: string;
+      resourceType: string;
+      resourceId?: string | null;
+      metadata?: Record<string, unknown>;
+      requestId: string;
+    }): Promise<void> {
+      state.audit.push({
+        id: createId(),
+        organizationId: event.organizationId,
+        actorType: event.actorType,
+        actorId: event.actorId,
+        action: event.action,
+        resourceType: event.resourceType,
+        resourceId: event.resourceId ?? null,
+        metadata: event.metadata ?? {},
+        requestId: event.requestId,
+        createdAt: new Date().toISOString(),
+      });
+    },
+    async list(organizationId: string, filter: AuditFilter, page: PageRequest) {
+      const from = filter.from ? Date.parse(filter.from) : undefined;
+      const to = filter.to ? Date.parse(filter.to) : undefined;
+      const matching = state.audit
+        .filter((event) => {
+          if (event.organizationId !== organizationId) return false;
+          if (filter.action && event.action !== filter.action) return false;
+          if (filter.resourceType && event.resourceType !== filter.resourceType) {
+            return false;
+          }
+          if (filter.resourceId && event.resourceId !== filter.resourceId) return false;
+          if (filter.actorId && event.actorId !== filter.actorId) return false;
+          const created = Date.parse(event.createdAt);
+          if (from !== undefined && created < from) return false;
+          if (to !== undefined && created > to) return false;
+          return true;
+        })
+        .sort((left, right) => {
+          const byTime = right.createdAt.localeCompare(left.createdAt);
+          return byTime === 0 ? right.id.localeCompare(left.id) : byTime;
+        });
+      return {
+        items: matching.slice(page.offset, page.offset + page.limit),
+        total: matching.length,
+      };
+    },
+    async prune(organizationId: string, before: string): Promise<number> {
+      const cutoff = Date.parse(before);
+      const kept = state.audit.filter(
+        (event) =>
+          event.organizationId !== organizationId ||
+          Date.parse(event.createdAt) >= cutoff,
+      );
+      const removed = state.audit.length - kept.length;
+      state.audit = kept;
+      return removed;
+    },
+  };
+
+  const idempotency = {
+    async begin(input: {
+      organizationId: string;
+      principalId: string;
+      key: string;
+      fingerprint: string;
+      method: string;
+      path: string;
+      now: string;
+      expiresAt: string;
+    }) {
+      const id = `${input.organizationId}|${input.principalId}|${input.key}`;
+      const existing = state.idempotency.get(id);
+      if (existing && Date.parse(existing.expiresAt) <= Date.parse(input.now)) {
+        state.idempotency.delete(id);
+      }
+      const current = state.idempotency.get(id);
+      if (current) {
+        if (current.fingerprint !== input.fingerprint) {
+          return { status: "mismatch" as const };
+        }
+        if (current.status === "completed") {
+          return { status: "completed" as const, record: current };
+        }
+        return { status: "in-flight" as const };
+      }
+      state.idempotency.set(id, {
+        organizationId: input.organizationId,
+        principalId: input.principalId,
+        key: input.key,
+        fingerprint: input.fingerprint,
+        method: input.method,
+        path: input.path,
+        status: "in-flight",
+        statusCode: null,
+        responseBody: null,
+        createdAt: input.now,
+        expiresAt: input.expiresAt,
+      });
+      return { status: "reserved" as const };
+    },
+    async complete(input: {
+      organizationId: string;
+      principalId: string;
+      key: string;
+      statusCode: number;
+      responseBody: unknown;
+    }): Promise<void> {
+      const id = `${input.organizationId}|${input.principalId}|${input.key}`;
+      const current = state.idempotency.get(id);
+      if (!current) return;
+      Object.assign(current, {
+        status: "completed",
+        statusCode: input.statusCode,
+        responseBody: input.responseBody,
+      });
+    },
+    async release(
+      organizationId: string,
+      principalId: string,
+      key: string,
+    ): Promise<void> {
+      state.idempotency.delete(`${organizationId}|${principalId}|${key}`);
+    },
+    async prune(before: string): Promise<number> {
+      const cutoff = Date.parse(before);
+      let removed = 0;
+      for (const [id, record] of state.idempotency) {
+        if (Date.parse(record.expiresAt) < cutoff) {
+          state.idempotency.delete(id);
+          removed += 1;
+        }
+      }
+      return removed;
     },
   };
 
@@ -701,6 +843,7 @@ export function createMemoryPersistence(env: Env): Persistence {
     embedTokens,
     dataSources,
     audit,
+    idempotency,
     async permissions() {
       return PERMISSIONS.map((permission) => ({
         id: createId(),

@@ -12,6 +12,9 @@ import {
 } from "./infrastructure/persistence/index.ts";
 import { RateLimiter, type RateLimitConfig } from "./infrastructure/rate-limit.ts";
 import { createAuthHooks } from "./http/auth.ts";
+import { createIdempotencyHooks } from "./http/idempotency.ts";
+import { registerAuditRoutes } from "./modules/audit/routes.ts";
+import { pruneExpired } from "./modules/audit/retention.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerDashboardRoutes } from "./modules/dashboards/routes.ts";
 import { registerEmbedTokenRoutes } from "./modules/dashboards/embed-tokens.ts";
@@ -73,6 +76,11 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
       windowMs: 60_000,
     },
   );
+  const idempotency = createIdempotencyHooks({
+    persistence,
+    now,
+    ttlMs: env.IDEMPOTENCY_TTL_HOURS * 3_600_000,
+  });
 
   const app = Fastify({
     logger:
@@ -96,6 +104,13 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
 
   app.addHook("onSend", async (request, reply, payload) => {
     reply.header("x-request-id", request.id);
+    if (request.idempotency) {
+      try {
+        await idempotency.settle(request, reply.statusCode, payload);
+      } catch (error) {
+        request.log.error({ err: error }, "failed to settle idempotency key");
+      }
+    }
     return payload;
   });
 
@@ -134,7 +149,7 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
     loginLimiter,
     metrics,
   });
-  registerDashboardRoutes(app, { persistence, now, hooks });
+  registerDashboardRoutes(app, { persistence, now, hooks, idempotency });
   registerShareRoutes(app, { persistence, now, hooks });
   registerEmbedTokenRoutes(app, { persistence, now, hooks });
   registerDataSourceRoutes(app, {
@@ -143,8 +158,30 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
     hooks,
     credentialCipher,
     service: queryService,
+    idempotency,
   });
-  registerOrganizationRoutes(app, { persistence, now, hooks });
+  registerOrganizationRoutes(app, { persistence, now, hooks, idempotency });
+  registerAuditRoutes(app, { persistence, hooks });
+
+  const retentionTimer = setInterval(
+    () => {
+      void pruneExpired({
+        persistence,
+        now,
+        auditRetentionDays: env.AUDIT_RETENTION_DAYS,
+      })
+        .then(({ audit, idempotency: keys }) => {
+          if (audit > 0 || keys > 0) {
+            app.log.info({ audit, idempotency: keys }, "retention job pruned rows");
+          }
+        })
+        .catch((error) => app.log.error({ err: error }, "retention job failed"));
+    },
+    24 * 60 * 60 * 1000,
+  );
+  retentionTimer.unref();
+  app.addHook("onClose", async () => clearInterval(retentionTimer));
+
   registerPreferenceRoutes(app, { persistence, hooks });
   registerQueryRoutes(app, {
     service: queryService,

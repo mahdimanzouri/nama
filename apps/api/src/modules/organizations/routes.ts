@@ -15,6 +15,7 @@ import type {
   TenantScope,
 } from "../../infrastructure/persistence/types.ts";
 import type { AuthContext, AuthHooks } from "../../http/auth.ts";
+import type { IdempotencyHooks } from "../../http/idempotency.ts";
 
 const listQuerySchema = z
   .object({
@@ -55,6 +56,7 @@ export interface OrganizationRouteDeps {
   persistence: Persistence;
   now: () => Date;
   hooks: AuthHooks;
+  idempotency?: IdempotencyHooks;
 }
 
 function requireAuth(request: FastifyRequest): AuthContext {
@@ -96,7 +98,7 @@ function validatePermissionNames(names: string[]): void {
 
 export function registerOrganizationRoutes(
   app: FastifyInstance,
-  { persistence, now, hooks }: OrganizationRouteDeps,
+  { persistence, now, hooks, idempotency }: OrganizationRouteDeps,
 ): void {
   app.get(
     "/v1/organizations/:id/members",
@@ -136,6 +138,7 @@ export function registerOrganizationRoutes(
         hooks.authenticate,
         hooks.requireCsrf,
         hooks.requirePermission("organization.members.manage"),
+        ...(idempotency ? [idempotency.enforce] : []),
       ],
     },
     async (request, reply) => {
@@ -320,6 +323,7 @@ export function registerOrganizationRoutes(
         hooks.authenticate,
         hooks.requireCsrf,
         hooks.requirePermission("organization.roles.manage"),
+        ...(idempotency ? [idempotency.enforce] : []),
       ],
     },
     async (request, reply) => {

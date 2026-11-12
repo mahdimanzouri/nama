@@ -66,7 +66,10 @@ publishes the validated data-source plugin contract and registry,
 `@nama/dashboard-builder/plugins` exports widget registration, and
 `examples/plugin-kit` adds a custom widget (with a `configVersion` migration) and
 a `memory` connector that `pnpm verify:consumer` registers against the packed
-tarballs. An in-memory persistence adapter remains for tests — see the
+tarballs. M12 hardens operations: login and query rate limits, a shared realtime
+connection cap, liveness/readiness/Prometheus endpoints, request IDs, enforced
+`Idempotency-Key` replay on create endpoints and a filterable audit trail with
+CSV export. An in-memory persistence adapter remains for tests — see the
 [roadmap](docs/implementation/roadmap.md).
 
 ## Architecture documentation
@@ -111,7 +114,8 @@ Chromium build. CI runs the suite in a dedicated `browser` job.
 The API reads `HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL`, `APP_DATABASE_URL`,
 `CREDENTIAL_ENCRYPTION_KEY`, `REALTIME_POLL_INTERVAL_MS`,
 `REALTIME_MAX_CONNECTIONS`, `LOGIN_RATE_LIMIT`, `QUERY_RATE_LIMIT`,
-`METRICS_TOKEN` and the demo-account variables; see `apps/api/.env.example`.
+`AUDIT_RETENTION_DAYS`, `IDEMPOTENCY_TTL_HOURS`, `METRICS_TOKEN` and the
+demo-account variables; see `apps/api/.env.example`.
 `GET /healthz` reports liveness, `GET /readyz` probes persistence and
 `GET /metrics` exposes Prometheus text (bearer-protected when `METRICS_TOKEN` is
 set). The web app proxies `/api/*` to `NAMA_API_URL` (default

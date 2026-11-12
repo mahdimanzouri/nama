@@ -211,7 +211,31 @@ Details in [ADR-009](decisions/ADR-009-embed-tokens.md).
 | `request_id` | text | correlates with logs |
 | `created_at` | timestamptz | indexed |
 
-Retention is configuration with a documented default (365 days proposed).
+Retention is configuration (`AUDIT_RETENTION_DAYS`, default 365) and is enforced
+by a daily per-organization job; the API exposes read/export only, never delete.
+Indexed by `(organization_id, action, created_at)` for filtered lists and
+`(organization_id, created_at)` for the default view.
+
+### IdempotencyKey
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid (v7) | PK |
+| `organization_id` | uuid | RLS |
+| `principal_id` | uuid | user who owns the key |
+| `key` | text | client-supplied, 1–128 characters |
+| `fingerprint` | text | SHA-256 of method, route and canonical body |
+| `method`, `path` | text | request identity for diagnostics |
+| `status` | text | `in-flight` or `completed` |
+| `status_code` | integer | nullable until settled |
+| `response_body` | jsonb | stored response for replay; null until settled |
+| `created_at` | timestamptz | |
+| `expires_at` | timestamptz | `IDEMPOTENCY_TTL_HOURS`, default 24 |
+
+Unique on `(organization_id, principal_id, key)`. The response body may contain
+resource metadata but never credential material or plaintext tokens; the embed
+token endpoint is therefore excluded from idempotency. Expired rows are pruned by
+the daily retention job.
 
 ## Row-level security
 
@@ -252,7 +276,8 @@ Rules:
 - `dashboard_shares (dashboard_id, subject_type, subject_id)` unique
 - `data_sources (organization_id, name)`
 - `embed_tokens (token_hash)` unique, `(dashboard_id, expires_at)`
-- `audit_logs (organization_id, created_at desc)`
+- `audit_logs (organization_id, created_at desc)`, `(organization_id, action, created_at)`
+- `idempotency_keys (organization_id, principal_id, key)` unique, `(expires_at)`
 
 ## Migration policy
 

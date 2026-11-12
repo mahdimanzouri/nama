@@ -309,4 +309,75 @@ describe("api client", () => {
     expect(calls[0]?.url).toBe("/api/v1/organizations/o1/members?page=1");
     expect(calls[1]?.url).toBe("/api/v1/organizations/o1/roles");
   });
+
+  it("sends an Idempotency-Key on unsafe creates", async () => {
+    const { calls, fetchImpl } = stubFetch({ body: { id: "d1", revision: 1 } });
+    const client = createApiClient({ fetch: fetchImpl, csrfToken: () => "token" });
+
+    await client.createDashboard({ name: "New" }, { idempotencyKey: "key-1" });
+
+    const headers = calls[0]?.init.headers as Record<string, string>;
+    expect(headers["idempotency-key"]).toBe("key-1");
+    expect(calls[0]?.init.method).toBe("POST");
+  });
+
+  it("lists audit events with filters and pagination", async () => {
+    const { calls, fetchImpl } = stubFetch({
+      body: {
+        items: [
+          {
+            id: "a1",
+            actorType: "user",
+            actorId: "u1",
+            action: "dashboard.create",
+            resourceType: "dashboard",
+            resourceId: "d1",
+            metadata: {},
+            requestId: "r1",
+            createdAt: "2026-11-13T10:00:00.000Z",
+          },
+        ],
+        pagination: { page: 2, pageSize: 5, total: 6 },
+      },
+    });
+    const client = createApiClient({ fetch: fetchImpl, csrfToken: () => "token" });
+
+    const events = await client.listAuditEvents("o1", {
+      page: 2,
+      pageSize: 5,
+      action: "dashboard.create",
+      actorId: "u1",
+      from: "2026-11-01T00:00:00.000Z",
+    });
+
+    expect(events.items[0]?.action).toBe("dashboard.create");
+    expect(calls[0]?.url).toBe(
+      "/api/v1/organizations/o1/audit-events?page=2&pageSize=5&action=dashboard.create&actorId=u1&from=2026-11-01T00%3A00%3A00.000Z",
+    );
+  });
+
+  it("downloads the audit CSV with truncation metadata", async () => {
+    const { calls, fetchImpl } = stubFetch(
+      () =>
+        new Response("id,action\n1,dashboard.create", {
+          status: 200,
+          headers: {
+            "content-type": "text/csv; charset=utf-8",
+            "content-disposition": 'attachment; filename="audit-events-o1.csv"',
+            "x-audit-export-truncated": "true",
+          },
+        }),
+    );
+    const client = createApiClient({ fetch: fetchImpl, csrfToken: () => "token" });
+
+    const exported = await client.exportAuditEvents("o1", { action: "dashboard.create" });
+
+    expect(exported.csv).toBe("id,action\n1,dashboard.create");
+    expect(exported.truncated).toBe(true);
+    expect(exported.filename).toBe("audit-events-o1.csv");
+    expect(calls[0]?.url).toBe(
+      "/api/v1/organizations/o1/audit-events/export?action=dashboard.create",
+    );
+    expect((calls[0]?.init.headers as Record<string, string>).accept).toBe("text/csv");
+  });
 });

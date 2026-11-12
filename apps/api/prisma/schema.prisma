@@ -263,7 +263,29 @@ model AuditLog {
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([organizationId, createdAt])
+  @@index([organizationId, action, createdAt])
   @@map("audit_logs")
+}
+
+// One row per Idempotency-Key per principal. `status` is `in-flight` while the
+// original request runs and `completed` once the response is stored.
+model IdempotencyKey {
+  id             String   @id @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  principalId    String   @map("principal_id") @db.Uuid
+  key            String
+  fingerprint    String
+  method         String
+  path           String
+  status         String
+  statusCode     Int?     @map("status_code")
+  responseBody   Json?    @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, principalId, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
 }
 
 // Sessions are global rather than tenant-scoped: the opaque token hash is the

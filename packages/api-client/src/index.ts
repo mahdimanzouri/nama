@@ -9,6 +9,7 @@ export { createApiClient } from "./client";
 export type {
   ApiClient,
   ApiClientOptions,
+  AuditEventListOptions,
   ListDashboardsOptions,
   ListOptions,
   RequestOptions,
@@ -16,6 +17,10 @@ export type {
 export { ApiError, RevisionConflictError } from "./errors";
 export type {
   ApiErrorBody,
+  AuditEvent,
+  AuditEventFilter,
+  AuditEventList,
+  AuditExport,
   CreateDashboardRequest,
   DashboardDraft,
   DashboardList,

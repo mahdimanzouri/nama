@@ -6,11 +6,14 @@ import { createId, type DashboardConfig } from "@nama/dashboard-types";
 
 import { PERMISSIONS } from "../rbac.ts";
 import type {
+  AuditFilter,
+  AuditLogRecord,
   DashboardRecord,
   DashboardShareRecord,
   DashboardVersionRecord,
   DataSourceRecord,
   EmbedTokenRecord,
+  IdempotencyRecord,
   MemberWithUser,
   MembershipRecord,
   OrganizationRecord,
@@ -80,6 +83,60 @@ function toOrganization(row: {
   slug: string;
 }): OrganizationRecord {
   return { id: row.id, name: row.name, slug: row.slug };
+}
+
+function toAuditLog(row: {
+  id: string;
+  organizationId: string;
+  actorType: "user" | "embed" | "system";
+  actorId: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  metadata: Prisma.JsonValue;
+  requestId: string;
+  createdAt: Date;
+}): AuditLogRecord {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    actorType: row.actorType,
+    actorId: row.actorId,
+    action: row.action,
+    resourceType: row.resourceType,
+    resourceId: row.resourceId,
+    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    requestId: row.requestId,
+    createdAt: iso(row.createdAt),
+  };
+}
+
+function toIdempotency(row: {
+  organizationId: string;
+  principalId: string;
+  key: string;
+  fingerprint: string;
+  method: string;
+  path: string;
+  status: string;
+  statusCode: number | null;
+  responseBody: Prisma.JsonValue | null;
+  createdAt: Date;
+  expiresAt: Date;
+}): IdempotencyRecord {
+  return {
+    organizationId: row.organizationId,
+    principalId: row.principalId,
+    key: row.key,
+    fingerprint: row.fingerprint,
+    method: row.method,
+    path: row.path,
+    status: row.status === "completed" ? "completed" : "in-flight",
+    statusCode: row.statusCode,
+    responseBody: row.responseBody,
+    createdAt: iso(row.createdAt),
+    expiresAt: iso(row.expiresAt),
+  };
 }
 
 function toMembership(row: {
@@ -354,6 +411,10 @@ export function createPostgresPersistence(connectionString: string): Persistence
     async findById(id: string): Promise<OrganizationRecord | null> {
       const row = await db().organization.findUnique({ where: { id } });
       return row ? toOrganization(row) : null;
+    },
+    async listAll(): Promise<OrganizationRecord[]> {
+      const rows = await db().organization.findMany({ orderBy: { createdAt: "asc" } });
+      return rows.map(toOrganization);
     },
     async create(record: OrganizationRecord): Promise<void> {
       await db().organization.create({ data: record });
@@ -1065,6 +1126,150 @@ export function createPostgresPersistence(connectionString: string): Persistence
         },
       });
     },
+    async list(
+      organizationId: string,
+      filter: AuditFilter,
+      page: PageRequest,
+    ): Promise<{ items: AuditLogRecord[]; total: number }> {
+      const createdAt =
+        filter.from || filter.to
+          ? {
+              ...(filter.from ? { gte: new Date(filter.from) } : {}),
+              ...(filter.to ? { lte: new Date(filter.to) } : {}),
+            }
+          : undefined;
+      const where: Prisma.AuditLogWhereInput = {
+        organizationId,
+        ...(filter.action ? { action: filter.action } : {}),
+        ...(filter.resourceType ? { resourceType: filter.resourceType } : {}),
+        ...(filter.resourceId ? { resourceId: filter.resourceId } : {}),
+        ...(filter.actorId ? { actorId: filter.actorId } : {}),
+        ...(createdAt ? { createdAt } : {}),
+      };
+      const [rows, total] = await Promise.all([
+        db().auditLog.findMany({
+          where,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          skip: page.offset,
+          take: page.limit,
+        }),
+        db().auditLog.count({ where }),
+      ]);
+      return { items: rows.map(toAuditLog), total };
+    },
+    async prune(organizationId: string, before: string): Promise<number> {
+      const result = await db().auditLog.deleteMany({
+        where: { organizationId, createdAt: { lt: new Date(before) } },
+      });
+      return result.count;
+    },
+  };
+
+  const beginIdempotency = async (input: {
+    organizationId: string;
+    principalId: string;
+    key: string;
+    fingerprint: string;
+    method: string;
+    path: string;
+    now: string;
+    expiresAt: string;
+  }): Promise<
+    | { status: "reserved" }
+    | { status: "completed"; record: IdempotencyRecord }
+    | { status: "in-flight" }
+    | { status: "mismatch" }
+  > => {
+    const uniqueWhere = {
+      organizationId_principalId_key: {
+        organizationId: input.organizationId,
+        principalId: input.principalId,
+        key: input.key,
+      },
+    };
+
+    // ON CONFLICT DO NOTHING keeps the surrounding transaction usable when the
+    // key already exists; a thrown P2002 would abort it (Postgres 25P02).
+    const inserted = await db().idempotencyKey.createMany({
+      data: [
+        {
+          id: createId(),
+          organizationId: input.organizationId,
+          principalId: input.principalId,
+          key: input.key,
+          fingerprint: input.fingerprint,
+          method: input.method,
+          path: input.path,
+          status: "in-flight",
+          createdAt: new Date(input.now),
+          expiresAt: new Date(input.expiresAt),
+        },
+      ],
+      skipDuplicates: true,
+    });
+    if (inserted.count === 1) return { status: "reserved" };
+
+    const existing = await db().idempotencyKey.findUnique({ where: uniqueWhere });
+    if (!existing) return { status: "in-flight" };
+
+    if (existing.expiresAt.getTime() <= Date.parse(input.now)) {
+      await db().idempotencyKey.deleteMany({
+        where: {
+          organizationId: input.organizationId,
+          principalId: input.principalId,
+          key: input.key,
+        },
+      });
+      return beginIdempotency(input);
+    }
+
+    if (existing.fingerprint !== input.fingerprint) return { status: "mismatch" };
+    if (existing.status === "completed") {
+      return { status: "completed", record: toIdempotency(existing) };
+    }
+    return { status: "in-flight" };
+  };
+
+  const idempotency = {
+    begin: beginIdempotency,
+    async complete(input: {
+      organizationId: string;
+      principalId: string;
+      key: string;
+      statusCode: number;
+      responseBody: unknown;
+    }): Promise<void> {
+      await db().idempotencyKey.updateMany({
+        where: {
+          organizationId: input.organizationId,
+          principalId: input.principalId,
+          key: input.key,
+        },
+        data: {
+          status: "completed",
+          statusCode: input.statusCode,
+          responseBody:
+            input.responseBody === null || input.responseBody === undefined
+              ? Prisma.JsonNull
+              : toJson(input.responseBody),
+        },
+      });
+    },
+    async release(
+      organizationId: string,
+      principalId: string,
+      key: string,
+    ): Promise<void> {
+      await db().idempotencyKey.deleteMany({
+        where: { organizationId, principalId, key },
+      });
+    },
+    async prune(before: string): Promise<number> {
+      const result = await db().idempotencyKey.deleteMany({
+        where: { expiresAt: { lt: new Date(before) } },
+      });
+      return result.count;
+    },
   };
 
   return {
@@ -1079,6 +1284,7 @@ export function createPostgresPersistence(connectionString: string): Persistence
     embedTokens,
     dataSources,
     audit,
+    idempotency,
     async permissions() {
       const rows = await db().permission.findMany({ orderBy: { name: "asc" } });
       if (rows.length > 0) {

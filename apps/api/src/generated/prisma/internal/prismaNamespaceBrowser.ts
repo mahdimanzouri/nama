@@ -67,6 +67,7 @@ export const ModelName = {
   WidgetDefinition: 'WidgetDefinition',
   EmbedToken: 'EmbedToken',
   AuditLog: 'AuditLog',
+  IdempotencyKey: 'IdempotencyKey',
   Session: 'Session'
 } as const
 
@@ -285,6 +286,24 @@ export const AuditLogScalarFieldEnum = {
 } as const
 
 export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
+
+
+export const IdempotencyKeyScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  principalId: 'principalId',
+  key: 'key',
+  fingerprint: 'fingerprint',
+  method: 'method',
+  path: 'path',
+  status: 'status',
+  statusCode: 'statusCode',
+  responseBody: 'responseBody',
+  createdAt: 'createdAt',
+  expiresAt: 'expiresAt'
+} as const
+
+export type IdempotencyKeyScalarFieldEnum = (typeof IdempotencyKeyScalarFieldEnum)[keyof typeof IdempotencyKeyScalarFieldEnum]
 
 
 export const SessionScalarFieldEnum = {

@@ -413,6 +413,7 @@ export const ModelName = {
   WidgetDefinition: 'WidgetDefinition',
   EmbedToken: 'EmbedToken',
   AuditLog: 'AuditLog',
+  IdempotencyKey: 'IdempotencyKey',
   Session: 'Session'
 } as const
 
@@ -429,7 +430,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "userPreference" | "organization" | "membership" | "role" | "permission" | "rolePermission" | "membershipRole" | "dashboard" | "dashboardVersion" | "dashboardShare" | "dataSource" | "dataSourceCredential" | "widgetDefinition" | "embedToken" | "auditLog" | "session"
+    modelProps: "user" | "userPreference" | "organization" | "membership" | "role" | "permission" | "rolePermission" | "membershipRole" | "dashboard" | "dashboardVersion" | "dashboardShare" | "dataSource" | "dataSourceCredential" | "widgetDefinition" | "embedToken" | "auditLog" | "idempotencyKey" | "session"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1617,6 +1618,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    IdempotencyKey: {
+      payload: Prisma.$IdempotencyKeyPayload<ExtArgs>
+      fields: Prisma.IdempotencyKeyFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.IdempotencyKeyFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.IdempotencyKeyFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload>
+        }
+        findFirst: {
+          args: Prisma.IdempotencyKeyFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.IdempotencyKeyFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload>
+        }
+        findMany: {
+          args: Prisma.IdempotencyKeyFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload>[]
+        }
+        create: {
+          args: Prisma.IdempotencyKeyCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload>
+        }
+        createMany: {
+          args: Prisma.IdempotencyKeyCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.IdempotencyKeyCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload>[]
+        }
+        delete: {
+          args: Prisma.IdempotencyKeyDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload>
+        }
+        update: {
+          args: Prisma.IdempotencyKeyUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload>
+        }
+        deleteMany: {
+          args: Prisma.IdempotencyKeyDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.IdempotencyKeyUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.IdempotencyKeyUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload>[]
+        }
+        upsert: {
+          args: Prisma.IdempotencyKeyUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$IdempotencyKeyPayload>
+        }
+        aggregate: {
+          args: Prisma.IdempotencyKeyAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateIdempotencyKey>
+        }
+        groupBy: {
+          args: Prisma.IdempotencyKeyGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.IdempotencyKeyGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.IdempotencyKeyCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.IdempotencyKeyCountAggregateOutputType> | number
+        }
+      }
+    }
     Session: {
       payload: Prisma.$SessionPayload<ExtArgs>
       fields: Prisma.SessionFieldRefs
@@ -1929,6 +2004,24 @@ export const AuditLogScalarFieldEnum = {
 } as const
 
 export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
+
+
+export const IdempotencyKeyScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  principalId: 'principalId',
+  key: 'key',
+  fingerprint: 'fingerprint',
+  method: 'method',
+  path: 'path',
+  status: 'status',
+  statusCode: 'statusCode',
+  responseBody: 'responseBody',
+  createdAt: 'createdAt',
+  expiresAt: 'expiresAt'
+} as const
+
+export type IdempotencyKeyScalarFieldEnum = (typeof IdempotencyKeyScalarFieldEnum)[keyof typeof IdempotencyKeyScalarFieldEnum]
 
 
 export const SessionScalarFieldEnum = {
@@ -2339,6 +2432,7 @@ export type GlobalOmitConfig = {
   widgetDefinition?: Prisma.WidgetDefinitionOmit
   embedToken?: Prisma.EmbedTokenOmit
   auditLog?: Prisma.AuditLogOmit
+  idempotencyKey?: Prisma.IdempotencyKeyOmit
   session?: Prisma.SessionOmit
 }
 

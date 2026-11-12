@@ -186,8 +186,8 @@ Working rules for M12 and later:
 32. `pnpm test:e2e` runs Playwright from the root against the dev servers with
     `NEXT_PUBLIC_NAMA_WS_URL` set. Next keeps inactive route segments mounted,
     so scope chrome locators with `:visible`; regenerate screenshot baselines
-    deliberately and keep `test-results/` out of commits. The suite is not wired
-    into CI yet (TD-036).
+    deliberately and keep `test-results/` out of commits. CI runs it in a
+    dedicated browser job.
 33. Widget plugins register through `defineWidget`/`createWidgetRegistry` from
     `@nama/dashboard-builder/plugins`; a plugin must not import `./editor`, and
     the plugins entry stays inside its 8 KiB `verify:consumer` budget.
@@ -200,5 +200,12 @@ Working rules for M12 and later:
     from packed tarballs by `pnpm verify:consumer` and must keep printing
     `PLUGIN_KIT_OK`. Do not add a fifth `@nama/*` package or a workspace
     dependency on it.
+36. Keep `Idempotency-Key` enforcement on create endpoints: reserve after
+    auth + CSRF, settle the stored response in `onSend`, release the reservation
+    on failure, and never persist embed-token responses (plaintext tokens).
+37. Route audit access through `modules/audit`: reads and exports require
+    `organization.audit.read` and the caller's own organization, exports are
+    audited, and pruning stays in the per-organization retention job
+    (`AUDIT_RETENTION_DAYS`).
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

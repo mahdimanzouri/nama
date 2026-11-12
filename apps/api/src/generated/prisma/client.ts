@@ -122,6 +122,11 @@ export type EmbedToken = Prisma.EmbedTokenModel
  */
 export type AuditLog = Prisma.AuditLogModel
 /**
+ * Model IdempotencyKey
+ * 
+ */
+export type IdempotencyKey = Prisma.IdempotencyKeyModel
+/**
  * Model Session
  * 
  */

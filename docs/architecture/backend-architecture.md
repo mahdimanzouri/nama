@@ -75,11 +75,12 @@ request
   → SET LOCAL app.organization_id / app.user_id
   → RBAC permission check (resource-level)
   → rate limit where configured (login, query execution)
+  → idempotency reservation where an `Idempotency-Key` is supplied
   → business validation (Zod, caps, ownership)
   → handler
   → audit event (for sensitive actions)
   → commit
-  → response envelope
+  → response envelope (+ stored response for idempotent replays)
 ```
 
 Error mapping:
@@ -140,11 +141,36 @@ All three steps succeed or none do. A `409` leaves data unchanged.
 
 ## Idempotency
 
-- Retryable `POST` endpoints accept `Idempotency-Key`.
-- The key is stored with the request hash and the response for a bounded window
-  (proposed 24 hours), scoped to the authenticated principal.
-- Replaying the same key with the same payload returns the stored response; a
-  different payload is rejected with `409`.
+- The create endpoints (`POST /v1/dashboards`, `POST /v1/data-sources`, member
+  invites and role creation) accept `Idempotency-Key` (1–128 characters).
+- A `idempotency_keys` row stores the method, route, a SHA-256 fingerprint of the
+  body and, once settled, the status code and response, for
+  `IDEMPOTENCY_TTL_HOURS` (default 24). It is unique per organization, principal
+  and key, and protected by row-level security like every tenant table.
+- The request reserves the key (`in-flight`) before the handler runs. A replay of
+  the same key and payload returns the stored response with
+  `idempotent-replayed: true` and performs no write; a different payload returns
+  `409 IDEMPOTENCY_MISMATCH`; a still-running reservation returns
+  `409 IDEMPOTENCY_IN_PROGRESS` with `retryAfterMs`.
+- A failed response (`4xx`/`5xx`) releases the reservation so the caller can retry
+  with the same key; the settlement runs from an `onSend` hook so it covers error
+  envelopes too.
+- `POST /v1/dashboards/{id}/embed-tokens` is excluded because its response holds a
+  plaintext token that must never be persisted for replay.
+- Dashboard writes keep `If-Match` for concurrency; idempotency only prevents
+  duplicated creates and is not a substitute for the revision check.
+
+## Audit trail
+
+- `modules/audit` owns the `audit_logs` table and its read side.
+- `GET /v1/organizations/{id}/audit-events` lists events newest first with
+  `action`, `resourceType`, `resourceId`, `actorId`, `from` and `to` filters and
+  standard pagination. `GET .../audit-events/export` streams the same filter as
+  CSV, capped at 10,000 entries with `x-audit-export-truncated`.
+- Both routes require `organization.audit.read` (owner and administrator by
+  default) and only accept the caller's own organization; anything else is `404`.
+- Exporting the trail is itself audited (`audit.export` with format/count
+  metadata). Audit metadata never contains credentials, tokens or query results.
 
 ## Realtime gateway
 
@@ -168,7 +194,9 @@ These are module services invoked by a scheduler or queue, not cron logic in
 route handlers:
 
 - Dashboard version pruning (last 50 per dashboard).
-- Audit-log retention pruning (default 365 days).
+- Audit-log retention pruning (default 365 days) and expired idempotency keys;
+  both run per organization inside a tenant transaction because row-level
+  security rejects an unscoped delete.
 - Session expiry cleanup.
 - Embed-token expiry cleanup.
 
@@ -183,8 +211,9 @@ Queue/cache infrastructure is introduced only when measurements justify it.
 - Required configuration includes database URL, session secret, credential-KEK,
   allowed origins, and rate-limit defaults.
 - M12 knobs: `REALTIME_MAX_CONNECTIONS` (default 500, shared by WebSocket and
-  SSE), `LOGIN_RATE_LIMIT` (default 30 requests per 5 minutes per IP + account)
-  and `QUERY_RATE_LIMIT` (default 300 requests per minute per user).
+  SSE), `LOGIN_RATE_LIMIT` (default 30 requests per 5 minutes per IP + account),
+  `QUERY_RATE_LIMIT` (default 300 requests per minute per user),
+  `AUDIT_RETENTION_DAYS` (default 365) and `IDEMPOTENCY_TTL_HOURS` (default 24).
 
 ## Observability
 

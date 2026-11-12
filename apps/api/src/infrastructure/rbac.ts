@@ -23,6 +23,7 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
   { name: "datasource.admin", description: "Use raw SQL and manage credentials" },
   { name: "organization.members.manage", description: "Invite and manage members" },
   { name: "organization.roles.manage", description: "Manage roles and permissions" },
+  { name: "organization.audit.read", description: "Read and export the audit trail" },
 ] as const;
 
 export const ALL_PERMISSIONS = PERMISSIONS.map((permission) => permission.name);

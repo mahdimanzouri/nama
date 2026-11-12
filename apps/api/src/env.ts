@@ -41,6 +41,10 @@ const envSchema = z.object({
   QUERY_RATE_LIMIT: z.coerce.number().int().min(1).max(100_000).default(300),
   /** When set, `/metrics` requires `Authorization: Bearer <token>`. */
   METRICS_TOKEN: z.string().min(16).optional(),
+  /** Audit events older than this are pruned by the daily retention job. */
+  AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
+  /** How long a stored `Idempotency-Key` response stays replayable. */
+  IDEMPOTENCY_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(24),
   DEMO_EDITOR_EMAIL: z.email().default("demo@nama.local"),
   DEMO_EDITOR_PASSWORD: z.string().min(8).default("nama-demo-123"),
   DEMO_VIEWER_EMAIL: z.email().default("viewer@nama.local"),

@@ -1,6 +1,6 @@
 # API Conventions
 
-**Status:** M12 hardening (2026-11-12). [`openapi.yaml`](openapi.yaml) describes
+**Status:** M12 hardening (2026-11-13). [`openapi.yaml`](openapi.yaml) describes
 the contract; operations marked `x-m0-status: implemented` are served by
 `apps/api` today and verified by `pnpm verify:openapi`.
 
@@ -12,7 +12,7 @@ the contract; operations marked `x-m0-status: implemented` are served by
 | `GET` | `/v1/auth/session` | Current user, organization, roles and permissions |
 | `POST` | `/v1/auth/logout` | CSRF-protected; revokes the session and clears cookies |
 | `GET` | `/v1/dashboards` | Tenant-scoped list, `page`/`pageSize` |
-| `POST` | `/v1/dashboards` | Creates an empty `schemaVersion: 1` draft at revision 1 |
+| `POST` | `/v1/dashboards` | Creates an empty `schemaVersion: 1` draft at revision 1; honours `Idempotency-Key` |
 | `GET` | `/v1/dashboards/{id}` | Published configuration and permissions only; never the draft |
 | `PATCH` | `/v1/dashboards/{id}` | `If-Match` required; updates name/metadata title without touching the draft |
 | `DELETE` | `/v1/dashboards/{id}` | `If-Match` required |
@@ -26,21 +26,23 @@ the contract; operations marked `x-m0-status: implemented` are served by
 | `POST` | `/v1/dashboards/{id}/embed-tokens` | Published dashboards only; returns the plaintext token once |
 | `DELETE` | `/v1/dashboards/{id}/embed-tokens/{tokenId}` | Revokes a token |
 | `GET` | `/v1/data-sources` | Metadata only; credentials never returned |
-| `POST` | `/v1/data-sources` | Encrypts credentials with AES-256-GCM |
+| `POST` | `/v1/data-sources` | Encrypts credentials with AES-256-GCM; honours `Idempotency-Key` |
 | `GET` | `/v1/data-sources/{id}` | Metadata only |
 | `PATCH` | `/v1/data-sources/{id}` | Metadata, credentials or status |
 | `DELETE` | `/v1/data-sources/{id}` | Deletes the source and its credential row |
 | `POST` | `/v1/data-sources/{id}/test` | Runs the connector test and audits `datasource.test`; unknown kinds return `501` |
 | `GET` | `/v1/data-sources/{id}/schema` | Discovered datasets and fields; connectors without discovery return `501` |
 | `GET` | `/v1/organizations/{id}/members` | Requires `organization.members.manage` |
-| `POST` | `/v1/organizations/{id}/members` | Invites a user with roles |
+| `POST` | `/v1/organizations/{id}/members` | Invites a user with roles; honours `Idempotency-Key` |
 | `PATCH` | `/v1/organizations/{id}/members/{memberId}` | Roles and status |
 | `DELETE` | `/v1/organizations/{id}/members/{memberId}` | Self-removal returns `409` |
 | `GET` | `/v1/organizations/{id}/roles` | System and custom roles |
-| `POST` | `/v1/organizations/{id}/roles` | Custom role; unknown permissions rejected |
+| `POST` | `/v1/organizations/{id}/roles` | Custom role; unknown permissions rejected; honours `Idempotency-Key` |
 | `PATCH` | `/v1/organizations/{id}/roles/{roleId}` | System roles are immutable (`404`) |
 | `DELETE` | `/v1/organizations/{id}/roles/{roleId}` | Assigned/system roles return `409` |
 | `GET` | `/v1/organizations/{id}/permissions` | Caller's effective permissions |
+| `GET` | `/v1/organizations/{id}/audit-events` | Requires `organization.audit.read`; filterable, paginated audit trail |
+| `GET` | `/v1/organizations/{id}/audit-events/export` | CSV export capped at 10,000 events; records `audit.export` |
 | `GET` | `/v1/me/preferences` | Locale, theme, timezone, default organization |
 | `PATCH` | `/v1/me/preferences` | Validated IANA timezone and membership |
 | `POST` | `/v1/queries/execute` | Connector execution; 15 s / 10,000 rows / 5 MiB / 4-concurrent limits, truncation flagged |
@@ -123,15 +125,38 @@ because it reads `docs/api/openapi.yaml` outside the package build graph.
 
 ## Idempotency
 
-- Retryable `POST` endpoints accept `Idempotency-Key` (≤ 128 characters).
-- **Not enforced yet.** The header is accepted and documented, but storage and
-  replay protection are deferred (tracked in
-  [technical-debt.md](../implementation/technical-debt.md)). Until then,
-  dashboard writes are protected by `If-Match` rather than idempotency keys.
-- The intended policy: the key is stored with a hash of the request and the
-  response for a bounded window (proposed 24 hours), scoped to the authenticated
-  principal; replaying the same key and payload returns the stored response and
-  reusing a key with a different payload returns `409`.
+- The create endpoints `POST /v1/dashboards`, `POST /v1/data-sources`,
+  `POST /v1/organizations/{id}/members` and `POST /v1/organizations/{id}/roles`
+  accept `Idempotency-Key` (1–128 characters).
+- When the header is present the key is **enforced**: the API stores a
+  fingerprint of the method, route and body together with the response for
+  `IDEMPOTENCY_TTL_HOURS` (default 24), scoped to the authenticated principal
+  and organization.
+- Repeating the same key with the same payload returns the stored response with
+  `idempotent-replayed: true` and performs no second write.
+- Reusing a key with a different payload returns `409 IDEMPOTENCY_MISMATCH`.
+  A key whose first request is still running returns `409
+  IDEMPOTENCY_IN_PROGRESS` with `retryAfterMs`.
+- Failed requests (`4xx`/`5xx`) release the reservation so a corrected retry may
+  reuse the same key.
+- `POST /v1/dashboards/{id}/embed-tokens` is intentionally excluded: its
+  response contains a plaintext token that must never be persisted for replay.
+- Dashboard writes remain protected by `If-Match`; an idempotency key does not
+  replace the revision check.
+
+## Audit trail
+
+- `GET /v1/organizations/{id}/audit-events` lists the tenant's audit trail,
+  newest first, with `page`/`pageSize` and optional `action`, `resourceType`,
+  `resourceId`, `actorId`, `from` and `to` (ISO-8601) filters.
+- `GET /v1/organizations/{id}/audit-events/export` returns
+  `text/csv; charset=utf-8` with a `content-disposition` filename. The export is
+  capped at 10,000 events and sets `x-audit-export-truncated: true` when the
+  filter matched more; the export itself is recorded as `audit.export`.
+- Both routes require `organization.audit.read` (owner and administrator by
+  default) and return `404` for any organization other than the caller's.
+- Events older than `AUDIT_RETENTION_DAYS` (default 365) are pruned by a daily
+  retention job; expired idempotency keys are pruned by the same job.
 
 ## Pagination
 
