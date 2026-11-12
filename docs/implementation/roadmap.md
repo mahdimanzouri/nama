@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-**Status:** Active — M0, M1, M2, M3, M3.5, M4, M5 and M6 complete (2026-11-12)
+**Status:** Active — M0, M1, M2, M3, M3.5, M4, M5, M6, M7 and M8 complete (2026-11-12)
 **Date:** 2026-11-12
 
 Milestones have review gates. Do not begin the next milestone until the current
@@ -21,7 +21,7 @@ engineer should expect roughly 1.8× the elapsed time.
 | M5 | Visualization system | 2.5 weeks | Multiple widget types from validated config | Complete |
 | M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI | Complete |
 | M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced | Complete |
-| M8 | Realtime infrastructure | 3 weeks | Shared connections; resume, gap, cleanup | Not started |
+| M8 | Realtime infrastructure | 3 weeks | Shared connections; resume, gap, cleanup | Complete |
 | M9 | Advanced dashboard capabilities | 3 weeks | Variables, filters, import/export, templates | Not started |
 | M10 | Internationalization and themes | 2 weeks | en/fa, RTL chrome, LTR canvas disclosed, themes | Not started |
 | M10.5 | Accessibility | 1.5 weeks | Automated checks and keyboard review pass | Not started |
@@ -288,15 +288,30 @@ and connect, cross-process concurrency limits, and realtime/SSE adapters
 
 ## M8 — Realtime infrastructure
 
+**Status:** Delivered (2026-11-12).
+
 **Tasks:** shared WebSocket manager; subscription registry; cleanup; SSE adapter;
 authentication and per-subscription authorization; reconnect with backoff;
 resume/snapshot/gap recovery; heartbeats; event validation and sequences; bounded
 replay buffers; bounded streaming buffer; server throttling; integration tests.
 
+**Delivered:** `apps/api/src/modules/realtime` (gateway, connection, authorizer,
+hub, replay buffer, options); `GET /v1/stream`; SDK
+`createWebSocketRealtimeAdapter`/`createSseRealtimeAdapter`; `useWidgetQuery`
+subscriptions; web wiring; 8 gateway integration tests and 8 client adapter
+tests.
+
 **Acceptance:** multiple widgets share connections without independent sockets;
 subscriptions clean up; reconnect and gap recovery work.
 
-**Blocked by:** ADR-011 deployment decision for WebSocket hosting and fan-out.
+**Verified by:** gateway tests (shared socket, replay, stale-resume gap, auth
+timeout, embed scoping, invalid token, SSE resume, heartbeat close), client tests
+(connection sharing, cleanup, reconnect/resume, duplicates and gaps, heartbeat,
+embed subprotocol, revocation) and the workspace checks recorded in
+[current-phase.md](current-phase.md).
+
+**Blocked by:** ADR-011 deployment decision for WebSocket hosting and fan-out —
+accepted as Option A.
 
 ## M9 — Advanced dashboard capabilities
 

@@ -179,7 +179,7 @@ function createCartesianWidget(variant: CartesianVariant) {
       area: variant.defaultArea,
     },
     defaultSize: variant.defaultSize,
-    capabilities: { filters: true },
+    capabilities: { filters: true, realtime: true },
     component: Component,
     settings: Settings,
   });

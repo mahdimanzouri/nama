@@ -15,7 +15,6 @@ import type {
   Persistence,
   TenantScope,
 } from "../../infrastructure/persistence/types.ts";
-import type { AuthContext } from "../../http/auth.ts";
 import { ConcurrencyGate, resolveLimits, type DataSourceLimits } from "./limits.ts";
 import type { PluginRegistry } from "./plugins/registry.ts";
 import { DEMO_DATA_SOURCE_ID } from "./plugins/static.ts";
@@ -57,6 +56,25 @@ export interface ExecuteOptions {
   requestId: string;
   signal?: AbortSignal;
   logger?: PluginLogger;
+}
+
+/**
+ * The identity a query runs as. Realtime embed sessions have no user session,
+ * so the caller is explicit rather than derived from an HTTP request.
+ */
+export interface QueryCaller {
+  organizationId: string;
+  /** Tenant scope key; for embeds this is the issuer's user id. */
+  userId: string;
+  actorType?: "user" | "embed";
+  actorId?: string;
+}
+
+export function callerFromAuth(auth: {
+  organization: { id: string };
+  user: { id: string };
+}): QueryCaller {
+  return { organizationId: auth.organization.id, userId: auth.user.id };
 }
 
 export interface DiscoveredSource {
@@ -159,20 +177,20 @@ export class QueryService {
     this.gate = concurrency;
   }
 
-  private scope(auth: AuthContext): TenantScope {
-    return { organizationId: auth.organization.id, userId: auth.user.id };
+  private scope(caller: QueryCaller): TenantScope {
+    return { organizationId: caller.organizationId, userId: caller.userId };
   }
 
   private async loadSource(
-    auth: AuthContext,
+    caller: QueryCaller,
     dataSourceId: string,
   ): Promise<DataSourceRecord> {
     if (dataSourceId === DEMO_DATA_SOURCE_ID) {
-      return demoRecord(auth.organization.id);
+      return demoRecord(caller.organizationId);
     }
 
-    const record = await this.persistence.withTenant(this.scope(auth), () =>
-      this.persistence.dataSources.find(auth.organization.id, dataSourceId),
+    const record = await this.persistence.withTenant(this.scope(caller), () =>
+      this.persistence.dataSources.find(caller.organizationId, dataSourceId),
     );
     if (!record) throw notFound("Data source not found");
     return record;
@@ -205,13 +223,13 @@ export class QueryService {
   }
 
   private async credentials(
-    auth: AuthContext,
+    caller: QueryCaller,
     record: DataSourceRecord,
   ): Promise<Record<string, unknown>> {
     if (record.id === DEMO_DATA_SOURCE_ID) return {};
 
-    const stored = await this.persistence.withTenant(this.scope(auth), () =>
-      this.persistence.dataSources.getCredential(auth.organization.id, record.id),
+    const stored = await this.persistence.withTenant(this.scope(caller), () =>
+      this.persistence.dataSources.getCredential(caller.organizationId, record.id),
     );
     if (!stored) return {};
 
@@ -233,7 +251,7 @@ export class QueryService {
   }
 
   private async buildContext(
-    auth: AuthContext,
+    caller: QueryCaller,
     record: DataSourceRecord,
     plugin: ServerDataSourcePlugin,
     options: { requestId: string; signal: AbortSignal; logger?: PluginLogger },
@@ -241,12 +259,12 @@ export class QueryService {
     const limits = resolveLimits(record.limits);
     let pending: Promise<Record<string, unknown>> | undefined;
     const context: PluginContext = {
-      organizationId: auth.organization.id,
+      organizationId: caller.organizationId,
       dataSourceId: record.id,
       requestId: options.requestId,
       config: this.pluginConfig(plugin, record),
       credentials: () => {
-        pending ??= this.credentials(auth, record);
+        pending ??= this.credentials(caller, record);
         return pending;
       },
       limits,
@@ -259,11 +277,11 @@ export class QueryService {
   }
 
   async execute(
-    auth: AuthContext,
+    caller: QueryCaller,
     request: QueryRequest,
     options: ExecuteOptions,
   ): Promise<QueryResult> {
-    const record = await this.loadSource(auth, request.dataSourceId);
+    const record = await this.loadSource(caller, request.dataSourceId);
     if (record.status === "disabled") {
       throw new HttpError(422, {
         code: "QUERY_INVALID",
@@ -274,7 +292,7 @@ export class QueryService {
     const plugin = this.pluginFor(record);
     const limits = resolveLimits(record.limits);
 
-    const key = `${auth.organization.id}:${record.id}`;
+    const key = `${caller.organizationId}:${record.id}`;
     const release = this.gate.tryAcquire(key, limits.maxConcurrent);
     if (!release) {
       throw new HttpError(429, {
@@ -298,7 +316,7 @@ export class QueryService {
     const startedAt = performance.now();
 
     try {
-      const { context } = await this.buildContext(auth, record, plugin, {
+      const { context } = await this.buildContext(caller, record, plugin, {
         requestId: options.requestId,
         signal: controller.signal,
         logger: options.logger,
@@ -357,14 +375,14 @@ export class QueryService {
   }
 
   async validate(
-    auth: AuthContext,
+    caller: QueryCaller,
     request: QueryRequest,
     options: Pick<ExecuteOptions, "requestId" | "logger">,
   ): Promise<ValidationResult> {
-    const record = await this.loadSource(auth, request.dataSourceId);
+    const record = await this.loadSource(caller, request.dataSourceId);
     const plugin = this.pluginFor(record);
     const controller = new AbortController();
-    const { context } = await this.buildContext(auth, record, plugin, {
+    const { context } = await this.buildContext(caller, record, plugin, {
       requestId: options.requestId,
       signal: controller.signal,
       logger: options.logger,
@@ -378,11 +396,11 @@ export class QueryService {
   }
 
   async discover(
-    auth: AuthContext,
+    caller: QueryCaller,
     dataSourceId: string,
     options: Pick<ExecuteOptions, "requestId" | "logger">,
   ): Promise<DiscoveredSource> {
-    const record = await this.loadSource(auth, dataSourceId);
+    const record = await this.loadSource(caller, dataSourceId);
     const plugin = this.pluginFor(record);
     if (!plugin.discover) {
       throw new HttpError(501, {
@@ -394,7 +412,7 @@ export class QueryService {
     const limits = resolveLimits(record.limits);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), limits.timeoutMs);
-    const { context } = await this.buildContext(auth, record, plugin, {
+    const { context } = await this.buildContext(caller, record, plugin, {
       requestId: options.requestId,
       signal: controller.signal,
       logger: options.logger,
@@ -419,16 +437,16 @@ export class QueryService {
   }
 
   async test(
-    auth: AuthContext,
+    caller: QueryCaller,
     dataSourceId: string,
     options: Pick<ExecuteOptions, "requestId" | "logger">,
   ): Promise<TestResult> {
-    const record = await this.loadSource(auth, dataSourceId);
+    const record = await this.loadSource(caller, dataSourceId);
     const plugin = this.pluginFor(record);
     const limits = resolveLimits(record.limits);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), limits.timeoutMs);
-    const { context } = await this.buildContext(auth, record, plugin, {
+    const { context } = await this.buildContext(caller, record, plugin, {
       requestId: options.requestId,
       signal: controller.signal,
       logger: options.logger,
@@ -437,11 +455,11 @@ export class QueryService {
     try {
       const result = await plugin.test(context);
       if (record.id !== DEMO_DATA_SOURCE_ID) {
-        await this.persistence.withTenant(this.scope(auth), () =>
+        await this.persistence.withTenant(this.scope(caller), () =>
           this.persistence.audit.record({
-            organizationId: auth.organization.id,
-            actorType: "user",
-            actorId: auth.user.id,
+            organizationId: caller.organizationId,
+            actorType: caller.actorType ?? "user",
+            actorId: caller.actorId ?? caller.userId,
             action: "datasource.test",
             resourceType: "data_source",
             resourceId: record.id,

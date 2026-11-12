@@ -31,6 +31,8 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+  /** How often a shared realtime channel re-executes its query. */
+  REALTIME_POLL_INTERVAL_MS: z.coerce.number().int().min(250).max(60_000).default(5_000),
   DEMO_EDITOR_EMAIL: z.email().default("demo@nama.local"),
   DEMO_EDITOR_PASSWORD: z.string().min(8).default("nama-demo-123"),
   DEMO_VIEWER_EMAIL: z.email().default("viewer@nama.local"),

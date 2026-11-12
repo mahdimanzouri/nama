@@ -126,7 +126,7 @@ export const gaugeWidget = defineWidget({
   configSchema: gaugeConfigSchema,
   defaultConfig: { min: 0, max: 200 },
   defaultSize: { w: 4, h: 5 },
-  capabilities: { filters: true },
+  capabilities: { filters: true, realtime: true },
   component: GaugeWidget,
   settings: GaugeSettings,
 });

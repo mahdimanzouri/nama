@@ -203,8 +203,12 @@ Common codes:
 
 ## Realtime
 
-REST does not stream dashboard data. Live updates use `/ws/v1` with the same
-session cookie or embed token. See
+REST does not stream dashboard data. Live updates use `/ws/v1` with the session
+cookie or the `nama.embed.<token>` subprotocol. `GET /v1/stream` is the SSE
+fallback: same frames, cookie or `Authorization: Bearer <embed-token>`, one
+stream per subscription and `Last-Event-ID` for resume. Both paths validate the
+same `subscribe` payload (including the structured `query`), authorize the data
+source per subscription and apply the query limits. See
 [realtime-protocol.md](../architecture/realtime-protocol.md).
 
 ## Typed client

@@ -125,7 +125,7 @@ export const pieWidget = defineWidget({
   configSchema: pieConfigSchema,
   defaultConfig: { donut: true },
   defaultSize: { w: 4, h: 5 },
-  capabilities: { filters: true },
+  capabilities: { filters: true, realtime: true },
   component: PieWidget,
   settings: PieSettings,
 });

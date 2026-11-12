@@ -62,17 +62,17 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M7 (data infrastructure) is complete and awaiting acceptance (2026-11-12); M8
-(realtime infrastructure) is the next milestone and has not started. ADR-011 is
-accepted as a self-hosted Docker topology. The workspace contains `apps/web`,
-`apps/api`, `examples/standalone-consumer` and exactly four packages:
+M8 (realtime infrastructure) is complete and awaiting acceptance (2026-11-12);
+M9 (dashboard features) is next and has not started. ADR-011 is accepted as a
+self-hosted Docker topology. The workspace contains `apps/web`, `apps/api`,
+`examples/standalone-consumer` and exactly four packages:
 `@nama/dashboard-types` (contracts), `@nama/dashboard-core` (host-agnostic
 runtime: plugin contract, registry, query keys, i18n, layout, theme, HTTP/static
-data adapters), `@nama/dashboard-builder` (React provider, viewer, editor,
-canvas, renderer, hooks, plus seven built-in widgets behind the `./widgets`
-subpath) and `@nama/api-client` (hand-written typed transport; codegen is
-deferred). Do not create the target-only packages listed in
-`docs/architecture/package-dependencies.md`.
+data adapters, WebSocket and SSE realtime adapters), `@nama/dashboard-builder`
+(React provider, viewer, editor, canvas, renderer, hooks, plus seven built-in
+widgets behind the `./widgets` subpath) and `@nama/api-client` (hand-written
+typed transport; codegen is deferred). Do not create the target-only packages
+listed in `docs/architecture/package-dependencies.md`.
 
 The API persists product data in PostgreSQL behind the `Persistence` facade when
 `APP_DATABASE_URL` is set (required in production) and falls back to the seeded
@@ -83,9 +83,11 @@ role. Demo accounts are seeded from `DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD`
 (`demo@nama.local` / `nama-demo-123`) and
 `DEMO_VIEWER_EMAIL`/`DEMO_VIEWER_PASSWORD` (`viewer@nama.local` /
 `nama-viewer-123`). The web app proxies `/api/*` to `NAMA_API_URL` (default
-`http://localhost:3001`).
+`http://localhost:3001`), which also carries the SSE stream endpoint; WebSocket
+upgrades are not proxied by Next.js rewrites, so live sockets use
+`NEXT_PUBLIC_NAMA_WS_URL` pointing at the API.
 
-Working rules for M8 and later:
+Working rules for M9 and later:
 
 1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
    `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`,
@@ -132,6 +134,23 @@ Working rules for M8 and later:
 18. SDK data adapters stay host-injected: no cookies, CSRF, base URLs or
     credentials inside `dashboard-core`; the host passes base URL, transport,
     headers and CSRF token.
-19. Do not implement work from a later milestone while closing the current one.
+19. Realtime adapters keep one connection per adapter instance: subscriptions
+    multiplex over a single socket, `release()` sends `unsubscribe` and only
+    closes the socket when the last subscription leaves, and the SSE adapter
+    stays the web default behind `/api`.
+20. Realtime authentication is authoritative at handshake and per subscription:
+    session cookies resolve over WebSocket, embed tokens use the
+    `nama.embed.<token>` subprotocol (Bearer on SSE), and every subscription
+    re-checks `datasource.execute` plus the published-dashboard scope. Never
+    widen an embed token.
+21. Preserve the realtime wire contract: `/ws/v1`, `subscribe` carries the full
+    `query`, sequences are allocated at send time, snapshots replace client
+    state, replay holds 60 s or 1,000 events (whichever is smaller), and the
+    server throttles `stream` at 250 ms. Do not add message types without
+    updating `docs/architecture/realtime-protocol.md` and the Zod schemas.
+22. `useWidgetQuery` subscribes only for plugins with `capabilities.realtime`;
+    keep its 250 ms flush and `REALTIME_DEFAULTS.maxBufferedSamples` buffer, and
+    write snapshots into the TanStack cache instead of component state.
+23. Do not implement work from a later milestone while closing the current one.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

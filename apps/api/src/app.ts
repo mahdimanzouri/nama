@@ -20,6 +20,13 @@ import { registerPreferenceRoutes } from "./modules/preferences/routes.ts";
 import { registerQueryRoutes } from "./modules/queries/routes.ts";
 import { createPluginRegistry } from "./modules/queries/plugins/registry.ts";
 import { QueryService } from "./modules/queries/service.ts";
+import { RealtimeAuthorizer } from "./modules/realtime/authorizer.ts";
+import { registerRealtimeGateway } from "./modules/realtime/gateway.ts";
+import { RealtimeHub } from "./modules/realtime/hub.ts";
+import {
+  REALTIME_OPTION_DEFAULTS,
+  type RealtimeOptions,
+} from "./modules/realtime/options.ts";
 
 export const API_VERSION = "0.1.0";
 
@@ -29,6 +36,8 @@ export interface BuildAppOptions {
   now?: () => Date;
   /** Injected transport so connector tests reach loopback fixtures. */
   fetch?: typeof globalThis.fetch;
+  /** Tightens realtime timings for tests. */
+  realtime?: Partial<RealtimeOptions>;
   /** Observes every registered route; used by the OpenAPI drift check. */
   onRoute?: (route: { method: string | string[]; url: string }) => void;
 }
@@ -89,6 +98,24 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
   registerOrganizationRoutes(app, { persistence, now, hooks });
   registerPreferenceRoutes(app, { persistence, hooks });
   registerQueryRoutes(app, { service: queryService, hooks });
+
+  const realtimeOptions: RealtimeOptions = {
+    ...REALTIME_OPTION_DEFAULTS,
+    pollIntervalMs: env.REALTIME_POLL_INTERVAL_MS,
+    ...options.realtime,
+  };
+  const realtimeHub = new RealtimeHub({
+    service: queryService,
+    options: realtimeOptions,
+    now: () => now().getTime(),
+    logger: app.log,
+  });
+  registerRealtimeGateway(app, {
+    authorizer: new RealtimeAuthorizer({ persistence, now }),
+    hub: realtimeHub,
+    options: realtimeOptions,
+    now: () => now().getTime(),
+  });
 
   app.get("/healthz", async () => ({
     status: "ok",

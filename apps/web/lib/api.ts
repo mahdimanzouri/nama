@@ -6,3 +6,4 @@ import { createAdapter } from "./data-adapter";
 export const apiClient = createApiClient({ baseUrl: "/api" });
 
 export const dataAdapter = createAdapter();
+export { realtimeAdapter } from "./realtime-adapter";

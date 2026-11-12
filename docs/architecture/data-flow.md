@@ -1,10 +1,11 @@
 # Data Flow
 
-**Status:** Implemented except realtime. The editor save/publish/restore and
-viewer read paths landed in M4, M5 added widget rendering, M6 moved the store to
-PostgreSQL with per-request tenant scoping and row-level security, and M7 added
-connector-backed query execution with limits and truncation. Version restore
-copies into the draft without publishing, and realtime remains a contract only.
+**Status:** Implemented. The editor save/publish/restore and viewer read paths
+landed in M4, M5 added widget rendering, M6 moved the store to PostgreSQL with
+per-request tenant scoping and row-level security, M7 added connector-backed
+query execution with limits and truncation, and M8 added `/ws/v1` and
+`GET /v1/stream` with sequences, replay, throttling and SDK connection managers.
+Version restore copies into the draft without publishing.
 
 ## Editor: load, edit, save, publish
 
@@ -118,9 +119,16 @@ External source
   → widget (at most 4 UI updates/sec)
 ```
 
-- Stream data does not enter TanStack Query.
+- Stream data does not enter TanStack Query as raw events; `snapshot-then-stream`
+  snapshots do replace the cached query result so charts and KPIs update live.
 - A snapshot replaces state after connect or gap.
-- Duplicate sequences are ignored; out-of-order sequences trigger gap recovery.
+- Duplicate sequences are ignored; out-of-order sequences trigger gap recovery
+  and a cache refetch.
+- The server re-executes the query on `REALTIME_POLL_INTERVAL_MS` (default 5 s)
+  because connectors are pull-based today; the hub shares one poller per
+  organization + request.
+- The web app uses SSE through `/api` unless `NEXT_PUBLIC_NAMA_WS_URL` points at
+  the WebSocket gateway.
 
 ## Migration points
 

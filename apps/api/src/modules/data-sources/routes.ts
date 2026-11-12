@@ -18,7 +18,7 @@ import type {
   TenantScope,
 } from "../../infrastructure/persistence/types.ts";
 import type { AuthContext, AuthHooks } from "../../http/auth.ts";
-import type { QueryService } from "../queries/service.ts";
+import { callerFromAuth, type QueryService } from "../queries/service.ts";
 
 const KIND = z.enum(["postgres", "mysql", "rest", "mqtt", "static"]);
 
@@ -318,7 +318,7 @@ export function registerDataSourceRoutes(
       const auth = requireAuth(request);
       const { id } = request.params as { id: string };
 
-      return service.test(auth, id, {
+      return service.test(callerFromAuth(auth), id, {
         requestId: request.id,
         logger: request.log,
       });
@@ -334,7 +334,7 @@ export function registerDataSourceRoutes(
       const auth = requireAuth(request);
       const { id } = request.params as { id: string };
 
-      return service.discover(auth, id, {
+      return service.discover(callerFromAuth(auth), id, {
         requestId: request.id,
         logger: request.log,
       });

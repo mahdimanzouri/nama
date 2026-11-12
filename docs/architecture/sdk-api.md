@@ -216,8 +216,10 @@ publishes it. `revision` defaults to `0` and is used as the `If-Match` value in
 The host supplies a `DataAdapter` (see
 [data-source-contracts.md](data-source-contracts.md)) and optionally a
 `RealtimeAdapter` (see [realtime-protocol.md](realtime-protocol.md)). The SDK
-ships HTTP, static/mock and SSE-oriented adapters for convenience but does not
-choose a backend.
+ships convenience implementations: `createHttpDataAdapter` and
+`createStaticDataAdapter` for snapshots, and `createWebSocketRealtimeAdapter`
+(one shared socket) and `createSseRealtimeAdapter` (one stream per subscription)
+for live data. It still does not choose a backend.
 
 Widgets receive data through the runtime; they never call `fetch` directly.
 A single shared realtime connection serves all subscriptions.

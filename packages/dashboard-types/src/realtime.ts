@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { PLATFORM_LIMITS, timestampSchema } from "./primitives";
+import { queryDefinitionSchema } from "./query";
 import type {
   QueryContext,
   QueryRequest,
@@ -111,11 +112,17 @@ export const realtimeSubscribeMessageSchema = z
     subscriptionId: subscriptionIdSchema,
     dataSourceId: z.string().min(1).max(200),
     queryId: z.string().min(1).max(200),
+    /** The definition is client-supplied; variables and filters are resolved server-side. */
+    query: queryDefinitionSchema,
     mode: streamModeSchema.default("snapshot-then-stream"),
     resumeFrom: sequenceSchema.optional(),
     parameters: z.record(z.string(), z.unknown()).optional(),
   })
-  .strict();
+  .strict()
+  .refine((message) => message.query.queryId === message.queryId, {
+    message: "query.queryId must match queryId",
+    path: ["query", "queryId"],
+  });
 
 export type RealtimeSubscribeMessage = z.infer<typeof realtimeSubscribeMessageSchema>;
 

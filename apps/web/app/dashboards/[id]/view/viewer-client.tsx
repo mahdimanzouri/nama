@@ -6,7 +6,7 @@ import { DashboardProvider, DashboardViewer } from "@nama/dashboard-builder";
 import type { DashboardView, SessionPayload } from "@nama/api-client";
 
 import { WorkspaceGate } from "@/components/workspace-gate";
-import { apiClient, dataAdapter } from "@/lib/api";
+import { apiClient, dataAdapter, realtimeAdapter } from "@/lib/api";
 import { errorMessage } from "@/lib/error-message";
 import { directionFor } from "@/lib/locale";
 import { WEB_WIDGETS } from "@/lib/widgets";
@@ -120,6 +120,7 @@ function ViewerLoader({
         theme={session.user.theme}
         timezone={session.user.timezone}
         dataAdapter={dataAdapter}
+        realtimeAdapter={realtimeAdapter}
         widgets={WEB_WIDGETS}
       >
         <DashboardViewer />

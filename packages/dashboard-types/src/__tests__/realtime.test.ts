@@ -64,6 +64,12 @@ describe("client messages", () => {
       subscriptionId: "sub-123",
       dataSourceId: "factory-01",
       queryId: "production-live",
+      query: {
+        queryId: "production-live",
+        dataset: "production",
+        fields: ["value"],
+        timeRange: { mode: "relative", last: "1h" },
+      },
     });
 
     expect(result.success).toBe(true);
@@ -78,6 +84,11 @@ describe("client messages", () => {
       subscriptionId: "sub-123",
       dataSourceId: "factory-01",
       queryId: "production-live",
+      query: {
+        queryId: "production-live",
+        dataset: "production",
+        fields: ["value"],
+      },
       mode: "stream",
       resumeFrom: 1024,
       parameters: { machineId: "machine-01" },
@@ -93,7 +104,37 @@ describe("client messages", () => {
       subscriptionId: "sub-123",
       dataSourceId: "factory-01",
       queryId: "production-live",
+      query: {
+        queryId: "production-live",
+        dataset: "production",
+        fields: ["value"],
+      },
       resumeFrom: -1,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("requires the query definition to carry the subscription query id", () => {
+    const result = realtimeClientMessageSchema.safeParse({
+      type: "subscribe",
+      requestId: "req-1",
+      subscriptionId: "sub-123",
+      dataSourceId: "factory-01",
+      queryId: "production-live",
+      query: { queryId: "another-query", fields: ["value"] },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a subscription without a query definition", () => {
+    const result = realtimeClientMessageSchema.safeParse({
+      type: "subscribe",
+      requestId: "req-1",
+      subscriptionId: "sub-123",
+      dataSourceId: "factory-01",
+      queryId: "production-live",
     });
 
     expect(result.success).toBe(false);

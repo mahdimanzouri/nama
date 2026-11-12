@@ -1,6 +1,6 @@
 # Nama Dashboard Platform — Architecture Package
 
-**Status:** M0 approved; M1, M2, M3, M3.5, M4, M5, M6 and M7 complete ([current phase](implementation/current-phase.md))
+**Status:** M0 approved; M1, M2, M3, M3.5, M4, M5, M6, M7 and M8 complete ([current phase](implementation/current-phase.md))
 **Date:** 2026-11-12
 **Scope:** Architecture and decisions, plus the implemented walking skeleton.
 **Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)
@@ -43,6 +43,11 @@ served operation `implemented`, and `pnpm verify:openapi` fails on drift.
 M7 added server-side connector plugins (`static`, `rest`) with SSRF range
 blocking, per-source limits and truncation, query execution/validation/schema
 endpoints, and SDK HTTP/static adapters used by the web app.
+M8 added the realtime gateway: `/ws/v1` with pre-upgrade authentication and
+per-subscription authorization, `GET /v1/stream` as an SSE fallback, a shared
+subscription hub with 60 s replay threads, sequence and gap handling, 250 ms
+stream throttling, and SDK WebSocket/SSE connection managers wired into the web
+app and built-in live widgets.
 Documents describing target-only packages list them as such.
 
 ## Status legend

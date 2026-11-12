@@ -29,6 +29,7 @@ describe("loadEnv", () => {
       LOG_LEVEL: "info",
       SESSION_TTL_HOURS: 12,
       ALLOW_PRIVATE_DATA_SOURCES: false,
+      REALTIME_POLL_INTERVAL_MS: 5_000,
       DEMO_EDITOR_EMAIL: "demo@nama.local",
       DEMO_EDITOR_PASSWORD: "nama-demo-123",
       DEMO_VIEWER_EMAIL: "viewer@nama.local",

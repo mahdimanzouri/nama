@@ -8,12 +8,17 @@ import {
   type WidgetDataState,
   type WidgetError,
 } from "@nama/dashboard-core";
-import type { DashboardWidget, DataEvent, Unsubscribe } from "@nama/dashboard-types";
+import {
+  REALTIME_DEFAULTS,
+  type DashboardWidget,
+  type DataEvent,
+  type Unsubscribe,
+} from "@nama/dashboard-types";
 
 import { useDashboardRuntime } from "./context";
 import { createQueryContext } from "./query-context";
 
-const STREAM_BUFFER_SIZE = 100;
+const STREAM_BUFFER_SIZE = REALTIME_DEFAULTS.maxBufferedSamples;
 /** At most four widget updates per second, whatever the source emits. */
 const STREAM_FLUSH_MS = 250;
 

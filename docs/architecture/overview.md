@@ -49,8 +49,8 @@ built-in widgets behind its `./widgets` entry, and the hand-written `api-client`
 Target-only packages are still absent. The API stores product data in PostgreSQL
 behind the `Persistence` facade (the in-memory adapter remains for tests), enforces
 tenant isolation through row-level security, executes queries through connector
-plugins with SSRF range blocking and tighten-only limits, and realtime remains a
-contract.
+plugins with SSRF range blocking and tighten-only limits, and streams live data
+through `/ws/v1` plus an SSE fallback using the same connector runtime.
 
 ## Target monorepo structure
 

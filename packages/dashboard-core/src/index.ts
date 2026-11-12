@@ -9,5 +9,6 @@ export * from "./i18n";
 export * from "./layout";
 export * from "./plugin";
 export * from "./query";
+export * from "./realtime";
 export * from "./registry";
 export * from "./theme";

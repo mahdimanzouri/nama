@@ -91,7 +91,7 @@ export const kpiWidget = defineWidget({
   configSchema: kpiConfigSchema,
   defaultConfig: { label: "Metric" },
   defaultSize: { w: 3, h: 5 },
-  capabilities: { filters: true },
+  capabilities: { filters: true, realtime: true },
   component: KpiWidget,
   settings: KpiSettings,
 });

@@ -7,8 +7,8 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M7 (data infrastructure) is complete and awaiting acceptance
-(2026-11-12).** M8 (realtime infrastructure) is next.
+**Milestone M8 (realtime infrastructure) is complete and awaiting acceptance
+(2026-11-12).** M9 (dashboard features) is next.
 
 The workspace contains:
 
@@ -17,11 +17,13 @@ apps/web                  Next.js 16 application: login, dashboard list, editor,
                           published viewer
 apps/api                  Fastify 5 service: PostgreSQL persistence, auth, RBAC,
                           dashboards, shares, embed tokens, data sources,
-                          queries, health endpoint
+                          queries, realtime gateway (WebSocket + SSE), health
+                          endpoint
 packages/dashboard-types  public contracts: constants plus Zod schemas (M2)
 packages/dashboard-core   host-agnostic runtime: plugin contract, registry,
                           query keys, i18n, layout, theme, HTTP/static data
-                          adapters (M3, adapters in M7)
+                          adapters (M3, adapters in M7), WebSocket/SSE realtime
+                          adapters (M8)
 packages/dashboard-builder React provider, viewer, editor, grid canvas, hooks,
                           stylesheet and built-in widgets behind `./widgets`
                           (M3, editor in M4, widgets in M5)
@@ -43,8 +45,13 @@ administration, sharing, scoped embed tokens, encrypted data-source credentials
 and audit logging. M7 adds server-side connector plugins (`static`, `rest`) with
 SSRF range blocking, tighten-only limits (15 s, 10,000 rows, 5 MiB, 4 concurrent)
 and truncation reporting, plus query validate/schema/test endpoints and SDK HTTP
-and static adapters used by the web app. An in-memory persistence adapter remains
-for tests; realtime lands in M8 — see the
+and static adapters used by the web app. M8 adds realtime: a `/ws/v1` WebSocket
+gateway and an SSE fallback with pre-upgrade authentication, per-subscription
+authorization, one shared connection per adapter, snapshot-then-stream delivery,
+sequences with gap detection and 60-second replay, bounded buffers, heartbeats
+and reconnect with backoff. The web app defaults to SSE behind the `/api` proxy
+and switches to WebSocket when `NEXT_PUBLIC_NAMA_WS_URL` is set. An in-memory
+persistence adapter remains for tests — see the
 [roadmap](docs/implementation/roadmap.md).
 
 ## Architecture documentation
@@ -80,9 +87,13 @@ pnpm clean
 ```
 
 The API reads `HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL`, `APP_DATABASE_URL`,
-`CREDENTIAL_ENCRYPTION_KEY` and the demo-account variables; see
-`apps/api/.env.example`. `GET /healthz` returns the service status. The web app
-proxies `/api/*` to `NAMA_API_URL` (default `http://localhost:3001`).
+`CREDENTIAL_ENCRYPTION_KEY`, `REALTIME_POLL_INTERVAL_MS` and the demo-account
+variables; see `apps/api/.env.example`. `GET /healthz` returns the service
+status. The web app proxies `/api/*` to `NAMA_API_URL` (default
+`http://localhost:3001`), which also carries the SSE fallback at
+`/api/v1/stream`. Next.js rewrites cannot upgrade WebSocket connections, so live
+sockets need `NEXT_PUBLIC_NAMA_WS_URL` (for example `ws://localhost:3001/ws/v1`)
+pointing directly at the API.
 
 ### PostgreSQL
 

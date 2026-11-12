@@ -35,6 +35,7 @@ tags:
   - name: Data sources
   - name: Queries
   - name: Widgets
+  - name: Realtime
   - name: Organizations
   - name: Roles
   - name: Preferences
@@ -684,6 +685,64 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/InternalError' }
 
+  /v1/stream:
+    get:
+      tags: [Realtime]
+      operationId: streamEvents
+      summary: Server-Sent Events fallback for the realtime protocol
+      description: |
+        One stream per subscription, used where the host cannot proxy WebSocket
+        upgrades. The first frame is `subscribed`, followed by `snapshot` (or
+        replayed `data`) frames. Each frame carries its per-subscription
+        `sequence` in the SSE `id` field; send `Last-Event-ID` to resume after a
+        dropped connection. WebSocket clients use `/ws/v1` with the same
+        messages (see `docs/architecture/realtime-protocol.md`). The endpoint
+        re-authorizes the data source on every connection and resolves
+        variables and filters server-side.
+      x-m0-status: implemented
+      security:
+        - sessionCookie: []
+        - embedBearer: []
+      parameters:
+        - name: dataSourceId
+          in: query
+          required: true
+          schema: { type: string, maxLength: 200 }
+        - name: queryId
+          in: query
+          required: true
+          schema: { type: string, maxLength: 200 }
+        - name: query
+          in: query
+          required: true
+          description: JSON-encoded query definition; must carry the same `queryId`.
+          schema: { type: string, maxLength: 20000 }
+        - name: mode
+          in: query
+          schema:
+            $ref: '#/components/schemas/StreamMode'
+        - name: resumeFrom
+          in: query
+          description: Last applied sequence; overridden by `Last-Event-ID`.
+          schema: { type: integer, minimum: 0 }
+        - name: subscriptionId
+          in: query
+          description: Client subscription id; generated when omitted.
+          schema: { type: string, maxLength: 120 }
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Event stream (`event` is one of `subscribed`, `snapshot`, `data`, `gap`, `error`)
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
   /v1/widgets:
     get:
       tags: [Widgets]
@@ -1093,6 +1152,13 @@ components:
               items: { $ref: '#/components/schemas/ValidationIssue' }
             currentRevision: { type: integer }
             retryAfterMs: { type: integer }
+    StreamMode:
+      type: string
+      enum: [snapshot-then-stream, stream]
+      default: snapshot-then-stream
+      description: |
+        `snapshot-then-stream` emits an authoritative snapshot per server poll;
+        `stream` emits throttled `data` events (250 ms) after the first snapshot.
     Pagination:
       type: object
       required: [page, pageSize, total]

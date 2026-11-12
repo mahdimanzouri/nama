@@ -3,7 +3,7 @@ import { issuesFromZod, queryRequestSchema } from "@nama/dashboard-types";
 
 import { HttpError } from "../../infrastructure/errors.ts";
 import type { AuthContext, AuthHooks } from "../../http/auth.ts";
-import type { QueryService } from "./service.ts";
+import { callerFromAuth, type QueryService } from "./service.ts";
 
 export interface QueryRouteDeps {
   service: QueryService;
@@ -51,7 +51,7 @@ export function registerQueryRoutes(
       request.raw.once("aborted", onAborted);
 
       try {
-        return await service.execute(auth, parsed.data, {
+        return await service.execute(callerFromAuth(auth), parsed.data, {
           requestId: request.id,
           signal: controller.signal,
           logger: request.log,
@@ -84,7 +84,7 @@ export function registerQueryRoutes(
         });
       }
 
-      return service.validate(auth, parsed.data, {
+      return service.validate(callerFromAuth(auth), parsed.data, {
         requestId: request.id,
         logger: request.log,
       });

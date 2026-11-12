@@ -1,6 +1,6 @@
 # Technical Debt
 
-**Status:** Updated at M7 (2026-11-12)
+**Status:** Updated at M8 (2026-11-12)
 
 Debt is recorded honestly with impact, owner and target milestone. Items are
 removed only when the fix is merged and verified; closed items are listed at the
@@ -27,11 +27,11 @@ end so IDs stay stable.
 | TD-025 | `apps/web` runs with `noUnusedLocals: false` | Next 16 generates `.next/dev/types/validator.ts` with unused declarations; only ESLint checks our app sources for unused code | Tooling | When Next stops emitting that file, or routes are added and verified |
 | TD-027 | Dashboard `schemaVersion` migration steps must be registered by callers; there is no on-disk discovery or version table (database migrations use Prisma and are unaffected) | Import/read paths must wire config migrations explicitly; forgetting one fails closed with `missing_migration` | SDK | M9, with import/export |
 | TD-028 | Widget plugins must be function components; class components are rejected by the erased registry type | A host with class-based widgets needs a wrapper or a contract change | SDK | Revisit if a consumer needs classes |
-| TD-030 | Realtime subscription lifecycle and stream buffering have no client-side test | No jsdom/client renderer in the workspace yet; only SSR is exercised | QA | M8, with the gateway |
+| TD-030 | Client adapter lifecycle is covered, but the `useWidgetQuery` buffer/flush path has no React test | The SDK connection manager is tested; widget-level subscription behavior still relies on review | QA | M12 |
 | TD-032 | `verify:consumer` installs with `--offline` and needs React, TanStack Query and zod in the local pnpm store | A clean CI runner must prime the store first (lockfile install) | Tooling | M12 CI hardening |
 | TD-033 | Changing the `widgets` array identity rebuilds the registry; dynamic register/unregister after mount is unsupported | Hosts must pass a stable array; live plugin registration waits for M11 | SDK | M11 |
 | TD-035 | The API has no request rate limiting or connection-pool sizing; RLS and audit logging now exist | A burst can exhaust the pool or the database; login has no throttling | Backend/Security | M12 |
-| TD-036 | No browser end-to-end test in CI; M4 was verified with a scratch headless Playwright script | Regressions in the editor/viewer UI are caught manually, not on every change | QA | M8, with Playwright |
+| TD-036 | No browser end-to-end test in CI; M4 and M8 were verified with suites and manual checks | Regressions in the editor/viewer UI and realtime wiring are caught manually, not on every change | QA | M12 |
 | TD-038 | Editor and viewer use different layout engines: React Grid Layout for editing, CSS grid for viewing | Widgets can differ by a pixel or two between modes; no parity test exists | Frontend | M9 |
 | TD-039 | The grid and resize rules from React Grid Layout are reproduced in the SDK stylesheet instead of importing the package CSS | RGL upgrades can silently break drag/resize styling | SDK | Every RGL upgrade |
 | TD-040 | Every built-in chart renders a single series; there is no groupBy, multi-series, stacked or combo chart support | Users cannot compare categories on one chart; the demo dataset has no grouping | Product/Frontend | M9, with variables and filters |
@@ -49,7 +49,11 @@ end so IDs stay stable.
 | TD-048 | RLS covers tenant tables only; global tables (`users`, `permissions`, `sessions`) rely on application scoping | A repository bug on a global table is not caught by the database | Backend/Security | M12 security review |
 | TD-049 | Audit rows are write-only; there is no read/export endpoint or retention policy | Operators cannot query the audit trail yet | Backend | M12 |
 | TD-050 | The Postgres integration suite skips unless `NAMA_TEST_DATABASE_URL` is set | Isolation regressions are caught in CI but not by a plain local `pnpm test` | QA | M12 CI hardening |
-| TD-051 | Only a development Compose file exists; no production Dockerfile or deployment runbook | ADR-011 Option A is decided but not yet operationalised | Platform | M12 |
+| TD-057 | Realtime re-executes each subscribed query on a timer (`REALTIME_POLL_INTERVAL_MS`, default 5 s); connectors have no push, webhook or CDC path | Live data lags by up to one poll interval and each subscription costs a query per tick | Backend | When a connector gains push support |
+| TD-058 | Built-in widgets render `snapshot-then-stream` snapshots; none consume `data.stream.latest` | Raw `stream` mode is only useful to custom widgets, and the 500-sample client buffer is currently write-only for built-ins | SDK | M9 or when a high-frequency widget is requested |
+| TD-059 | Realtime channels, replay threads and connection limits live in one API process; fan-out to other replicas needs Redis or sticky routing | A second replica would not share subscriptions, exceed per-process limits, and lose the 60 s resume window on failover | Backend | When a second instance exists |
+| TD-060 | SSE opens one HTTP stream per subscription and the web app uses SSE by default behind the Next proxy | Many live widgets exhaust browser per-origin HTTP/1.1 connections; WebSocket requires exposing the API origin via `NEXT_PUBLIC_NAMA_WS_URL` | Frontend/Platform | Revisit with deployment or HTTP/2 |
+| TD-061 | Per-connection limits exist (50 subscriptions, 120 messages per 10 s), but there is no global connection cap or socket backpressure signal | A client fleet can exhaust file descriptors; slow sockets are only bounded by the replay buffer | Backend | M12 hardening |
 
 ## Closed
 

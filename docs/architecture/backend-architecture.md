@@ -147,10 +147,18 @@ All three steps succeed or none do. A `409` leaves data unchanged.
 
 ## Realtime gateway
 
-- Mounted in the same process in v1; behind a `RealtimeGateway` interface.
-- Authenticates connections and each subscription (ADR-004).
-- Owns subscription registry, sequence assignment, replay buffers and throttling.
-- Authorizes through the `dashboards` and `data-sources` services.
+- Mounted in the same process in v1 (ADR-011 Option A).
+- `GET /ws/v1` upgrades are handled on the raw HTTP server so an invalid session
+  or token is rejected with HTTP 401 before a socket exists; `GET /v1/stream`
+  serves the SSE fallback through normal Fastify routing.
+- Authenticates connections and each subscription (ADR-004, ADR-009). Embed
+  sources are accepted only when a published dashboard inside the token scope
+  references them, and issuer permissions are rechecked on every heartbeat.
+- Owns the subscription registry, sequence assignment, replay buffers and
+  throttling. Channels keyed by organization + query request share one poller;
+  resume threads survive disconnects for the 60 s replay window.
+- Reuses `QueryService`, so connector plugins, limits, credential decryption and
+  cancellation behave exactly as on the REST path.
 - Cross-instance fan-out (Redis) is added only when a second instance exists.
 
 ## Eventual jobs
