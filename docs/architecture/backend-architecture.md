@@ -1,7 +1,8 @@
 # Backend Architecture
 
-**Status:** Proposed (M0). Topology-neutral pending
-[ADR-011](decisions/ADR-011-deployment-topology.md).
+**Status:** Accepted (M0). Implements
+[ADR-011](decisions/ADR-011-deployment-topology.md): a self-hosted Docker
+deployment with an in-process realtime gateway behind an interface.
 
 ## Strategy
 

@@ -9,7 +9,11 @@ describe("GET /healthz", () => {
     const response = await app.inject({ method: "GET", url: "/healthz" });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: "ok", version: API_VERSION });
+    expect(response.json()).toEqual({
+      status: "ok",
+      version: API_VERSION,
+      persistence: "memory",
+    });
 
     await app.close();
   });

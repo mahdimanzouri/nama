@@ -1,7 +1,9 @@
 # Security
 
-**Status:** Proposed (M0). Security requirements are implemented from M6 and are
-reviewed again before production.
+**Status:** Implemented in part (M6): authentication, RBAC, tenant isolation and
+credential encryption are live; rate limiting, audit read access and the
+production review remain open (see technical debt). Reviewed again before
+production.
 
 ## Trust boundaries
 

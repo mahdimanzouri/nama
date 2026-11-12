@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { createId, type PlatformId } from "@nama/dashboard-types";
 
-import type { SessionRecord, Store } from "./store.ts";
+import type { Persistence, SessionRecord } from "./persistence/types.ts";
 
 export const SESSION_COOKIE = "nama_session";
 export const CSRF_COOKIE = "nama_csrf";
@@ -28,13 +28,13 @@ export interface IssuedSession {
   session: SessionRecord;
 }
 
-export function issueSession(
-  store: Store,
+export async function issueSession(
+  persistence: Persistence,
   userId: PlatformId,
   organizationId: PlatformId,
   ttlMs: number,
   now: Date,
-): IssuedSession {
+): Promise<IssuedSession> {
   const token = createRandomToken();
   const session: SessionRecord = {
     id: createId(),
@@ -46,7 +46,7 @@ export function issueSession(
     expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
   };
 
-  store.sessions.set(session.tokenHash, session);
+  await persistence.sessions.create(session);
   return { token, session };
 }
 

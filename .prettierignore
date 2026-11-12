@@ -5,5 +5,6 @@ pnpm-lock.yaml
 **/coverage/
 .turbo/
 *.tsbuildinfo
+apps/api/src/generated/
 docs/
 dashboard-platform-full-planning.md

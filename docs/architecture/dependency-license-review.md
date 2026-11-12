@@ -1,6 +1,6 @@
 # Dependency License and Compatibility Review
 
-**Status:** Verified through M5 (2026-11-12). Versions were checked against the
+**Status:** Verified through M6 (2026-11-12). Versions were checked against the
 npm registry on **2026-11-12**; the installed inventory below is the source of
 truth for what ships.
 
@@ -38,7 +38,8 @@ truth for what ships.
 | `fastify` | 5.12.8 | MIT | API framework | Requires Node ≥ 20; repo runs Node 24 |
 | `@fastify/cookie` | 11.1.5 | MIT | Session/CSRF cookies | Session and CSRF cookie parsing and signing |
 | `@node-rs/argon2` | 2.2.2 | MIT | Password hashing | Prebuilt native binding; used by `apps/api` only |
-| `prisma` | 8.0.0-rc.33 | Apache-2.0 | ORM | **Release candidate**; pin latest stable at M1 and record the choice |
+| `prisma` / `@prisma/client` / `@prisma/adapter-pg` | 7.10.1 | Apache-2.0 | ORM and PostgreSQL driver adapter | Stable line pinned at M6; generated client committed under `apps/api/src/generated` |
+| `pg` | 8.16.3 | MIT | PostgreSQL driver | Used through `@prisma/adapter-pg` in `apps/api` only |
 | `vitest` | 5.1.0 | MIT | Unit/integration tests | |
 | `@playwright/test` | 1.65.0 | Apache-2.0 | E2E | |
 
@@ -75,7 +76,9 @@ M3.5 added `@fastify/cookie`, `@node-rs/argon2`, `zustand` and `vitest` — all
 MIT; the lockfile was re-verified with `pnpm licenses list` on 2026-11-12. M4
 moved `zustand` into `@nama/dashboard-builder` and added `react-grid-layout`
 2.3.0 (MIT), which brings `react-resizable` and `react-draggable` (both MIT). No
-new license categories were introduced.
+new license categories were introduced. M6 added Prisma 7.10.1 and
+`@prisma/adapter-pg` (Apache-2.0), `pg` 8.16.3 (MIT), `yaml` 2.9.1 (ISC) and
+`tsx` (MIT, dev-only); no copyleft reaches the shipped SDK surface.
 
 ## Not yet verified (verify at M1)
 

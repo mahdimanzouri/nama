@@ -8,10 +8,10 @@ import {
   login,
   mutationHeaders,
   readHeaders,
+  createTestPersistence,
   testEnv,
   type LoginResult,
 } from "./helpers.ts";
-import { createSeededStore } from "../infrastructure/store.ts";
 
 async function createDashboard(app: FastifyInstance, session: LoginResult, name: string) {
   const response = await app.inject({
@@ -262,12 +262,12 @@ describe("dashboard lifecycle", () => {
   });
 
   it("returns 404 for a dashboard owned by another organization", async () => {
-    const store = createSeededStore(testEnv());
-    const tenantApp = await createApp({ store });
+    const persistence = createTestPersistence(testEnv());
+    const tenantApp = await createApp({ persistence });
     const tenantEditor = await login(tenantApp);
     const created = await createDashboard(tenantApp, tenantEditor, "Tenant scoped");
 
-    const tenant = addSecondTenant(store);
+    const tenant = await addSecondTenant(persistence);
 
     const response = await tenantApp.inject({
       method: "GET",

@@ -1,9 +1,10 @@
 # Data Flow
 
-**Status:** Proposed (M0); the editor save/publish/restore and viewer read paths
-are implemented through M4, and M5 added the widget rendering path. The API store
-is still in memory rather than PostgreSQL, version restore copies into the draft
-without publishing, and realtime remains a contract only.
+**Status:** Implemented except realtime. The editor save/publish/restore and
+viewer read paths landed in M4, M5 added widget rendering, and M6 moved the store
+to PostgreSQL with per-request tenant scoping and row-level security. Version
+restore copies into the draft without publishing, and realtime remains a contract
+only.
 
 ## Editor: load, edit, save, publish
 
@@ -37,10 +38,11 @@ sequenceDiagram
 
 Rules:
 
-- Local edits live in Zustand inside `dashboard-core`; they are not server state.
+- Local edits live in Zustand inside `dashboard-builder`; they are not server state.
 - Every save carries the last known `revision`. The server rejects stale writes;
   the editor surfaces a conflict workflow and never silently overwrites.
-- Publishing clears in-memory history and creates an immutable version.
+- Publishing copies the draft into the published configuration, increments the
+  revision, records an immutable version and prunes history to 50, atomically.
 - Saving a draft never changes what viewers see.
 
 ## Conflict workflow

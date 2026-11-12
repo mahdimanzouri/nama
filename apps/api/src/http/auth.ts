@@ -6,15 +6,13 @@ import {
   hashSessionToken,
   tokensMatch,
 } from "../infrastructure/sessions.ts";
-import {
-  findMembership,
-  permissionsFor,
-  type MembershipRecord,
-  type OrganizationRecord,
-  type SessionRecord,
-  type Store,
-  type UserRecord,
-} from "../infrastructure/store.ts";
+import type {
+  MembershipRecord,
+  OrganizationRecord,
+  Persistence,
+  SessionRecord,
+  UserRecord,
+} from "../infrastructure/persistence/types.ts";
 import { forbidden, unauthorized } from "../infrastructure/errors.ts";
 
 export interface AuthContext {
@@ -22,6 +20,7 @@ export interface AuthContext {
   user: UserRecord;
   membership: MembershipRecord;
   organization: OrganizationRecord;
+  roleNames: string[];
   permissions: readonly string[];
 }
 
@@ -32,7 +31,7 @@ declare module "fastify" {
 }
 
 export interface AuthDeps {
-  store: Store;
+  persistence: Persistence;
   now: () => Date;
 }
 
@@ -42,35 +41,39 @@ export interface AuthHooks {
   requirePermission(permission: string): (request: FastifyRequest) => Promise<void>;
 }
 
-export function createAuthHooks({ store, now }: AuthDeps): AuthHooks {
+export function createAuthHooks({ persistence, now }: AuthDeps): AuthHooks {
   const authenticate = async (request: FastifyRequest): Promise<void> => {
     const token = request.cookies?.[SESSION_COOKIE];
     if (!token) throw unauthorized();
 
     const tokenHash = hashSessionToken(token);
-    const session = store.sessions.get(tokenHash);
+    const session = await persistence.sessions.findByTokenHash(tokenHash);
     if (!session) throw unauthorized();
 
     if (Date.parse(session.expiresAt) <= now().getTime()) {
-      store.sessions.delete(tokenHash);
+      await persistence.sessions.deleteByTokenHash(tokenHash);
       throw unauthorized("Session expired");
     }
 
-    const user = store.users.get(session.userId);
+    const user = await persistence.users.findById(session.userId);
     if (!user || user.status !== "active") throw unauthorized();
 
-    const membership = findMembership(store, user.id, session.organizationId);
+    const membership = await persistence.memberships.findActive(
+      user.id,
+      session.organizationId,
+    );
     if (!membership) throw forbidden("Membership is not active");
 
-    const organization = store.organizations.get(session.organizationId);
+    const organization = await persistence.organizations.findById(session.organizationId);
     if (!organization) throw forbidden("Organization is not available");
 
     request.auth = {
       session,
       user,
-      membership,
+      membership: membership.membership,
       organization,
-      permissions: permissionsFor(membership.role),
+      roleNames: membership.roleNames,
+      permissions: membership.permissions,
     };
   };
 

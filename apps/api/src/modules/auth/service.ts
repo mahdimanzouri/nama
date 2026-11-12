@@ -1,9 +1,8 @@
 import type {
-  MembershipRecord,
   OrganizationRecord,
   SessionRecord,
   UserRecord,
-} from "../../infrastructure/store.ts";
+} from "../../infrastructure/persistence/types.ts";
 
 export interface SessionUser {
   id: string;
@@ -24,6 +23,7 @@ export interface SessionPayload {
   user: SessionUser;
   organization: SessionOrganization;
   role: string;
+  roleNames: string[];
   permissions: string[];
   csrfToken: string;
   expiresAt: string;
@@ -32,27 +32,38 @@ export interface SessionPayload {
 export function toSessionPayload(input: {
   user: UserRecord;
   organization: OrganizationRecord;
-  membership: MembershipRecord;
+  roleNames: readonly string[];
   session: SessionRecord;
   permissions: readonly string[];
+  preferences?: {
+    locale: "en" | "fa";
+    theme: "light" | "dark" | "system";
+    timezone: string;
+  } | null;
 }): SessionPayload {
-  const { user, organization, membership, session, permissions } = input;
+  const { user, organization, roleNames, session, permissions } = input;
+  const preferences = input.preferences ?? {
+    locale: "en",
+    theme: "system" as const,
+    timezone: "UTC",
+  };
 
   return {
     user: {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
-      locale: user.locale,
-      theme: user.theme,
-      timezone: user.timezone,
+      locale: preferences.locale,
+      theme: preferences.theme,
+      timezone: preferences.timezone,
     },
     organization: {
       id: organization.id,
       name: organization.name,
       slug: organization.slug,
     },
-    role: membership.role,
+    role: roleNames[0] ?? "viewer",
+    roleNames: [...roleNames],
     permissions: [...permissions],
     csrfToken: session.csrfToken,
     expiresAt: session.expiresAt,

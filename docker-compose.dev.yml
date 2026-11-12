@@ -1,0 +1,25 @@
+# Local development database for the Nama API.
+#
+# The owner role runs migrations; the API connects as `nama_app`, which is a
+# non-superuser without BYPASSRLS so tenant policies are enforced (ADR-008).
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: nama-postgres
+    environment:
+      POSTGRES_USER: nama
+      POSTGRES_PASSWORD: nama-owner-dev
+      POSTGRES_DB: nama
+    ports:
+      - "5433:5432"
+    volumes:
+      - nama-postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nama -d nama"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  nama-postgres-data:

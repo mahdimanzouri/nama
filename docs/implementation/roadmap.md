@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-**Status:** Active — M0, M1, M2, M3, M3.5, M4 and M5 complete (2026-11-12)
+**Status:** Active — M0, M1, M2, M3, M3.5, M4, M5 and M6 complete (2026-11-12)
 **Date:** 2026-11-12
 
 Milestones have review gates. Do not begin the next milestone until the current
@@ -19,7 +19,7 @@ engineer should expect roughly 1.8× the elapsed time.
 | M3.5 | Walking skeleton (monitoring) | 2 weeks | Login → KPI + line → save/publish/view in CI | Complete |
 | M4 | Visual editor | 3 weeks | Edit, move/resize, draft/publish/restore, 409 flow | Complete |
 | M5 | Visualization system | 2.5 weeks | Multiple widget types from validated config | Complete |
-| M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI | Not started |
+| M6 | Backend and persistence | 3 weeks | CRUD, publish, versions, shares, embed, RBAC, OpenAPI | Complete |
 | M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced | Not started |
 | M8 | Realtime infrastructure | 3 weeks | Shared connections; resume, gap, cleanup | Not started |
 | M9 | Advanced dashboard capabilities | 3 weeks | Variables, filters, import/export, templates | Not started |
@@ -193,7 +193,7 @@ errors or warnings. `pnpm lint`, `format:check`, `typecheck`, `test`, `build`,
 budgets for both the builder (12.5 KiB gzipped) and widgets (6.9 KiB gzipped)
 entries. Browser automation in CI remains deferred (technical debt).
 
-## M6 — Backend and persistence
+## M6 — Backend and persistence (complete 2026-11-12)
 
 **Tasks:** authentication (ADR-007); organizations, memberships, roles and
 permissions; dashboard CRUD; draft save/publish with conditional writes; versions
@@ -201,11 +201,47 @@ and restore; sharing; embed-token issue/revocation (ADR-009); user preferences;
 data-source metadata; credential storage abstraction; audit logging; OpenAPI;
 typed client with generation drift check; RLS policies (ADR-008).
 
+**Delivered:** ADR-011 accepted as a self-hosted Docker topology, which removed
+the M6 block. PostgreSQL persistence sits behind the existing `Persistence`
+facade: a Prisma 7.10.1 schema with migrations for users, sessions,
+organizations, memberships, roles/permissions, dashboards, versions, shares,
+embed tokens, data sources and encrypted credentials, widget definitions and
+audit logs; a Postgres adapter selected when `APP_DATABASE_URL` is set (required
+in production) and an in-memory adapter for tests. Every tenant table carries
+`ENABLE` + `FORCE ROW LEVEL SECURITY` with an `organization_id` policy driven by
+`SET LOCAL app.organization_id`, and repositories run inside a per-request
+transaction through AsyncLocalStorage; an empty/unset context returns no rows.
+Authentication uses Argon2id (`@node-rs/argon2`), opaque session tokens stored
+hashed, CSRF-protected mutations and server-side logout. RBAC ships the
+14-permission catalog and five system roles, with member/role administration and
+guards against removing the last owner or yourself. Dashboards gained metadata
+update/delete, sharing by user/role/organization, and scoped embed tokens (256-bit
+opaque, stored SHA-256 hashed, pre-bound variables/filters, 60 s–1 year expiry,
+revocable, plaintext returned once). Data-source metadata CRUD encrypts
+credentials with AES-256-GCM under `CREDENTIAL_ENCRYPTION_KEY` and never returns
+them; the connectivity test is a `501` stub until M7. User preferences store
+locale, theme, timezone and default organization. Audit rows are written for
+authentication, dashboard, share, embed-token and administration actions. The
+OpenAPI document now marks all served operations `implemented`, and
+`pnpm verify:openapi` fails on drift between Fastify routes and the document.
+The typed `api-client` covers the whole surface and the CI workflow provisions a
+PostgreSQL service, applies migrations/seeds and runs the Postgres integration
+suite through `NAMA_TEST_DATABASE_URL`.
+
 **Acceptance:** authorized users save a draft, publish and retrieve the published
 dashboard. Stale saves are rejected. Unauthorized and cross-tenant requests are
 denied. Embed tokens cannot exceed the issuer's permissions.
 
-**Blocked by:** ADR-011 deployment decision for the session/secret hosting model.
+**Verified 2026-11-12:** with `NAMA_TEST_DATABASE_URL` pointed at PostgreSQL 17,
+six integration tests passed: the save → stale-409 → publish → viewer-published
+lifecycle, viewer draft denial, cross-tenant list/read/save denial, embed-token
+scope and cross-tenant revocation denial, credential encryption and
+non-exposure, RLS returning zero rows without context or under a foreign
+organization, and audit rows for the exercised actions. `pnpm lint`,
+`format:check`, `typecheck`, `test`, `build`, `verify:workspace`,
+`verify:consumer` and `verify:openapi` pass. `verify:openapi` reports 36 served
+operations against 37 documented. Idempotency keys are documented but not yet
+enforced; code generation remains deferred (technical debt).
 
 ## M7 — Data infrastructure
 
@@ -282,7 +318,8 @@ and operated with documented procedures.
 - No milestone starts before the previous gate is accepted or remaining work is
   explicitly waived.
 - Scope added to a milestone requires re-estimation at the gate.
-- ADR-011 must be accepted before M6 and M8.
+- ADR-011 is accepted (Option A, self-hosted Docker); M8 relies on its
+  long-lived API process for WebSocket hosting.
 - Configuration schema changes require migration tests before merge.
 - Cross-tenant and `If-Match` tests run on every change to affected modules.
 

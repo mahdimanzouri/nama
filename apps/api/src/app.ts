@@ -3,24 +3,37 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { PLATFORM_LIMITS, createId } from "@nama/dashboard-types";
 
 import type { Env } from "./env.ts";
+import { createCredentialCipher } from "./infrastructure/credentials.ts";
 import { HttpError } from "./infrastructure/errors.ts";
-import { createSeededStore, type Store } from "./infrastructure/store.ts";
+import {
+  createPersistence,
+  type Persistence,
+} from "./infrastructure/persistence/index.ts";
 import { createAuthHooks } from "./http/auth.ts";
 import { registerAuthRoutes } from "./modules/auth/routes.ts";
 import { registerDashboardRoutes } from "./modules/dashboards/routes.ts";
+import { registerEmbedTokenRoutes } from "./modules/dashboards/embed-tokens.ts";
+import { registerShareRoutes } from "./modules/dashboards/shares.ts";
+import { registerDataSourceRoutes } from "./modules/data-sources/routes.ts";
+import { registerOrganizationRoutes } from "./modules/organizations/routes.ts";
+import { registerPreferenceRoutes } from "./modules/preferences/routes.ts";
 import { registerQueryRoutes } from "./modules/queries/routes.ts";
 
 export const API_VERSION = "0.1.0";
 
 export interface BuildAppOptions {
-  /** Injected store so tests can seed extra organizations or freeze time. */
-  store?: Store;
+  /** Injected persistence so tests can seed extra organizations or freeze time. */
+  persistence?: Persistence;
   now?: () => Date;
+  /** Observes every registered route; used by the OpenAPI drift check. */
+  onRoute?: (route: { method: string | string[]; url: string }) => void;
 }
 
 export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstance {
-  const store = options.store ?? createSeededStore(env);
+  const persistence = options.persistence ?? createPersistence(env);
+  const ownsPersistence = options.persistence === undefined;
   const now = options.now ?? (() => new Date());
+  const credentialCipher = createCredentialCipher(env.CREDENTIAL_ENCRYPTION_KEY);
 
   const app = Fastify({
     logger: env.LOG_LEVEL === "silent" ? false : { level: env.LOG_LEVEL },
@@ -30,21 +43,40 @@ export function buildApp(env: Env, options: BuildAppOptions = {}): FastifyInstan
 
   void app.register(cookie);
 
-  const hooks = createAuthHooks({ store, now });
+  if (options.onRoute) {
+    const onRoute = options.onRoute;
+    app.addHook("onRoute", (route) => {
+      onRoute({ method: route.method, url: route.url });
+    });
+  }
+
+  if (ownsPersistence) {
+    app.addHook("onClose", async () => {
+      await persistence.close();
+    });
+  }
+
+  const hooks = createAuthHooks({ persistence, now });
 
   registerAuthRoutes(app, {
-    store,
+    persistence,
     now,
     hooks,
     sessionTtlMs: env.SESSION_TTL_HOURS * 3_600_000,
     isProduction: env.NODE_ENV === "production",
   });
-  registerDashboardRoutes(app, { store, now, hooks });
+  registerDashboardRoutes(app, { persistence, now, hooks });
+  registerShareRoutes(app, { persistence, now, hooks });
+  registerEmbedTokenRoutes(app, { persistence, now, hooks });
+  registerDataSourceRoutes(app, { persistence, now, hooks, credentialCipher });
+  registerOrganizationRoutes(app, { persistence, now, hooks });
+  registerPreferenceRoutes(app, { persistence, hooks });
   registerQueryRoutes(app, { now, hooks });
 
   app.get("/healthz", async () => ({
     status: "ok",
     version: API_VERSION,
+    persistence: persistence.kind,
   }));
 
   app.setErrorHandler((error: unknown, request, reply) => {

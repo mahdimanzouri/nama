@@ -1,7 +1,7 @@
 # Current Phase
 
-**Current milestone:** M6 — Backend and persistence (next)
-**Status:** M5 complete, awaiting acceptance (2026-11-12)
+**Current milestone:** M7 — Data infrastructure (next)
+**Status:** M6 complete, awaiting acceptance (2026-11-12)
 **Date:** 2026-11-12
 
 ## What the repository looks like now
@@ -10,17 +10,24 @@
 nama/
 ├── apps/
 │   ├── web/                    # Next.js 16 app: login, dashboard list, editor, viewer
-│   └── api/                    # Fastify 5 service: auth, dashboards, versions, queries
+│   └── api/                    # Fastify 5 service with PostgreSQL persistence
+│       ├── prisma/             # schema, migrations, seed
+│       ├── scripts/            # OpenAPI drift check
+│       └── src/
+│           ├── http/           # auth hooks and request helpers
+│           ├── infrastructure/ # persistence, RLS scoping, credentials, RBAC, sessions
+│           └── modules/        # auth, dashboards, data-sources, organizations,
+│                               # preferences, queries
 ├── packages/
 │   ├── dashboard-types/        # platform constants + runtime contracts (M2)
 │   ├── dashboard-core/         # host-agnostic runtime (M3)
 │   ├── dashboard-builder/      # public React API, editor and CSS (M3/M4);
 │   │                           # built-in widgets behind the `./widgets` entry (M5)
-│   └── api-client/             # hand-written typed transport (M3.5)
+│   └── api-client/             # hand-written typed transport (M3.5, extended in M6)
 ├── examples/standalone-consumer/  # SSR consumer with a custom widget (M3)
-├── scripts/
-│   ├── verify-workspace.mjs
-│   └── verify-consumer.mjs     # pack → offline install → SSR → distribution checks
+├── infra/postgres/init.sql     # owner role, runtime role grants
+├── docker-compose.dev.yml      # PostgreSQL 17 on host port 5433
+├── scripts/                    # workspace, consumer and OpenAPI verification
 ├── docs/                       # architecture, decisions, implementation state
 ├── turbo.json
 ├── tsconfig.base.json
@@ -29,83 +36,111 @@ nama/
 └── pnpm-workspace.yaml
 ```
 
-## Delivered in M5
+## Delivered in M6
 
-### `@nama/dashboard-builder/widgets`
-
-| Area | Contents |
-| --- | --- |
-| Built-ins | `kpi`, `line`, `area`, `bar`, `pie`, `gauge`, `table` as `NAMA_WIDGETS`; the subpath keeps the main entry free of ECharts |
-| Chart host | One `EChart` canvas component: deferred init after layout, `ResizeObserver` resizing, tree-shaken ECharts 6 registration, CSS-token resolution for canvas painting, `data-theme` re-resolution |
-| Option builders | `buildLineOption`, `buildBarOption`, `buildPieOption`, `buildGaugeOption` in widget terms; canvas-rendered rich-text tooltips; reduced-motion aware |
-| Settings | Per-widget settings components with text/number/toggle fields; every commit is validated against the plugin `configSchema` before it reaches the draft |
-| States | Loading, error and empty states per widget; truncated results disclosed for charts and tables |
-| Data projection | `toSeries`, `latestValue`, field selection and locale-aware category/value formatting |
-
-### `@nama/dashboard-builder` (main entry)
+### Persistence and tenancy
 
 | Area | Contents |
 | --- | --- |
-| Validation feedback | `WidgetSettings` reports `ValidationIssue`s from Zod and clears them when the user edits again; invalid commits never enter the draft |
-| Media | `usePrefersReducedMotion` via `useSyncExternalStore` |
+| Database | PostgreSQL 17; Prisma 7.10.1 with the `prisma-client` generator, ESM output in `apps/api/src/generated/prisma`, migrations for every product entity |
+| Facade | `Persistence` repository interface with `withTenant(scope, fn)`; Postgres adapter when `APP_DATABASE_URL` is set (required in production), in-memory adapter for tests and demos |
+| RLS | `ENABLE` + `FORCE ROW LEVEL SECURITY` on every tenant table; policy compares `organization_id` with `SET LOCAL app.organization_id`; `NULLIF(..., '')` makes an unset context fail closed with zero rows |
+| Runtime role | `nama_app` is non-owner and has no `BYPASSRLS`; migrations run as the owner role through `prisma migrate deploy` |
+| Transactions | Each authenticated request runs inside a transaction that sets the tenant GUC; the Prisma transaction client travels through AsyncLocalStorage |
 
-### `apps/web`
+### Authentication and administration
 
 | Area | Contents |
 | --- | --- |
-| Widget plugins | `WEB_WIDGETS` wraps the SDK built-ins with demo query bindings for `demo-source`; the host keeps data policy out of the SDK |
-| Editor/viewer | Unchanged mount points now render all seven types from live demo data |
-| Local widgets | The M4 hand-written KPI/line plugins were removed; the SDK is the only widget implementation |
+| Passwords | Argon2id via `@node-rs/argon2` |
+| Sessions | 256-bit opaque token, SHA-256 hashed in `sessions`, `nama_session` + `nama_csrf` cookies, server-side logout |
+| RBAC | 14-permission catalog and system roles `owner`, `administrator`, `editor`, `viewer`, `data-source-administrator`; permission checks on every route |
+| Organizations | Member list/invite/update/remove and custom role create/update/delete, with guards for system roles, last-owner removal and self-removal |
+| Preferences | `GET`/`PATCH /v1/me/preferences` for locale, theme, timezone and default organization |
 
-## Decisions taken during M5
+### Dashboards and sharing
+
+| Area | Contents |
+| --- | --- |
+| CRUD | List/create/read, metadata `PATCH`, `DELETE`; viewer reads return `publishedConfig`/`publishedRevision` only |
+| Draft/publish | `PUT /draft` and publish require `If-Match`; stale writes return `409 REVISION_CONFLICT` with `currentRevision` |
+| Publish transaction | Copies draft, increments revision, inserts `DashboardVersion`, prunes to 50 versions |
+| Restore | Copies a retained version into the draft and increments revision |
+| Shares | `GET`/`PUT /v1/dashboards/:id/shares` for user, role or organization subjects with `view`/`edit`; `If-Match` protected |
+| Embed tokens | `POST`/`DELETE /v1/dashboards/:id/embed-tokens`; 256-bit opaque token stored SHA-256 hashed, dashboard-scoped, pre-bound variables/filters, 60 s–1 year expiry, revocable, plaintext returned once (ADR-009) |
+
+### Data sources and audit
+
+| Area | Contents |
+| --- | --- |
+| Metadata | `GET`/`POST /v1/data-sources`, `GET`/`PATCH`/`DELETE /v1/data-sources/:id` with pagination and RBAC |
+| Credentials | AES-256-GCM with a version byte, `CREDENTIAL_ENCRYPTION_KEY`; write-only, never returned; `503 CREDENTIALS_NOT_CONFIGURED` without a key |
+| Connectivity test | `POST /v1/data-sources/:id/test` returns `501 NOT_IMPLEMENTED` until M7 |
+| Audit | `audit_logs` rows for login, dashboard, share, embed-token, data-source and organization actions |
+
+### Contracts and CI
+
+| Area | Contents |
+| --- | --- |
+| OpenAPI | Every served operation marked `x-m0-status: implemented`; `pnpm verify:openapi` compares Fastify routes with the document and fails on drift |
+| Typed client | `@nama/api-client` covers dashboards, shares, embed tokens, data sources, organizations, roles, preferences and session `roleNames` |
+| CI | `postgres:17-alpine` service, init script, migrations, seed, and the Postgres integration suite via `NAMA_TEST_DATABASE_URL` |
+| Development | `docker-compose.dev.yml` and `infra/postgres/init.sql` mirror the production owner/runtime role split |
+
+## Decisions taken during M6
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| Widget location | Built-ins ship behind `@nama/dashboard-builder/widgets` | Keeps ECharts out of the main entry (12.5 KiB) while staying inside the four-package graph |
-| ECharts imports | Modular `echarts/core` + explicit chart/component registrations | Avoids the full bundle; new widget types extend `registerModules` |
-| Demo data | Host wrapper adds `defaultQuery`/`defaultDataSourceId` | The SDK must not assume a data source; M4 already made creation defaults plugin-provided |
-| Settings validation | Central `plugin.configSchema.safeParse` in the settings panel | One validation path for every widget; the draft can never hold invalid config |
-| Config migration | Widen M4 schemas with defaults, keep `configVersion: 1` | Persisted KPI/line documents keep loading without a migration step |
-| Chart theming | Resolve CSS tokens after mount; observe `data-theme` | Canvas cannot paint `var(...)`; re-resolution keeps light/dark switching correct |
-| Tooltips | `renderMode: "richText"` | Data labels are never interpolated into HTML |
-| Table limits | Render at most `maxRows` (default 25) client-side | Keeps large results readable while the API truncation flag is disclosed |
-| Legend/axis language | Category labels use the dashboard locale formatter; canvas stays LTR | Matches the disclosed LTR-only canvas decision (ADR-005) |
+| ORM | Prisma 7.10.1 with `@prisma/adapter-pg` | Stable release; typed queries and migrations without a query-builder abstraction |
+| RLS context | Transaction-local `SET LOCAL` from AsyncLocalStorage, per request | No pool leakage between tenants; the runtime role cannot bypass policies |
+| Unset tenant context | `NULLIF(current_setting(...), '')::uuid` in every policy | A reset GUC reads as `''`; without `NULLIF` the cast raises instead of returning no rows |
+| Repository facade | Keep `Persistence` and add a Postgres adapter | Existing services and memory tests stay unchanged; swapping stores is a composition decision |
+| Session storage | Hashed tokens in PostgreSQL | Logout and revocation are server-side; no signed-cookie replay after revocation |
+| Embed tokens | Hash lookup, not JWT | A signed token cannot be revoked; §12.4's "signed" wording is resolved in ADR-009 |
+| Credentials | AES-256-GCM with a key-version prefix | Rotation can add versions without re-encrypting everything; decryption rejects unknown versions |
+| Version retention | Prune to 50 inside the publish transaction | History stays bounded without a background job |
+| Idempotency | Accept the header but do not enforce it yet | Enforcement needs a stored-key table and payload hashing; recorded as debt |
+| Data-source test | `501` until M7 | No adapter exists yet; pretending to test connectivity would be dishonest |
+| Drift check | Route inventory only | Code generation and schema-level comparison remain deferred; path drift is caught now |
 
 ## Open decisions
 
 | Decision | Status | Blocks | Notes |
 | --- | --- | --- | --- |
-| Deployment topology | **Unresolved** | M6, M8 | ADR-011 recommends self-hosted Docker; options and trade-offs recorded |
-| Prisma major version | Open | M6 | Latest registry version is a release candidate; pin newest stable at M6 |
+| Deployment topology | Resolved — ADR-011 Option A (self-hosted Docker) | — | M6 unblocked; M8 uses the long-lived API process |
+| Prisma major version | Resolved — pinned 7.10.1 | — | Stable release, not the earlier release candidate |
 | Persian calendar library | Open | M10 | Display-only strategy decided; library selection deferred |
-| API code generation | Deferred to M6 | M6 | `api-client` is hand-written; no drift check until codegen lands |
+| API code generation | Deferred to M12 | — | `api-client` remains hand-written; `verify:openapi` covers path drift only |
+| Connection pooling and rate limiting | Open | — | No pool sizing or request rate limits yet; recorded as debt |
 | Raw SQL for non-admin users | Deferred | — | Not supported in v1 (ADR-010) |
 | Public/anonymous sharing | Deferred | — | Organization-scoped sharing only in v1 |
 | External time-series store | Deferred | — | Telemetry stays out of Postgres; product selection later |
 | Plugin sandbox/marketplace | Deferred | — | Trusted install only (ADR-006) |
-| Browser end-to-end test in CI | Deferred | — | M4 and M5 were verified with a manual headless-browser walkthrough; no CI job yet |
-| Viewer/editor pixel parity | Open | — | Editor uses RGL; the viewer canvas still uses CSS grid; re-targeted from M5 to M9 |
+| Browser end-to-end test in CI | Deferred | — | M4–M6 were verified manually or at the HTTP level; no browser CI job yet |
+| Viewer/editor pixel parity | Open | — | Editor uses RGL; the viewer canvas still uses CSS grid; re-targeted to M9 |
 
-## What M6 must not assume
+## What M7 must not assume
 
-- That the API is persistent; it is an in-memory seeded store that reseeds on
-  restart, with no migrations or connection pooling.
-- That authentication hardening exists; demo accounts and cookies are walking-
-  skeleton implementations, not the ADR-007 design.
-- That RLS, rate limiting, audit logging or credential storage exist; only
-  service-layer organization scoping is active.
-- That query execution is real; the demo adapter answers from a static dataset
-  with no groupBy, and no external source is contacted.
+- That a data source can execute queries; metadata and encrypted credentials
+  exist, but nothing decrypts them or contacts an external system.
+- That the connectivity test works; `POST /v1/data-sources/:id/test` is a `501`
+  stub.
+- That the query engine is general; the demo adapter answers a fixed dataset
+  and ignores `groupBy`/joins.
+- That the web app can choose bindings; `apps/web` still hard-codes a demo query
+  and data source per built-in widget type.
+- That results are cached, cancelled or deduplicated; TanStack Query is not yet
+  wired to any adapter.
+- That query limits are enforced end to end; the 15 s / 10,000 rows / 5 MiB caps
+  exist in the demo engine but no external adapter is bounded yet.
 - That realtime exists; only HTTP polling is live and the gateway is M8.
-- That widget data bindings are host-configurable; `apps/web` hard-codes demo
-  queries per built-in type until M7 introduces data-source selection.
-- That charts render multi-series data; every built-in draws one series, and
-  there is no variable/filter binding yet (M9).
-- That `dashboard-core` may import React at runtime, ECharts, or Next.js.
-- That the widgets entry is imported by hosts automatically; consumers opt into
-  `@nama/dashboard-builder/widgets` and bundle ECharts themselves.
+- That sessions or credentials are rate limited; the API has no request rate
+  limits or pool sizing.
+- That idempotency works; `Idempotency-Key` is accepted but not enforced.
+- That `dashboard-core` may import React at runtime, ECharts, a database driver
+  or Next.js.
 
-## Verification (M5)
+## Verification (M6)
 
 All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2.
 
@@ -113,21 +148,24 @@ All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2
 | --- | --- | --- |
 | Boundaries | `pnpm verify:workspace` | Passes: approved graph, no host imports, single React version |
 | Lint | `pnpm lint` | Clean |
-| Format | `pnpm format:check` | All files match |
+| Format | `pnpm format:check` | All files match (generated Prisma output ignored) |
 | Typecheck | `pnpm typecheck` | 10 tasks successful |
-| Test | `pnpm test` | 186 tests in 19 files: types 70, core 37, builder 44, api-client 10, api 25 |
+| Test | `pnpm test` | 197 tests in 21 files: types 70, core 37, builder 44, api-client 14, api 32; the 6 Postgres tests skip without `NAMA_TEST_DATABASE_URL` |
+| Postgres integration | `NAMA_TEST_DATABASE_URL=… npx vitest run src/__tests__/postgres.test.ts` | 6/6 passed against PostgreSQL 17 |
 | Build | `pnpm build` | 6 tasks successful, 8 routes |
-| Consumer | `pnpm verify:consumer` | Passes: `"use client"` preserved on both entries, 12.5 KiB and 6.9 KiB gzipped (16 KiB budgets), SSR render, single React copy |
-| Browser walkthrough | Headless Chromium via Playwright | Created a dashboard with all seven widget types; five chart canvases, KPI value and 25 table rows rendered from live data; blank series label and gauge max below min were rejected with field-level messages and no draft change; saved (1→2), published (2→3); published-only viewer rendered in light and dark themes with no console errors or warnings |
+| Consumer | `pnpm verify:consumer` | Passes: `"use client"` preserved, 12.5 KiB and 6.9 KiB gzipped (16 KiB budgets), SSR render, single React copy |
+| OpenAPI drift | `pnpm verify:openapi` | In sync: 36 served operations, 37 documented |
 
-The browser walkthrough is a scratch script, not a CI test. During verification a
-dev-server restart produced one stale frame where canvases were sized but painted
-at animation frame zero; fresh runs rendered correctly and a resize forced the
-expected repaint. No product code change was needed, and a production build
-renders the same widgets.
+The Postgres suite covers the save → stale-`409` → publish → published-only
+viewer lifecycle, viewer draft denial, cross-tenant list/read/save denial,
+embed-token scope and cross-tenant revocation denial, credential encryption and
+non-exposure, RLS zero-row behavior without context or under a foreign
+organization, and audit rows for the exercised actions. It is skipped locally
+unless `NAMA_TEST_DATABASE_URL` is provided and always runs in CI.
 
 ## Next action
 
-M5 is complete and awaiting acceptance. The next milestone is M6 (backend and
-persistence), which remains blocked on the ADR-011 deployment decision. Do not
-begin M6 until it is requested.
+M6 is complete and awaiting acceptance. The next milestone is M7 (data
+infrastructure): query manager, TanStack Query, HTTP/static adapters, backend
+query execution, validation, cache and cancellation, enforced limits, and a
+data-source plugin example. Do not begin M7 until it is requested.

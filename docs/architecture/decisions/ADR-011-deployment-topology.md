@@ -2,13 +2,13 @@
 
 ## Status
 
-Proposed — **unresolved**
+**Accepted** (2026-11-12)
 
 ## Date
 
 2026-11-12
 
-**Deciders:** Architecture (M0), product owner (pending)
+**Deciders:** Architecture (M0), product owner
 
 ## Context
 
@@ -42,23 +42,33 @@ store for exports if needed. Rationale:
 - Credential encryption keys must be managed outside the repository; a
   persistent host simplifies a managed key store or sealed secret injection.
 
-This recommendation remains **Proposed** until the product owner chooses.
-
 ## Decision
 
-No final decision. The architecture documents remain topology-neutral where
-possible. `implementation/current-phase.md` records deployment as unresolved and
-blocking M6 and M8.
+Adopt **Option A** for v1: a self-hosted Docker deployment with the Next.js web
+app, the Fastify API and PostgreSQL on a persistent host. Realtime fan-out stays
+in-process in the API process (ADR-004) behind an interface, so a later move to a
+shared broker does not change module contracts.
+
+The local development and test topology mirrors production: PostgreSQL 17 with a
+table-owner role for migrations and a non-superuser `nama_app` role for runtime
+queries, so row-level security is exercised rather than bypassed.
 
 ## Consequences
 
-- M6/M8 implementation must not assume a specific host or serverless runtime.
-- Auth cookies must not be tied to a single domain until B is ruled out.
-- Realtime fan-out stays in-process until the topology is known (ADR-004).
-- Migration and backup procedures are documented as requirements, not as
-  platform-specific steps.
-- Choosing B or C requires amendments to ADR-004 (fan-out/transport) and ADR-007
-  (cookie/session transport).
+- Sessions use first-party cookies on a single host; no cross-domain cookie
+  shim is required (ADR-007).
+- WebSocket hosting and in-process subscription state are supported by the
+  long-lived API process (ADR-004, M8).
+- Query execution keeps its 15 s budget and bounded concurrency inside the API
+  process; background workers can be extracted later without contract changes.
+- Credential encryption keys are injected as environment secrets
+  (`CREDENTIAL_ENCRYPTION_KEY`) and rotated by key version.
+- Operators own upgrades, backups, TLS and monitoring; the deployment runbook
+  is delivered in M12.
+- Migrations run as the owner role in the release step; the runtime role never
+  has `BYPASSRLS` and never owns tables.
+- Choosing B or C later still requires amendments to ADR-004 (fan-out/transport)
+  and ADR-007 (cookie/session transport).
 
 ## Related documents
 
@@ -70,5 +80,6 @@ blocking M6 and M8.
 
 ## Review trigger
 
-The product owner selects a deployment option, or M6/M8 cannot proceed without
-one. This ADR must be accepted before those milestones.
+Revisit if realtime fan-out outgrows a single API process, if the operator
+burden of self-hosting exceeds the team's capacity, or if a managed platform
+adds durable WebSocket support that removes Option B's main gap.

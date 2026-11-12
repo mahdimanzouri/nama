@@ -1,28 +1,66 @@
 # API Conventions
 
-**Status:** M4 implemented slice (2026-11-12). [`openapi.yaml`](openapi.yaml)
-describes the contract; operations marked `x-m0-status: implemented` are served
-by `apps/api` today. Code generation remains M6 work.
+**Status:** M6 implemented (2026-11-12). [`openapi.yaml`](openapi.yaml) describes
+the contract; operations marked `x-m0-status: implemented` are served by
+`apps/api` today and verified by `pnpm verify:openapi`.
 
-## Implemented endpoints (M4)
+## Implemented endpoints (M6)
 
 | Method | Path | Notes |
 | --- | --- | --- |
 | `POST` | `/v1/auth/login` | Argon2id credentials; sets `nama_session` + `nama_csrf` cookies |
-| `GET` | `/v1/auth/session` | Current user, organization, role and permissions |
+| `GET` | `/v1/auth/session` | Current user, organization, roles and permissions |
 | `POST` | `/v1/auth/logout` | CSRF-protected; revokes the session and clears cookies |
 | `GET` | `/v1/dashboards` | Tenant-scoped list, `page`/`pageSize` |
 | `POST` | `/v1/dashboards` | Creates an empty `schemaVersion: 1` draft at revision 1 |
 | `GET` | `/v1/dashboards/{id}` | Published configuration and permissions only; never the draft |
+| `PATCH` | `/v1/dashboards/{id}` | `If-Match` required; updates name/metadata title without touching the draft |
+| `DELETE` | `/v1/dashboards/{id}` | `If-Match` required |
 | `GET` | `/v1/dashboards/{id}/draft` | Editor-only draft |
 | `PUT` | `/v1/dashboards/{id}/draft` | `If-Match` required; validates the full config |
 | `POST` | `/v1/dashboards/{id}/publish` | Copies draft, increments revision, records version |
 | `GET` | `/v1/dashboards/{id}/versions` | Paginated version summaries, newest first, retained to 50 |
 | `POST` | `/v1/dashboards/{id}/restore` | `If-Match` required; copies a version into the draft and increments revision |
+| `GET` | `/v1/dashboards/{id}/shares` | Tenant-scoped shares |
+| `PUT` | `/v1/dashboards/{id}/shares` | Replaces shares; `If-Match` required |
+| `POST` | `/v1/dashboards/{id}/embed-tokens` | Published dashboards only; returns the plaintext token once |
+| `DELETE` | `/v1/dashboards/{id}/embed-tokens/{tokenId}` | Revokes a token |
+| `GET` | `/v1/data-sources` | Metadata only; credentials never returned |
+| `POST` | `/v1/data-sources` | Encrypts credentials with AES-256-GCM |
+| `GET` | `/v1/data-sources/{id}` | Metadata only |
+| `PATCH` | `/v1/data-sources/{id}` | Metadata, credentials or status |
+| `DELETE` | `/v1/data-sources/{id}` | Deletes the source and its credential row |
+| `POST` | `/v1/data-sources/{id}/test` | Returns `501 NOT_IMPLEMENTED` until the M7 adapters |
+| `GET` | `/v1/organizations/{id}/members` | Requires `organization.members.manage` |
+| `POST` | `/v1/organizations/{id}/members` | Invites a user with roles |
+| `PATCH` | `/v1/organizations/{id}/members/{memberId}` | Roles and status |
+| `DELETE` | `/v1/organizations/{id}/members/{memberId}` | Self-removal returns `409` |
+| `GET` | `/v1/organizations/{id}/roles` | System and custom roles |
+| `POST` | `/v1/organizations/{id}/roles` | Custom role; unknown permissions rejected |
+| `PATCH` | `/v1/organizations/{id}/roles/{roleId}` | System roles are immutable (`404`) |
+| `DELETE` | `/v1/organizations/{id}/roles/{roleId}` | Assigned/system roles return `409` |
+| `GET` | `/v1/organizations/{id}/permissions` | Caller's effective permissions |
+| `GET` | `/v1/me/preferences` | Locale, theme, timezone, default organization |
+| `PATCH` | `/v1/me/preferences` | Validated IANA timezone and membership |
 | `POST` | `/v1/queries/execute` | Demo query engine; 15 s / 10,000 rows / 5 MiB limits |
 
-State is in memory in M4 and resets when the API restarts; M6 replaces the store
-with Postgres behind the same service layer.
+With `APP_DATABASE_URL` set the API uses Postgres and enforces tenant isolation
+with row-level security; without it the seeded in-memory adapter is used for
+tests and demos (`/healthz` reports which adapter is active).
+
+## Drift check
+
+`pnpm verify:openapi` builds the app with the in-memory adapter, records every
+registered Fastify route, and compares it with `openapi.yaml`:
+
+- A served method+path missing from the spec fails the check.
+- An operation marked `x-m0-status: implemented` that is not served fails.
+- Every operation must declare `x-m0-status: implemented | proposed | stub`.
+- `/healthz` is operational and intentionally absent from the public spec.
+
+Run it after touching routes or the specification. It is not part of `pnpm test`
+because it reads `docs/api/openapi.yaml` outside the package build graph.
+
 
 ## Versioning and scope
 
@@ -73,10 +111,14 @@ with Postgres behind the same service layer.
 ## Idempotency
 
 - Retryable `POST` endpoints accept `Idempotency-Key` (≤ 128 characters).
-- The key is stored with a hash of the request and the response for a bounded
-  window (proposed 24 hours), scoped to the authenticated principal.
-- Replaying the same key and payload returns the stored response.
-- Reusing a key with a different payload returns `409`.
+- **Not enforced yet.** The header is accepted and documented, but storage and
+  replay protection are deferred (tracked in
+  [technical-debt.md](../implementation/technical-debt.md)). Until then,
+  dashboard writes are protected by `If-Match` rather than idempotency keys.
+- The intended policy: the key is stored with a hash of the request and the
+  response for a bounded window (proposed 24 hours), scoped to the authenticated
+  principal; replaying the same key and payload returns the stored response and
+  reusing a key with a different payload returns `409`.
 
 ## Pagination
 
@@ -135,6 +177,12 @@ Common codes:
 | `QUERY_TIMEOUT` | 504 | Exceeded the 15 s limit |
 | `RESULT_TOO_LARGE` | 422 | Result exceeded 10,000 rows or 5 MiB |
 | `RAW_SQL_FORBIDDEN` | 403 | Raw SQL not permitted |
+| `MEMBER_EXISTS` | 409 | The user already belongs to the organization |
+| `ROLE_EXISTS` | 409 | A role with that name already exists |
+| `ROLE_IN_USE` | 409 | System or assigned role cannot be deleted |
+| `CANNOT_REMOVE_SELF` | 409 | Members cannot remove their own membership |
+| `CREDENTIALS_NOT_CONFIGURED` | 503 | Credentials supplied but `CREDENTIAL_ENCRYPTION_KEY` is unset |
+| `NOT_IMPLEMENTED` | 501 | Endpoint reserved for a later milestone |
 
 ## Limits enforcement
 
@@ -159,11 +207,14 @@ session cookie or embed token. See
 
 ## Typed client
 
-- `@nama/api-client` exposes the typed transport implemented in M3.5
-  (`createApiClient` plus `ApiError`/`RevisionConflictError`).
-- It is hand-written against `openapi.yaml`; there is no generator or drift
-  check yet. M6 may generate it — until then the spec and the client are kept in
-  sync by review (tracked as technical debt).
+- `@nama/api-client` exposes the typed transport (`createApiClient` plus
+  `ApiError`/`RevisionConflictError`).
+- M6 extended it to every implemented endpoint: dashboard metadata update and
+  delete, shares, embed tokens, data sources, organization members/roles/
+  permissions and preferences. Pagination options are shared via `ListOptions`.
+- It remains hand-written against `openapi.yaml`; `pnpm verify:openapi` is the
+  drift control. Full code generation from the specification is deferred
+  (tracked in [technical-debt.md](../implementation/technical-debt.md)).
 - Authentication travels as cookies; the client never stores tokens.
 - No endpoint types are duplicated by hand in applications.
 

@@ -1,6 +1,6 @@
 # Technical Debt
 
-**Status:** Updated at M5 (2026-11-12)
+**Status:** Updated at M6 (2026-11-12)
 
 Debt is recorded honestly with impact, owner and target milestone. Items are
 removed only when the fix is merged and verified; closed items are listed at the
@@ -12,12 +12,9 @@ end so IDs stay stable.
 | TD-002 | SDK distribution is private-workspace only; no registry or publish pipeline | Consumers must pack/install a tarball | Platform | When a second consumer exists |
 | TD-003 | 11 target packages are not created; code lives in four initial packages | Some modules are larger than ideal; boundaries unproven | Architecture | Split on evidence (ADR-001) |
 | TD-004 | Architecture documentation is English-only while the product ships Persian | Persian-speaking stakeholders rely on translations | Docs | When a Persian docs owner exists |
-| TD-005 | Deployment topology undecided | Blocks M6/M8; auth and realtime choices may need amendments | Product owner | Before M6 (ADR-011) |
 | TD-007 | No plugin sandbox, marketplace or remote loading | Third-party plugins are trusted code | Security | Future ADR |
 | TD-008 | No Jalali calendar library selected | Persian date input/display implementation deferred | Frontend | M10 |
 | TD-009 | `docs/guides/` absent despite the planning tree | No step-by-step operator/developer guides yet | Docs | M12 |
-| TD-010 | Prisma latest is a release candidate; version not pinned | M6 schema/migration work could target an unstable version | Backend | M6 |
-| TD-012 | OpenAPI is hand-written and `api-client` is a hand-written transport; no generated client or drift check | Client types can diverge until codegen exists | Backend | M6 |
 | TD-013 | Raw SQL remains available to `datasource.admin` | High-impact capability; relies on audit and read-only credentials | Security | Review each release |
 | TD-014 | No performance or accessibility measurements yet | Budgets are documented but unproven | QA | M12 / M10.5 |
 | TD-016 | LTR-only canvas is a documented accessibility limitation | Assistive-technology users get a non-mirrored grid | Accessibility | M10.5 documentation |
@@ -28,13 +25,12 @@ end so IDs stay stable.
 | TD-023 | Transitive MPL-2.0, LGPL-3.0 and CC-BY-4.0 dependencies are installed | `lightningcss`, `@img/sharp-libvips-linux-x64` and `caniuse-lite` need re-scan on lockfile change | Platform | Every dependency change |
 | TD-024 | `allowedDevOrigins` is unset, so non-`localhost` dev hosts are blocked | Next 16 rejects dev resources from e.g. a LAN IP; affects mobile/device testing | Tooling | When device testing starts |
 | TD-025 | `apps/web` runs with `noUnusedLocals: false` | Next 16 generates `.next/dev/types/validator.ts` with unused declarations; only ESLint checks our app sources for unused code | Tooling | When Next stops emitting that file, or routes are added and verified |
-| TD-027 | Migration steps must be registered by callers; there is no on-disk discovery or version table | Import/read paths must wire migrations explicitly; forgetting one fails closed with `missing_migration` | Backend | M6, when persistence lands |
+| TD-027 | Dashboard `schemaVersion` migration steps must be registered by callers; there is no on-disk discovery or version table (database migrations use Prisma and are unaffected) | Import/read paths must wire config migrations explicitly; forgetting one fails closed with `missing_migration` | SDK | M9, with import/export |
 | TD-028 | Widget plugins must be function components; class components are rejected by the erased registry type | A host with class-based widgets needs a wrapper or a contract change | SDK | Revisit if a consumer needs classes |
 | TD-030 | Realtime subscription lifecycle and stream buffering have no client-side test | No jsdom/client renderer in the workspace yet; only SSR is exercised | QA | M8, with the gateway |
 | TD-032 | `verify:consumer` installs with `--offline` and needs React, TanStack Query and zod in the local pnpm store | A clean CI runner must prime the store first (lockfile install) | Tooling | M12 CI hardening |
 | TD-033 | Changing the `widgets` array identity rebuilds the registry; dynamic register/unregister after mount is unsupported | Hosts must pass a stable array; live plugin registration waits for M11 | SDK | M11 |
-| TD-034 | API state is an in-memory seeded store with demo accounts; nothing survives a restart and there are no migrations | Data loss on restart; the walking skeleton cannot be demoed without reseeding | Backend | M6 |
-| TD-035 | The API has no rate limiting, audit logging, RLS enforcement or connection limits | ADR-007/008 controls are unimplemented; only service-layer scoping is active | Backend | M6 |
+| TD-035 | The API has no request rate limiting or connection-pool sizing; RLS and audit logging now exist | A burst can exhaust the pool or the database; login has no throttling | Backend/Security | M12 |
 | TD-036 | No browser end-to-end test in CI; M4 was verified with a scratch headless Playwright script | Regressions in the editor/viewer UI are caught manually, not on every change | QA | M8, with Playwright |
 | TD-038 | Editor and viewer use different layout engines: React Grid Layout for editing, CSS grid for viewing | Widgets can differ by a pixel or two between modes; no parity test exists | Frontend | M9 |
 | TD-039 | The grid and resize rules from React Grid Layout are reproduced in the SDK stylesheet instead of importing the package CSS | RGL upgrades can silently break drag/resize styling | SDK | Every RGL upgrade |
@@ -43,6 +39,13 @@ end so IDs stay stable.
 | TD-042 | Charts expose only `role="img"` with the widget title; there is no data-table fallback or keyboard interaction | Screen-reader users cannot inspect chart values | Accessibility | M10.5 |
 | TD-043 | `apps/web` hard-codes a demo query and data source per built-in type; hosts cannot choose bindings in the UI | Real sources cannot be attached without code changes | Frontend | M7, with data-source selection |
 | TD-044 | ECharts modules are registered manually in `registerModules`; adding a chart type requires an SDK code change | A host cannot add an ECharts chart type without forking the built-ins | SDK | When a third-party chart plugin is requested |
+| TD-045 | `api-client` is still hand-written; `verify:openapi` compares routes only | Request/response shapes can drift from the spec without detection | Backend | M12 |
+| TD-046 | `Idempotency-Key` is accepted but not enforced | A retried `POST` can duplicate an effect | Backend | M12 |
+| TD-047 | Data-source connectivity test returns `501 NOT_IMPLEMENTED` | Administrators cannot validate a source until M7 | Backend | M7 |
+| TD-048 | RLS covers tenant tables only; global tables (`users`, `permissions`, `sessions`) rely on application scoping | A repository bug on a global table is not caught by the database | Backend/Security | M12 security review |
+| TD-049 | Audit rows are write-only; there is no read/export endpoint or retention policy | Operators cannot query the audit trail yet | Backend | M12 |
+| TD-050 | The Postgres integration suite skips unless `NAMA_TEST_DATABASE_URL` is set | Isolation regressions are caught in CI but not by a plain local `pnpm test` | QA | M12 CI hardening |
+| TD-051 | Only a development Compose file exists; no production Dockerfile or deployment runbook | ADR-011 Option A is decided but not yet operationalised | Platform | M12 |
 
 ## Closed
 
@@ -57,6 +60,10 @@ end so IDs stay stable.
 | TD-029 | The SDK editor owns the draft and bridges `onSave`/`onPublish`/`onConflict`; `apps/web` passes those callbacks to the provider | M4 |
 | TD-031 | React Grid Layout 2.3.0 canvas with drag, resize, container-width measurement, selection and per-breakpoint editing; covered by `grid.test.tsx` and a browser walkthrough | M4 |
 | TD-037 | Widget settings validate every commit through the plugin `configSchema`, show field-level Zod issues and keep invalid values out of the draft; covered by `widgets.test.tsx`, a builder test and a browser walkthrough | M5 |
+| TD-005 | ADR-011 accepted Option A (self-hosted Docker); backend and security docs updated to match | M6 |
+| TD-010 | Prisma pinned to stable 7.10.1 with `@prisma/adapter-pg`; migrations and seed verified against PostgreSQL 17 | M6 |
+| TD-012 | `pnpm verify:openapi` compares every served Fastify route with `docs/api/openapi.yaml` and fails on drift; code generation remains tracked as TD-045 | M6 |
+| TD-034 | PostgreSQL persistence behind the `Persistence` facade; migrations, seed and restart-surviving state verified by the Postgres integration suite | M6 |
 
 ## Process
 

@@ -7,16 +7,16 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M5 (visualization system) is complete and awaiting acceptance
-(2026-11-12).** M6 (backend and persistence) is next and is blocked on the
-ADR-011 deployment decision.
+**Milestone M6 (backend and persistence) is complete and awaiting acceptance
+(2026-11-12).** M7 (data infrastructure) is next.
 
 The workspace contains:
 
 ```text
 apps/web                  Next.js 16 application: login, dashboard list, editor,
                           published viewer
-apps/api                  Fastify 5 service: auth, dashboards, draft/publish,
+apps/api                  Fastify 5 service: PostgreSQL persistence, auth, RBAC,
+                          dashboards, shares, embed tokens, data sources,
                           queries, health endpoint
 packages/dashboard-types  public contracts: constants plus Zod schemas (M2)
 packages/dashboard-core   host-agnostic runtime: plugin contract, registry,
@@ -36,8 +36,11 @@ version, and a viewer account sees the published configuration only. Stale write
 are rejected with a visible 409 conflict. M5 adds seven built-in widgets (KPI,
 line, area, bar, pie, gauge, table) on a tree-shaken ECharts 6 canvas with
 validated settings, theme-aware colours and loading/error/empty/truncated states.
-State is in memory and reseeds on restart; realtime and persistence land in
-M6–M8 — see the [roadmap](docs/implementation/roadmap.md).
+M6 moves state to PostgreSQL behind a `Persistence` facade: Prisma migrations,
+row-level tenant isolation, Argon2id authentication, RBAC and organization
+administration, sharing, scoped embed tokens, encrypted data-source credentials
+and audit logging. An in-memory adapter remains for tests; realtime lands in M8 —
+see the [roadmap](docs/implementation/roadmap.md).
 
 ## Architecture documentation
 
@@ -67,12 +70,33 @@ pnpm lint              # ESLint over the whole workspace
 pnpm format            # Prettier
 pnpm verify:workspace  # package boundaries and single React version
 pnpm verify:consumer   # packs the SDK and renders it in examples/standalone-consumer
+pnpm verify:openapi    # Fastify routes vs docs/api/openapi.yaml
 pnpm clean
 ```
 
-The API reads `HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL` and the demo-account
-variables; see `apps/api/.env.example`. `GET /healthz` returns the service status.
-The web app proxies `/api/*` to `NAMA_API_URL` (default `http://localhost:3001`).
+The API reads `HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL`, `APP_DATABASE_URL`,
+`CREDENTIAL_ENCRYPTION_KEY` and the demo-account variables; see
+`apps/api/.env.example`. `GET /healthz` returns the service status. The web app
+proxies `/api/*` to `NAMA_API_URL` (default `http://localhost:3001`).
+
+### PostgreSQL
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+# copy apps/api/.env.example and set DATABASE_URL (owner) and
+# APP_DATABASE_URL (runtime role)
+pnpm --filter @nama/api exec prisma migrate deploy
+pnpm --filter @nama/api exec prisma db seed
+```
+
+The runtime role is not a table owner and has no `BYPASSRLS`, so row-level
+security applies. Without `APP_DATABASE_URL` the API uses the seeded in-memory
+adapter in development and tests. The Postgres integration suite runs when
+`NAMA_TEST_DATABASE_URL` is set:
+
+```bash
+NAMA_TEST_DATABASE_URL=postgresql://nama_app:nama-app-dev@127.0.0.1:5433/nama pnpm test
+```
 
 Sign in at <http://localhost:3000/login> with the seeded accounts:
 
@@ -81,7 +105,9 @@ Sign in at <http://localhost:3000/login> with the seeded accounts:
 | Editor | `demo@nama.local`   | `nama-demo-123`   |
 | Viewer | `viewer@nama.local` | `nama-viewer-123` |
 
-The store is in memory: restarting the API discards dashboards and sessions.
+With PostgreSQL configured, dashboards, sessions and audit records survive
+restart. Without `APP_DATABASE_URL` the API reseeds the in-memory store on every
+start.
 
 ## Architectural rules (summary)
 

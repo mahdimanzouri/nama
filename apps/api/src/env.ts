@@ -16,6 +16,13 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(3001),
   LOG_LEVEL: z.enum(LOG_LEVELS).default("info"),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(12),
+  /**
+   * Runtime connection string for the `nama_app` role. When unset the API uses
+   * the seeded in-memory adapter, which is intended for tests and demos only.
+   */
+  APP_DATABASE_URL: z.string().url().optional(),
+  /** 32-byte base64 key used to encrypt data-source credentials at rest. */
+  CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
   DEMO_EDITOR_EMAIL: z.email().default("demo@nama.local"),
   DEMO_EDITOR_PASSWORD: z.string().min(8).default("nama-demo-123"),
   DEMO_VIEWER_EMAIL: z.email().default("viewer@nama.local"),

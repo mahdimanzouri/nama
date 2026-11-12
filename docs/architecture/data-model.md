@@ -1,6 +1,7 @@
 # Data Model
 
-**Status:** Proposed (M0). Prisma models and migrations are created in M6.
+**Status:** Implemented (M6). Prisma 7.10.1 models and migrations live in
+`apps/api/prisma`; row-level security policies are appended through migration SQL.
 
 ## Principles
 

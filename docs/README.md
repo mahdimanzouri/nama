@@ -1,6 +1,6 @@
 # Nama Dashboard Platform — Architecture Package
 
-**Status:** M0 approved; M1, M2, M3, M3.5, M4 and M5 complete ([current phase](implementation/current-phase.md))
+**Status:** M0 approved; M1, M2, M3, M3.5, M4, M5 and M6 complete ([current phase](implementation/current-phase.md))
 **Date:** 2026-11-12
 **Scope:** Architecture and decisions, plus the implemented walking skeleton.
 **Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)
@@ -33,7 +33,13 @@ plus version listing and restore. M5 added seven built-in widgets behind the
 `@nama/dashboard-builder/widgets` subpath: a shared tree-shaken ECharts 6 canvas,
 per-widget Zod config schemas with settings-time validation feedback, and
 loading/error/empty/truncated states; the main entry stays ECharts-free.
-`api-client` is a hand-written typed transport until codegen lands in M6.
+M6 replaced the in-memory store with PostgreSQL behind the `Persistence` facade:
+Prisma migrations, per-request tenant scoping under `SET LOCAL` and row-level
+security, Argon2id authentication with hashed server sessions, RBAC and
+organization administration, dashboard sharing, scoped embed tokens, encrypted
+data-source credentials and audit logging. The OpenAPI document marks every
+served operation `implemented`, and `pnpm verify:openapi` fails on drift.
+`api-client` remains hand-written; code generation is deferred (technical debt).
 Documents describing target-only packages list them as such.
 
 ## Status legend

@@ -177,7 +177,7 @@ paths:
       tags: [Dashboards]
       operationId: updateDashboard
       summary: Update dashboard metadata
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -206,7 +206,7 @@ paths:
       tags: [Dashboards]
       operationId: deleteDashboard
       summary: Delete a dashboard
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/CsrfToken'
@@ -367,7 +367,7 @@ paths:
       tags: [Shares]
       operationId: listDashboardShares
       summary: List dashboard shares
-      x-m0-status: proposed
+      x-m0-status: implemented
       responses:
         '200':
           description: Shares
@@ -383,7 +383,7 @@ paths:
       tags: [Shares]
       operationId: replaceDashboardShares
       summary: Replace dashboard shares
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IfMatch'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -416,7 +416,7 @@ paths:
       operationId: issueEmbedToken
       summary: Issue a scoped embed token
       description: Requires dashboard.share. The plaintext token is returned once and never stored.
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
@@ -447,7 +447,7 @@ paths:
       tags: [Embed tokens]
       operationId: revokeEmbedToken
       summary: Revoke an embed token
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       responses:
@@ -463,7 +463,7 @@ paths:
       tags: [Data sources]
       operationId: listDataSources
       summary: List authorized data sources
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -481,7 +481,7 @@ paths:
       tags: [Data sources]
       operationId: createDataSource
       summary: Create a data source
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
@@ -512,7 +512,7 @@ paths:
       tags: [Data sources]
       operationId: getDataSource
       summary: Get data-source metadata (credentials are never returned)
-      x-m0-status: proposed
+      x-m0-status: implemented
       responses:
         '200':
           description: Data source
@@ -528,7 +528,7 @@ paths:
       tags: [Data sources]
       operationId: updateDataSource
       summary: Update a data source
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
@@ -554,7 +554,7 @@ paths:
       tags: [Data sources]
       operationId: deleteDataSource
       summary: Delete a data source
-      x-m0-status: proposed
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       responses:
@@ -573,7 +573,7 @@ paths:
       tags: [Data sources]
       operationId: testDataSource
       summary: Test connectivity and permissions
-      x-m0-status: proposed
+      x-m0-status: stub
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -586,7 +586,7 @@ paths:
               additionalProperties: true
       responses:
         '200':
-          description: Test result
+          description: Test result (delivered with the M7 data adapters)
           content:
             application/json:
               schema:
@@ -595,6 +595,11 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
+        '501':
+          description: Connectivity testing is not implemented before M7
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '502': { $ref: '#/components/responses/UpstreamError' }
         '504': { $ref: '#/components/responses/UpstreamTimeout' }
 
@@ -675,7 +680,7 @@ paths:
       tags: [Organizations]
       operationId: listMembers
       summary: List organization members
-      x-m0-status: stub
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -693,7 +698,7 @@ paths:
       tags: [Organizations]
       operationId: inviteMember
       summary: Invite a member
-      x-m0-status: stub
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
@@ -724,7 +729,7 @@ paths:
       tags: [Organizations]
       operationId: updateMember
       summary: Update member roles or status
-      x-m0-status: stub
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -749,7 +754,7 @@ paths:
       tags: [Organizations]
       operationId: removeMember
       summary: Remove a member
-      x-m0-status: stub
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       responses:
@@ -767,7 +772,7 @@ paths:
       tags: [Roles]
       operationId: listRoles
       summary: List roles and their permissions
-      x-m0-status: stub
+      x-m0-status: implemented
       responses:
         '200':
           description: Roles
@@ -782,7 +787,7 @@ paths:
       tags: [Roles]
       operationId: createRole
       summary: Create a custom role
-      x-m0-status: stub
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CsrfToken'
@@ -813,7 +818,7 @@ paths:
       tags: [Roles]
       operationId: updateRole
       summary: Update a role
-      x-m0-status: stub
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -838,7 +843,7 @@ paths:
       tags: [Roles]
       operationId: deleteRole
       summary: Delete a custom role
-      x-m0-status: stub
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       responses:
@@ -857,7 +862,7 @@ paths:
       tags: [Roles]
       operationId: listEffectivePermissions
       summary: Retrieve the caller's effective permissions
-      x-m0-status: stub
+      x-m0-status: implemented
       responses:
         '200':
           description: Permissions
@@ -874,7 +879,7 @@ paths:
       tags: [Preferences]
       operationId: getPreferences
       summary: Read user preferences
-      x-m0-status: stub
+      x-m0-status: implemented
       responses:
         '200':
           description: Preferences
@@ -888,7 +893,7 @@ paths:
       tags: [Preferences]
       operationId: updatePreferences
       summary: Update user preferences
-      x-m0-status: stub
+      x-m0-status: implemented
       parameters:
         - $ref: '#/components/parameters/CsrfToken'
       requestBody:
@@ -1095,11 +1100,18 @@ components:
         slug: { type: string }
     SessionPayload:
       type: object
-      required: [user, organization, role, permissions, csrfToken, expiresAt]
+      required:
+        [user, organization, role, roleNames, permissions, csrfToken, expiresAt]
       properties:
         user: { $ref: '#/components/schemas/SessionUser' }
         organization: { $ref: '#/components/schemas/SessionOrganization' }
-        role: { type: string, enum: [editor, viewer] }
+        role:
+          type: string
+          description: Primary role name (first assigned role, custom roles included).
+          example: editor
+        roleNames:
+          type: array
+          items: { type: string }
         permissions:
           type: array
           items: { type: string }
@@ -1372,7 +1384,7 @@ components:
       required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
-        config: { $ref: '#/components/schemas/DashboardConfig' }
+        description: { type: string, maxLength: 2000 }
     UpdateDashboardRequest:
       type: object
       properties:
@@ -1635,11 +1647,15 @@ components:
 
     Preferences:
       type: object
+      required: [locale, theme, timezone, defaultOrganizationId]
       properties:
         locale: { type: string, enum: [en, fa] }
         theme: { type: string, enum: [light, dark, system] }
         timezone: { type: string }
-        defaultOrganizationId: { type: string, format: uuid }
+        defaultOrganizationId:
+          type: string
+          format: uuid
+          nullable: true
     PreferencesUpdate:
       type: object
       properties:

@@ -62,29 +62,34 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M5 (visualization system) is complete and awaiting acceptance (2026-11-12); M6
-(backend and persistence) is the next milestone, is blocked on the ADR-011
-deployment decision, and has not started. The workspace contains `apps/web`,
+M6 (backend and persistence) is complete and awaiting acceptance (2026-11-12);
+M7 (data infrastructure) is the next milestone and has not started. ADR-011 is
+accepted as a self-hosted Docker topology. The workspace contains `apps/web`,
 `apps/api`, `examples/standalone-consumer` and exactly four packages:
 `@nama/dashboard-types` (contracts), `@nama/dashboard-core` (host-agnostic
 runtime: plugin contract, registry, query keys, i18n, layout, theme),
 `@nama/dashboard-builder` (React provider, viewer, editor, canvas, renderer,
 hooks, plus seven built-in widgets behind the `./widgets` subpath) and
-`@nama/api-client` (hand-written typed transport until M6 codegen). Do not create
-the target-only packages listed in
+`@nama/api-client` (hand-written typed transport; codegen is deferred). Do not
+create the target-only packages listed in
 `docs/architecture/package-dependencies.md`.
 
-The API keeps all state in memory and reseeds on restart. Demo accounts come from
-`DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD` (`demo@nama.local` /
-`nama-demo-123`) and `DEMO_VIEWER_EMAIL`/`DEMO_VIEWER_PASSWORD`
-(`viewer@nama.local` / `nama-viewer-123`). The web app proxies `/api/*` to
-`NAMA_API_URL` (default `http://localhost:3001`).
+The API persists product data in PostgreSQL behind the `Persistence` facade when
+`APP_DATABASE_URL` is set (required in production) and falls back to the seeded
+in-memory adapter otherwise. `docker-compose.dev.yml` runs PostgreSQL 17 with an
+owner role for migrations (`DATABASE_URL`) and a non-superuser runtime role
+(`APP_DATABASE_URL`); row-level security is only meaningful with the runtime
+role. Demo accounts are seeded from `DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD`
+(`demo@nama.local` / `nama-demo-123`) and
+`DEMO_VIEWER_EMAIL`/`DEMO_VIEWER_PASSWORD` (`viewer@nama.local` /
+`nama-viewer-123`). The web app proxies `/api/*` to `NAMA_API_URL` (default
+`http://localhost:3001`).
 
-Working rules for M6 and later:
+Working rules for M7 and later:
 
 1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
    `pnpm typecheck`, `pnpm test`, `pnpm verify:workspace`,
-   `pnpm verify:consumer`).
+   `pnpm verify:consumer`, `pnpm verify:openapi`).
 2. Package entry points resolve to `dist`; build before typechecking or running
    a dependent app.
 3. Do not add cross-package imports outside the approved graph; the boundary
@@ -107,6 +112,17 @@ Working rules for M6 and later:
     entries inside the `verify:consumer` budgets.
 11. Widget settings must validate through the plugin `configSchema` before
     writing to the draft; never bypass it with a settings-specific parse.
-12. Do not implement M6 persistence or auth work while closing M5.
+12. Keep every tenant table under `ENABLE` + `FORCE ROW LEVEL SECURITY`; set the
+    tenant with a transaction-local `SET LOCAL app.organization_id` and never run
+    tenant queries as the owner role.
+13. Add a Prisma migration for every schema change; CI applies migrations and the
+    seed before tests, and the Postgres integration suite must stay green when
+    `NAMA_TEST_DATABASE_URL` is set.
+14. Never return credential material. `CREDENTIAL_ENCRYPTION_KEY` stays out of
+    the repository, decryption rejects unknown key versions, and a missing key
+    keeps returning `503 CREDENTIALS_NOT_CONFIGURED`.
+15. Update `docs/api/openapi.yaml` with every route change; `pnpm verify:openapi`
+    must report the contract in sync.
+16. Do not implement work from a later milestone while closing the current one.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

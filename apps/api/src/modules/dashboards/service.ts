@@ -4,9 +4,7 @@ import { badRequest } from "../../infrastructure/errors.ts";
 import type {
   DashboardRecord,
   DashboardVersionRecord,
-  SessionRecord,
-  Store,
-} from "../../infrastructure/store.ts";
+} from "../../infrastructure/persistence/types.ts";
 
 export interface DashboardSummary {
   id: string;
@@ -42,9 +40,9 @@ export function toSummary(record: DashboardRecord): DashboardSummary {
     organizationId: record.organizationId,
     name: record.name,
     revision: record.revision,
-    publishedRevision: record.publishedRevision ?? null,
+    publishedRevision: record.publishedRevision,
     updatedAt: record.updatedAt,
-    publishedAt: record.publishedAt ?? null,
+    publishedAt: record.publishedAt,
   };
 }
 
@@ -54,7 +52,7 @@ export function toView(
 ): DashboardView {
   return {
     ...toSummary(record),
-    publishedConfig: record.publishedConfig ?? null,
+    publishedConfig: record.publishedConfig,
     permissions: [...permissions],
   };
 }
@@ -76,17 +74,6 @@ export function toVersionSummary(
     title: version.config.metadata.title,
     createdAt: version.createdAt,
   };
-}
-
-/** Tenant-scoped lookup: out-of-scope ids are indistinguishable from missing. */
-export function findDashboard(
-  store: Store,
-  session: SessionRecord,
-  id: string,
-): DashboardRecord | undefined {
-  const record = store.dashboards.get(id);
-  if (!record || record.organizationId !== session.organizationId) return undefined;
-  return record;
 }
 
 export function parseIfMatch(value: string | string[] | undefined): number {

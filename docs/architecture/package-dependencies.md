@@ -1,6 +1,6 @@
 # Package Dependencies
 
-**Status:** Implemented through M5 (2026-11-12)
+**Status:** Implemented through M6 (2026-11-12)
 
 ## Initial packages (created in M1)
 

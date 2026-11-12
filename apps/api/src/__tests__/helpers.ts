@@ -3,7 +3,8 @@ import { createId, type DashboardConfig } from "@nama/dashboard-types";
 
 import { buildApp, type BuildAppOptions } from "../app.ts";
 import { loadEnv, type Env } from "../env.ts";
-import type { Store } from "../infrastructure/store.ts";
+import { createMemoryPersistence } from "../infrastructure/persistence/memory.ts";
+import type { Persistence } from "../infrastructure/persistence/types.ts";
 import { issueSession } from "../infrastructure/sessions.ts";
 
 export const EDITOR_EMAIL = "demo@nama.local";
@@ -133,40 +134,49 @@ export function demoConfig(title: string): DashboardConfig {
 }
 
 /** Adds a second organization and user for cross-tenant tests. */
-export function addSecondTenant(store: Store): {
+export async function addSecondTenant(persistence: Persistence): Promise<{
   organizationId: string;
   userId: string;
   token: string;
   cookie: string;
-} {
-  const organization = { id: createId(), name: "Other Org", slug: "other" };
-  const user = {
-    id: createId(),
-    email: "other@nama.local",
-    passwordHash: "not-used",
-    displayName: "Other User",
-    locale: "en" as const,
-    theme: "system" as const,
-    timezone: "UTC",
-    status: "active" as const,
-  };
-
-  store.organizations.set(organization.id, organization);
-  store.users.set(user.id, user);
-  store.memberships.push({
-    id: createId(),
+}> {
+  const organization = { id: createId(), name: "Other Org", slug: `other-${createId()}` };
+  await persistence.organizations.create(organization);
+  const viewerRole = await persistence.roles.create({
     organizationId: organization.id,
-    userId: user.id,
-    role: "viewer",
-    status: "active",
+    name: "viewer",
+    permissions: ["dashboard.read", "datasource.execute"],
   });
 
-  const { token } = issueSession(store, user.id, organization.id, 3_600_000, new Date());
+  const member = await persistence.memberships.create({
+    organizationId: organization.id,
+    user: {
+      id: createId(),
+      email: `other-${createId()}@nama.local`,
+      passwordHash: "",
+      displayName: "Other User",
+    },
+    roleIds: [viewerRole.id],
+    status: "active",
+    createdAt: new Date().toISOString(),
+  });
+
+  const { token } = await issueSession(
+    persistence,
+    member.user.id,
+    organization.id,
+    3_600_000,
+    new Date(),
+  );
 
   return {
     organizationId: organization.id,
-    userId: user.id,
+    userId: member.user.id,
     token,
     cookie: `nama_session=${token}`,
   };
+}
+
+export function createTestPersistence(env: Env = testEnv()): Persistence {
+  return createMemoryPersistence(env);
 }

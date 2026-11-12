@@ -16,7 +16,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify:workspace": "node scripts/verify-workspace.mjs",
-    "verify:consumer": "node scripts/verify-consumer.mjs"
+    "verify:consumer": "node scripts/verify-consumer.mjs",
+    "verify:openapi": "pnpm --filter @nama/api verify:openapi"
   },
   "devDependencies": {
     "@types/node": "^24",

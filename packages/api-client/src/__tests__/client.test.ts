@@ -231,4 +231,82 @@ describe("api client", () => {
     expect(error.status).toBe(502);
     expect(error.code).toBe("INTERNAL");
   });
+
+  it("renames with PATCH and deletes with If-Match", async () => {
+    const { calls, fetchImpl } = stubFetch((call) =>
+      call.init.method === "DELETE"
+        ? new Response(null, { status: 204 })
+        : Response.json({ id: "d1", revision: 4 }),
+    );
+    const client = createApiClient({ fetch: fetchImpl, csrfToken: () => "token" });
+
+    await client.updateDashboard("d1", { name: "Renamed" }, 3);
+    await client.deleteDashboard("d1", 4);
+
+    expect(calls[0]?.init.method).toBe("PATCH");
+    expect(calls[0]?.init.body).toBe(JSON.stringify({ name: "Renamed" }));
+    expect((calls[0]?.init.headers as Record<string, string>)["if-match"]).toBe('"3"');
+    expect(calls[1]?.init.method).toBe("DELETE");
+    expect((calls[1]?.init.headers as Record<string, string>)["if-match"]).toBe('"4"');
+    expect((calls[1]?.init.headers as Record<string, string>)["x-csrf-token"]).toBe(
+      "token",
+    );
+  });
+
+  it("issues and revokes embed tokens", async () => {
+    const { calls, fetchImpl } = stubFetch((call) =>
+      call.init.method === "DELETE"
+        ? new Response(null, { status: 204 })
+        : Response.json({ id: "e1", token: "abc", expiresAt: "later" }),
+    );
+    const client = createApiClient({ fetch: fetchImpl, csrfToken: () => "token" });
+
+    const issued = await client.issueEmbedToken("d1", { expiresInSeconds: 3600 });
+    await client.revokeEmbedToken("d1", "e1");
+
+    expect(issued.token).toBe("abc");
+    expect(calls[0]?.url).toBe("/api/v1/dashboards/d1/embed-tokens");
+    expect(calls[0]?.init.body).toBe(JSON.stringify({ expiresInSeconds: 3600 }));
+    expect(calls[1]?.url).toBe("/api/v1/dashboards/d1/embed-tokens/e1");
+  });
+
+  it("lists data sources with pagination and updates preferences", async () => {
+    const { calls, fetchImpl } = stubFetch((call) =>
+      call.url.includes("/preferences")
+        ? Response.json({
+            locale: "fa",
+            theme: "dark",
+            timezone: "Asia/Tehran",
+            defaultOrganizationId: "o1",
+          })
+        : Response.json({ items: [], pagination: { page: 2, pageSize: 10, total: 0 } }),
+    );
+    const client = createApiClient({ fetch: fetchImpl, csrfToken: () => "token" });
+
+    await client.listDataSources({ page: 2, pageSize: 10 });
+    const preferences = await client.updatePreferences({ locale: "fa", theme: "dark" });
+
+    expect(calls[0]?.url).toBe("/api/v1/data-sources?page=2&pageSize=10");
+    expect(preferences.locale).toBe("fa");
+    expect(calls[1]?.init.method).toBe("PATCH");
+    expect(calls[1]?.init.body).toBe(JSON.stringify({ locale: "fa", theme: "dark" }));
+  });
+
+  it("manages members and roles under the organization path", async () => {
+    const { calls, fetchImpl } = stubFetch((call) =>
+      call.url.includes("/members")
+        ? Response.json({
+            items: [],
+            pagination: { page: 1, pageSize: 25, total: 0 },
+          })
+        : Response.json({ items: [] }),
+    );
+    const client = createApiClient({ fetch: fetchImpl, csrfToken: () => "token" });
+
+    await client.listMembers("o1", { page: 1 });
+    await client.listRoles("o1");
+
+    expect(calls[0]?.url).toBe("/api/v1/organizations/o1/members?page=1");
+    expect(calls[1]?.url).toBe("/api/v1/organizations/o1/roles");
+  });
 });

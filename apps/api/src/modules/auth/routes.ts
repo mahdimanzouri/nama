@@ -16,7 +16,6 @@ import {
   unauthorized,
   validationFailed,
 } from "../../infrastructure/errors.ts";
-import { findUserByEmail, permissionsFor } from "../../infrastructure/store.ts";
 import type { AuthDeps, AuthHooks } from "../../http/auth.ts";
 import { verifyPassword } from "../../infrastructure/passwords.ts";
 import { toSessionPayload } from "./service.ts";
@@ -36,16 +35,17 @@ export interface AuthRouteDeps extends AuthDeps {
 
 export function registerAuthRoutes(
   app: FastifyInstance,
-  { store, now, hooks, sessionTtlMs, isProduction }: AuthRouteDeps,
+  { persistence, now, hooks, sessionTtlMs, isProduction }: AuthRouteDeps,
 ): void {
   app.post("/v1/auth/login", async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) throw validationFailed(issuesFromZod(parsed.error));
 
-    const user = findUserByEmail(store, parsed.data.email);
-    const passwordMatches = user
-      ? await verifyPassword(user.passwordHash, parsed.data.password)
-      : false;
+    const user = await persistence.users.findByEmail(parsed.data.email);
+    const passwordMatches =
+      user && user.passwordHash
+        ? await verifyPassword(user.passwordHash, parsed.data.password)
+        : false;
 
     if (!user || user.status !== "active" || !passwordMatches) {
       throw new HttpError(401, {
@@ -54,19 +54,17 @@ export function registerAuthRoutes(
       });
     }
 
-    const membership = store.memberships.find(
-      (candidate) => candidate.userId === user.id && candidate.status === "active",
+    const active = await persistence.memberships.findFirstActive(user.id);
+    if (!active) throw forbidden("No active organization membership");
+
+    const organization = await persistence.organizations.findById(
+      active.membership.organizationId,
     );
-    const organization = membership
-      ? store.organizations.get(membership.organizationId)
-      : undefined;
+    if (!organization) throw forbidden("Organization is not available");
 
-    if (!membership || !organization) {
-      throw forbidden("No active organization membership");
-    }
-
-    const { token, session } = issueSession(
-      store,
+    await persistence.sessions.deleteExpired(now());
+    const { token, session } = await issueSession(
+      persistence,
       user.id,
       organization.id,
       sessionTtlMs,
@@ -84,25 +82,30 @@ export function registerAuthRoutes(
       csrfCookieOptions(isProduction, sessionTtlMs),
     );
 
+    const preferences = await persistence.users.getPreferences(user.id);
+
     return toSessionPayload({
       user,
       organization,
-      membership,
+      roleNames: active.roleNames,
       session,
-      permissions: permissionsFor(membership.role),
+      permissions: active.permissions,
+      preferences,
     });
   });
 
   app.get("/v1/auth/session", { preHandler: [hooks.authenticate] }, async (request) => {
     const auth = request.auth;
     if (!auth) throw unauthorized();
+    const preferences = await persistence.users.getPreferences(auth.user.id);
 
     return toSessionPayload({
       user: auth.user,
       organization: auth.organization,
-      membership: auth.membership,
+      roleNames: auth.roleNames,
       session: auth.session,
       permissions: auth.permissions,
+      preferences,
     });
   });
 
@@ -111,7 +114,7 @@ export function registerAuthRoutes(
     { preHandler: [hooks.authenticate, hooks.requireCsrf] },
     async (request, reply) => {
       const token = request.cookies?.[SESSION_COOKIE];
-      if (token) store.sessions.delete(hashSessionToken(token));
+      if (token) await persistence.sessions.deleteByTokenHash(hashSessionToken(token));
 
       reply.clearCookie(SESSION_COOKIE, { path: "/" });
       reply.clearCookie(CSRF_COOKIE, { path: "/" });

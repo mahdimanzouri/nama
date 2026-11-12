@@ -1,6 +1,7 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   ISSUE_CODES,
+  PLATFORM_LIMITS,
   createId,
   issuesFromZod,
   parseDashboardConfig,
@@ -16,16 +17,14 @@ import {
   unauthorized,
   validationFailed,
 } from "../../infrastructure/errors.ts";
-import type { DashboardRecord, Store } from "../../infrastructure/store.ts";
-import type { AuthHooks } from "../../http/auth.ts";
-import {
-  findDashboard,
-  parseIfMatch,
-  toDraft,
-  toSummary,
-  toVersionSummary,
-  toView,
-} from "./service.ts";
+import type {
+  DashboardRecord,
+  Persistence,
+  RevisionWriteResult,
+  TenantScope,
+} from "../../infrastructure/persistence/types.ts";
+import type { AuthContext, AuthHooks } from "../../http/auth.ts";
+import { parseIfMatch, toDraft, toSummary, toVersionSummary, toView } from "./service.ts";
 
 const createSchema = z
   .object({
@@ -33,6 +32,23 @@ const createSchema = z
     description: z.string().max(2000).optional(),
   })
   .strict();
+
+const updateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    metadata: z
+      .object({
+        title: z.string().trim().min(1).max(200).optional(),
+        description: z.string().max(2000).optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .refine((value) => value.name || value.metadata?.title, {
+    message: "name or metadata.title is required",
+    path: ["name"],
+  });
 
 const saveDraftSchema = z
   .object({
@@ -50,14 +66,18 @@ const listQuerySchema = z
 const restoreSchema = z.object({ versionId: z.uuid() }).strict();
 
 export interface DashboardRouteDeps {
-  store: Store;
+  persistence: Persistence;
   now: () => Date;
   hooks: AuthHooks;
 }
 
-function requireAuth(request: Parameters<AuthHooks["authenticate"]>[0]) {
+function requireAuth(request: FastifyRequest): AuthContext {
   if (!request.auth) throw unauthorized();
   return request.auth;
+}
+
+function scopeOf(auth: AuthContext): TenantScope {
+  return { organizationId: auth.organization.id, userId: auth.user.id };
 }
 
 function validationFailure(issues: ValidationIssue[]): HttpError {
@@ -72,9 +92,15 @@ function validationFailure(issues: ValidationIssue[]): HttpError {
   return validationFailed(issues);
 }
 
+function unwrapWrite(result: RevisionWriteResult): DashboardRecord {
+  if (result.status === "missing") throw notFound("Dashboard not found");
+  if (result.status === "conflict") throw revisionConflict(result.currentRevision);
+  return result.record;
+}
+
 export function registerDashboardRoutes(
   app: FastifyInstance,
-  { store, now, hooks }: DashboardRouteDeps,
+  { persistence, now, hooks }: DashboardRouteDeps,
 ): void {
   app.get(
     "/v1/dashboards",
@@ -87,14 +113,16 @@ export function registerDashboardRoutes(
       if (!query.success) throw validationFailed(issuesFromZod(query.error));
 
       const { page, pageSize } = query.data;
-      const records = [...store.dashboards.values()]
-        .filter((record) => record.organizationId === auth.session.organizationId)
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+      const result = await persistence.withTenant(scopeOf(auth), () =>
+        persistence.dashboards.list(auth.organization.id, {
+          offset: (page - 1) * pageSize,
+          limit: pageSize,
+        }),
+      );
 
-      const start = (page - 1) * pageSize;
       return {
-        items: records.slice(start, start + pageSize).map(toSummary),
-        pagination: { page, pageSize, total: records.length },
+        items: result.items.map(toSummary),
+        pagination: { page, pageSize, total: result.total },
       };
     },
   );
@@ -121,16 +149,31 @@ export function registerDashboardRoutes(
 
       const record: DashboardRecord = {
         id: createId(),
-        organizationId: auth.session.organizationId,
+        organizationId: auth.organization.id,
         name: parsed.data.name,
         draftConfig: config,
+        publishedConfig: null,
         revision: 1,
+        publishedRevision: null,
         createdBy: auth.user.id,
         createdAt: timestamp,
         updatedAt: timestamp,
+        publishedAt: null,
       };
 
-      store.dashboards.set(record.id, record);
+      await persistence.withTenant(scopeOf(auth), async () => {
+        await persistence.dashboards.create(record);
+        await persistence.audit.record({
+          organizationId: auth.organization.id,
+          actorType: "user",
+          actorId: auth.user.id,
+          action: "dashboard.create",
+          resourceType: "dashboard",
+          resourceId: record.id,
+          requestId: request.id,
+        });
+      });
+
       return reply.code(201).send(toView(record, auth.permissions));
     },
   );
@@ -143,10 +186,96 @@ export function registerDashboardRoutes(
     async (request) => {
       const auth = requireAuth(request);
       const { id } = request.params as { id: string };
-      const record = findDashboard(store, auth.session, id);
+      const record = await persistence.withTenant(scopeOf(auth), () =>
+        persistence.dashboards.find(auth.organization.id, id),
+      );
       if (!record) throw notFound("Dashboard not found");
 
       return toView(record, auth.permissions);
+    },
+  );
+
+  app.patch(
+    "/v1/dashboards/:id",
+    {
+      preHandler: [
+        hooks.authenticate,
+        hooks.requireCsrf,
+        hooks.requirePermission("dashboard.update"),
+      ],
+    },
+    async (request) => {
+      const auth = requireAuth(request);
+      const { id } = request.params as { id: string };
+      const expectedRevision = parseIfMatch(request.headers["if-match"]);
+
+      const parsed = updateSchema.safeParse(request.body);
+      if (!parsed.success) throw validationFailed(issuesFromZod(parsed.error));
+
+      const name = parsed.data.name ?? parsed.data.metadata?.title;
+      if (!name) throw validationFailed([]);
+
+      return persistence.withTenant(scopeOf(auth), async () => {
+        const record = await persistence.dashboards.find(auth.organization.id, id);
+        if (!record) throw notFound("Dashboard not found");
+        if (record.revision !== expectedRevision) {
+          throw revisionConflict(record.revision);
+        }
+        const updated = await persistence.dashboards.rename(
+          auth.organization.id,
+          id,
+          name,
+        );
+        if (!updated) throw notFound("Dashboard not found");
+        await persistence.audit.record({
+          organizationId: auth.organization.id,
+          actorType: "user",
+          actorId: auth.user.id,
+          action: "dashboard.update",
+          resourceType: "dashboard",
+          resourceId: id,
+          metadata: { name },
+          requestId: request.id,
+        });
+        return toSummary(updated);
+      });
+    },
+  );
+
+  app.delete(
+    "/v1/dashboards/:id",
+    {
+      preHandler: [
+        hooks.authenticate,
+        hooks.requireCsrf,
+        hooks.requirePermission("dashboard.delete"),
+      ],
+    },
+    async (request, reply) => {
+      const auth = requireAuth(request);
+      const { id } = request.params as { id: string };
+      const expectedRevision = parseIfMatch(request.headers["if-match"]);
+
+      await persistence.withTenant(scopeOf(auth), async () => {
+        const record = await persistence.dashboards.find(auth.organization.id, id);
+        if (!record) throw notFound("Dashboard not found");
+        if (record.revision !== expectedRevision) {
+          throw revisionConflict(record.revision);
+        }
+        const removed = await persistence.dashboards.remove(auth.organization.id, id);
+        if (!removed) throw notFound("Dashboard not found");
+        await persistence.audit.record({
+          organizationId: auth.organization.id,
+          actorType: "user",
+          actorId: auth.user.id,
+          action: "dashboard.delete",
+          resourceType: "dashboard",
+          resourceId: id,
+          requestId: request.id,
+        });
+      });
+
+      return reply.code(204).send();
     },
   );
 
@@ -158,7 +287,9 @@ export function registerDashboardRoutes(
     async (request) => {
       const auth = requireAuth(request);
       const { id } = request.params as { id: string };
-      const record = findDashboard(store, auth.session, id);
+      const record = await persistence.withTenant(scopeOf(auth), () =>
+        persistence.dashboards.find(auth.organization.id, id),
+      );
       if (!record) throw notFound("Dashboard not found");
 
       return toDraft(record);
@@ -177,13 +308,7 @@ export function registerDashboardRoutes(
     async (request) => {
       const auth = requireAuth(request);
       const { id } = request.params as { id: string };
-      const record = findDashboard(store, auth.session, id);
-      if (!record) throw notFound("Dashboard not found");
-
       const expectedRevision = parseIfMatch(request.headers["if-match"]);
-      if (record.revision !== expectedRevision) {
-        throw revisionConflict(record.revision);
-      }
 
       const parsed = saveDraftSchema.safeParse(request.body);
       if (!parsed.success) throw validationFailed(issuesFromZod(parsed.error));
@@ -197,12 +322,30 @@ export function registerDashboardRoutes(
       if (!result.ok) throw validationFailure(result.issues);
 
       const timestamp = now().toISOString();
-      record.draftConfig = result.value;
-      record.name = result.value.metadata.title;
-      record.revision += 1;
-      record.updatedAt = timestamp;
+      const record = await persistence.withTenant(scopeOf(auth), async () => {
+        const written = unwrapWrite(
+          await persistence.dashboards.saveDraft({
+            organizationId: auth.organization.id,
+            id,
+            expectedRevision,
+            config: result.value,
+            now: timestamp,
+          }),
+        );
+        await persistence.audit.record({
+          organizationId: auth.organization.id,
+          actorType: "user",
+          actorId: auth.user.id,
+          action: "dashboard.update",
+          resourceType: "dashboard",
+          resourceId: id,
+          metadata: { revision: written.revision },
+          requestId: request.id,
+        });
+        return written;
+      });
 
-      return { revision: record.revision, updatedAt: timestamp };
+      return { revision: record.revision, updatedAt: record.updatedAt };
     },
   );
 
@@ -218,39 +361,32 @@ export function registerDashboardRoutes(
     async (request) => {
       const auth = requireAuth(request);
       const { id } = request.params as { id: string };
-      const record = findDashboard(store, auth.session, id);
-      if (!record) throw notFound("Dashboard not found");
-
       const expectedRevision = parseIfMatch(request.headers["if-match"]);
-      if (record.revision !== expectedRevision) {
-        throw revisionConflict(record.revision);
-      }
 
-      const timestamp = now().toISOString();
-      record.publishedConfig = record.draftConfig;
-      record.publishedAt = timestamp;
-      record.revision += 1;
-      record.publishedRevision = record.revision;
-      record.updatedAt = timestamp;
-
-      store.versions.push({
-        id: createId(),
-        dashboardId: record.id,
-        organizationId: record.organizationId,
-        revision: record.revision,
-        config: record.publishedConfig,
-        createdBy: auth.user.id,
-        createdAt: timestamp,
+      const record = await persistence.withTenant(scopeOf(auth), async () => {
+        const published = unwrapWrite(
+          await persistence.dashboards.publish({
+            organizationId: auth.organization.id,
+            id,
+            expectedRevision,
+            actorId: auth.user.id,
+            now: now().toISOString(),
+            versionId: createId(),
+            keepVersions: PLATFORM_LIMITS.maxRetainedVersions,
+          }),
+        );
+        await persistence.audit.record({
+          organizationId: auth.organization.id,
+          actorType: "user",
+          actorId: auth.user.id,
+          action: "dashboard.publish",
+          resourceType: "dashboard",
+          resourceId: id,
+          metadata: { revision: published.revision },
+          requestId: request.id,
+        });
+        return published;
       });
-
-      const versions = store.versions.filter(
-        (version) => version.dashboardId === record.id,
-      );
-      const excess = versions.length - 50;
-      if (excess > 0) {
-        const removed = new Set(versions.slice(0, excess).map((version) => version.id));
-        store.versions = store.versions.filter((version) => !removed.has(version.id));
-      }
 
       return toView(record, auth.permissions);
     },
@@ -264,21 +400,22 @@ export function registerDashboardRoutes(
     async (request) => {
       const auth = requireAuth(request);
       const { id } = request.params as { id: string };
-      const record = findDashboard(store, auth.session, id);
-      if (!record) throw notFound("Dashboard not found");
-
       const query = listQuerySchema.safeParse(request.query);
       if (!query.success) throw validationFailed(issuesFromZod(query.error));
 
       const { page, pageSize } = query.data;
-      const versions = store.versions
-        .filter((version) => version.dashboardId === record.id)
-        .sort((left, right) => right.revision - left.revision);
-      const start = (page - 1) * pageSize;
+      const result = await persistence.withTenant(scopeOf(auth), async () => {
+        const record = await persistence.dashboards.find(auth.organization.id, id);
+        if (!record) throw notFound("Dashboard not found");
+        return persistence.dashboards.listVersions(auth.organization.id, id, {
+          offset: (page - 1) * pageSize,
+          limit: pageSize,
+        });
+      });
 
       return {
-        items: versions.slice(start, start + pageSize).map(toVersionSummary),
-        pagination: { page, pageSize, total: versions.length },
+        items: result.items.map(toVersionSummary),
+        pagination: { page, pageSize, total: result.total },
       };
     },
   );
@@ -295,27 +432,33 @@ export function registerDashboardRoutes(
     async (request) => {
       const auth = requireAuth(request);
       const { id } = request.params as { id: string };
-      const record = findDashboard(store, auth.session, id);
-      if (!record) throw notFound("Dashboard not found");
-
       const expectedRevision = parseIfMatch(request.headers["if-match"]);
-      if (record.revision !== expectedRevision) {
-        throw revisionConflict(record.revision);
-      }
 
       const parsed = restoreSchema.safeParse(request.body);
       if (!parsed.success) throw validationFailed(issuesFromZod(parsed.error));
 
-      const version = store.versions.find(
-        (entry) => entry.id === parsed.data.versionId && entry.dashboardId === record.id,
-      );
-      if (!version) throw notFound("Version not found");
-
-      const timestamp = now().toISOString();
-      record.draftConfig = version.config;
-      record.name = version.config.metadata.title;
-      record.revision += 1;
-      record.updatedAt = timestamp;
+      const record = await persistence.withTenant(scopeOf(auth), async () => {
+        const restored = unwrapWrite(
+          await persistence.dashboards.restoreDraft({
+            organizationId: auth.organization.id,
+            id,
+            expectedRevision,
+            versionId: parsed.data.versionId,
+            now: now().toISOString(),
+          }),
+        );
+        await persistence.audit.record({
+          organizationId: auth.organization.id,
+          actorType: "user",
+          actorId: auth.user.id,
+          action: "dashboard.restore",
+          resourceType: "dashboard",
+          resourceId: id,
+          metadata: { versionId: parsed.data.versionId },
+          requestId: request.id,
+        });
+        return restored;
+      });
 
       return toDraft(record);
     },
