@@ -1,6 +1,6 @@
 # Nama Dashboard Platform — Architecture Package
 
-**Status:** M0 approved; M1, M2, M3, M3.5, M4, M5, M6, M7 and M8 complete ([current phase](implementation/current-phase.md))
+**Status:** M0 approved; M1, M2, M3, M3.5, M4, M5, M6, M7, M8, M9, M10 and M11 complete ([current phase](implementation/current-phase.md))
 **Date:** 2026-11-12
 **Scope:** Architecture and decisions, plus the implemented walking skeleton.
 **Source:** [`dashboard-platform-full-planning.md`](../dashboard-platform-full-planning.md)
@@ -59,6 +59,12 @@ Arabic-Indic digit input in controls and settings, a typed `web.*` chrome catalo
 on every page, header language and theme selectors with persisted preferences,
 RTL chrome around the disclosed LTR canvas, and a Playwright suite covering the
 Persian editor→publish→viewer flow, theme persistence and screenshot baselines.
+M11 completed the plugin platform: `@nama/dashboard-types` publishes the
+`ServerDataSourcePlugin` contract with `validateDataSourcePlugin` and
+`createDataSourcePluginRegistry` (the API registry now re-exports it),
+`@nama/dashboard-builder/plugins` exports the widget registration surface, and
+`examples/plugin-kit` registers a custom widget (`configVersion` migration) and a
+`memory` data source through those documented contracts inside `verify:consumer`.
 Documents describing target-only packages list them as such.
 
 ## Status legend

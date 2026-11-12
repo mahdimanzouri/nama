@@ -7,8 +7,8 @@ themes. The dashboard canvas is LTR-only in v1.
 
 ## Repository status
 
-**Milestone M10 (internationalization and themes) is complete and awaiting
-acceptance (2026-11-12).** M11 (plugin ecosystem) is next.
+**Milestone M11 (plugin ecosystem) is complete and awaiting acceptance
+(2026-11-12).** M12 (production readiness) is next.
 
 The workspace contains:
 
@@ -19,17 +19,21 @@ apps/api                  Fastify 5 service: PostgreSQL persistence, auth, RBAC,
                           dashboards, shares, embed tokens, data sources,
                           queries, realtime gateway (WebSocket + SSE), health
                           endpoint
-packages/dashboard-types  public contracts: constants plus Zod schemas (M2)
+packages/dashboard-types  public contracts: constants, Zod schemas (M2) and the
+                          data-source plugin contract and registry (M11)
 packages/dashboard-core   host-agnostic runtime: plugin contract, registry,
                           query keys, i18n, layout, theme, HTTP/static data
                           adapters (M3, adapters in M7), WebSocket/SSE realtime
                           adapters (M8)
 packages/dashboard-builder React provider, viewer, editor, grid canvas, hooks,
-                          stylesheet and built-in widgets behind `./widgets`
-                          (M3, editor in M4, widgets in M5)
+                          stylesheet, built-in widgets behind `./widgets` and the
+                          plugin registration surface behind `./plugins`
+                          (M3, editor in M4, widgets in M5, plugins in M11)
 packages/api-client       hand-written typed transport and errors (M3.5)
 examples/standalone-consumer  React app that renders a dashboard via packed
                               tarballs (M3)
+examples/plugin-kit       custom widget and `memory` data-source plugins
+                          registered through the public contracts (M11)
 ```
 
 The walking skeleton runs end to end, and the M4 editor adds direct manipulation:
@@ -57,8 +61,13 @@ JSON import/export. M10 completes English/Persian support: every page and state
 is translated, dates display in the Solar Hijri calendar, Persian digits are
 accepted in controls, and the header switches language and light/dark/system
 themes with persisted preferences. The canvas stays LTR-only inside RTL chrome
-and the editor says so. An in-memory persistence adapter remains for tests — see
-the [roadmap](docs/implementation/roadmap.md).
+and the editor says so. M11 opens the plugin surface: `@nama/dashboard-types`
+publishes the validated data-source plugin contract and registry,
+`@nama/dashboard-builder/plugins` exports widget registration, and
+`examples/plugin-kit` adds a custom widget (with a `configVersion` migration) and
+a `memory` connector that `pnpm verify:consumer` registers against the packed
+tarballs. An in-memory persistence adapter remains for tests — see the
+[roadmap](docs/implementation/roadmap.md).
 
 ## Architecture documentation
 
@@ -87,7 +96,7 @@ pnpm test
 pnpm lint              # ESLint over the whole workspace
 pnpm format            # Prettier
 pnpm verify:workspace  # package boundaries and single React version
-pnpm verify:consumer   # packs the SDK and renders it in examples/standalone-consumer
+pnpm verify:consumer   # packs the SDK, renders examples/standalone-consumer and runs examples/plugin-kit
 pnpm verify:openapi    # Fastify routes vs docs/api/openapi.yaml
 pnpm test:e2e          # Playwright locale/theme/screenshot suite (dev servers)
 pnpm clean

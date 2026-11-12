@@ -1,9 +1,6 @@
 import { createElement as h } from "react";
-import {
-  DashboardProvider,
-  DashboardViewer,
-  defineWidget,
-} from "@nama/dashboard-builder";
+import { DashboardProvider, DashboardViewer } from "@nama/dashboard-builder";
+import { defineWidget } from "@nama/dashboard-builder/plugins";
 import { z } from "zod";
 
 const KPI_WIDGET_ID = "0192f4c2-7a1e-7cc3-9a0e-3f5f0f6a2b01";

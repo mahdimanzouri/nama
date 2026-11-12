@@ -1,0 +1,16 @@
+{
+  "name": "nama-plugin-kit",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "Example widget and data-source plugins written against the public contracts",
+  "scripts": {
+    "verify": "node src/verify.mjs"
+  },
+  "dependencies": {
+    "@nama/dashboard-builder": "0.0.0",
+    "@nama/dashboard-types": "0.0.0",
+    "react": "19.3.0",
+    "zod": "4.6.7"
+  }
+}

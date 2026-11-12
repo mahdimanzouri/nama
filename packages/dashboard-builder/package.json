@@ -22,6 +22,10 @@
       "types": "./dist/widgets.d.mts",
       "import": "./dist/widgets.mjs"
     },
+    "./plugins": {
+      "types": "./dist/plugins.d.mts",
+      "import": "./dist/plugins.mjs"
+    },
     "./styles.css": "./dist/styles.css"
   },
   "scripts": {

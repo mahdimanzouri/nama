@@ -1,8 +1,12 @@
 # Plugin System
 
-**Status:** Proposed (M0). The registry, widget resolution, capability gating and
-placeholder behavior are implemented in `@nama/dashboard-core` (M3). Editor
-extensions and data-source plugins remain proposals.
+**Status:** Delivered (M11). Widget registration, resolution, capability gating,
+placeholder behavior and the editor settings panel are implemented in
+`@nama/dashboard-core` and `@nama/dashboard-builder` (M3–M5). The data-source
+contract now lives in `@nama/dashboard-types` with validated registration
+(M7 runtime, contract published in M11). `examples/plugin-kit` registers one
+plugin of each kind against the packed packages. Remote loading, marketplaces
+and sandboxes remain out of scope.
 
 The normative contracts live in:
 
@@ -19,6 +23,10 @@ lifecycle, versioning and security.
 2. **Data-source plugins** — REST, SQL, MQTT, WebSocket, customer integrations.
    These run server-side.
 3. **Editor extensions** — custom settings panels, controls, filters and actions.
+   In v1 the editor extension point is the widget contract's `settings`
+   component, which receives the current config, `onChange`, the available data
+   sources and an optional query editor. A generic registry for custom control
+   types or toolbar actions does not exist (TD-072).
 
 ## Lifecycle
 
@@ -88,6 +96,34 @@ Rules:
   not public API.
 - Unknown types fall back to a placeholder widget that shows the type, the
   `configVersion` and an explanation, and allows removal.
+
+Data-source plugins use the same registration model on the server:
+
+```ts
+import { createDataSourcePluginRegistry } from "@nama/dashboard-types";
+
+const registry = createDataSourcePluginRegistry([staticPlugin, restPlugin]);
+registry.register(plugin, { replace?: true });
+```
+
+Registration validates the manifest, the Zod schemas, the required methods and
+the declared capabilities before a plugin can serve a request; duplicate kinds
+are rejected. `apps/api` builds the registry at boot from its installed
+connectors (TD-071). The full rules are in the
+[data-source plugin contract](../plugins/data-source-plugin-contract.md).
+
+## Compatibility checks
+
+Three independent versions are validated at their boundaries:
+
+- `schemaVersion` (whole dashboard) is rejected when newer than the runtime and
+  migrated by `parseDashboardConfig` when older.
+- A widget's `configVersion` newer than the plugin's renders the placeholder;
+  older versions migrate through `migrate()` or fail with
+  `UnsupportedConfigVersionError`.
+- Plugin package `version` must be semver and is validated at registration, so a
+  manifest typo is a startup error instead of a support ticket. Capabilities
+  must match the methods a data-source plugin ships.
 
 ## Built-in widgets
 

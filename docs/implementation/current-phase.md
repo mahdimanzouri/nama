@@ -1,7 +1,7 @@
 # Current Phase
 
-**Current milestone:** M11 — Plugin platform (next)
-**Status:** M10 complete, awaiting acceptance (2026-11-12)
+**Current milestone:** M12 — Production readiness (next)
+**Status:** M11 complete, awaiting acceptance (2026-11-12)
 **Date:** 2026-11-12
 
 ## What the repository looks like now
@@ -31,15 +31,19 @@ nama/
 │               └── realtime/   # /ws/v1 gateway, SSE stream, authorizer, hub, buffers
 ├── packages/
 │   ├── dashboard-types/        # platform constants + runtime contracts (M2);
-│   │                           # controls, interaction and transfer schemas (M9)
+│   │                           # controls, interaction and transfer schemas (M9);
+│   │                           # data-source plugin contract + registry (M11)
 │   ├── dashboard-core/         # host-agnostic runtime, HTTP/static data adapters (M3/M7),
 │   │                           # WebSocket/SSE realtime adapters (M8),
 │   │                           # control/filter/visibility resolution (M9)
 │   ├── dashboard-builder/      # provider, viewer, controls and CSS (M3/M4/M9);
 │   │                           # editor behind the `./editor` entry (M9);
-│   │                           # built-in widgets behind the `./widgets` entry (M5)
+│   │                           # built-in widgets behind `./widgets` (M5);
+│   │                           # plugin authoring surface behind `./plugins` (M11)
 │   └── api-client/             # hand-written typed transport (M3.5, extended in M6/M7/M9)
-├── examples/standalone-consumer/  # SSR consumer with a custom widget (M3)
+├── examples/
+│   ├── standalone-consumer/    # SSR consumer with a custom widget (M3)
+│   └── plugin-kit/             # widget + data-source plugins against the contracts (M11)
 ├── infra/postgres/init.sql     # owner role, runtime role grants
 ├── docker-compose.dev.yml      # PostgreSQL 17 on host port 5433
 ├── scripts/                    # workspace, consumer and OpenAPI verification
@@ -51,63 +55,58 @@ nama/
 └── pnpm-workspace.yaml
 ```
 
-## Delivered in M10
+## Delivered in M11
 
-### SDK i18n and formatting
-
-| Area | Contents |
-| --- | --- |
-| Jalali display | `dateLocale` maps `fa` to `fa-IR-u-ca-persian`; `formatDate` combines it with the resolved timezone while storage stays UTC ISO. No calendar library (TD-008 closed) |
-| Digit normalization | `normalizeDigits` plus `parseLocalizedNumber` handle Persian/Arabic-Indic digits, `٬`/`,` grouping and the `٫` decimal separator; applied in dashboard controls, editor variable/filter settings and number widget settings (TD-062 closed) |
-| Localized SDK chrome | Toolbar revision and conflict counts format through `i18n.formatNumber`; optional status segments collapse so an empty slot leaves no ` · ` separator; the many-widgets warning localizes its count |
-| Formatter tests | Runtime tests cover normalization, localized parsing, fa-Jalali formatting with a fixed UTC timezone and missing-key fallback |
-
-### Web chrome and preferences
+### Public contracts
 
 | Area | Contents |
 | --- | --- |
-| Catalog | `apps/web/lib/i18n.ts` holds en/fa `WEB_MESSAGES` and `createWebI18n`, which delegates to `createDashboardI18n` so chrome and SDK text share the host → SDK → English → key order; template names and descriptions are keyed by template id |
-| Context | `WebPreferencesProvider`/`useWebI18n` expose locale, theme, direction and the facade; page content renders inside the shell so client components reach the context |
-| Translated surfaces | Home, login (fields, buttons, demo accounts), dashboard list, create form, editor loader/back links/read-only notice/conflict recovery/version history, viewer loading/not-published/meta, and the session pending/error states |
-| Switching | The header always shows a language selector and, once signed in, a theme selector. A signed-out choice is stored under `nama.locale` and read with `useSyncExternalStore`; a signed-in choice persists through `PATCH /v1/me/preferences` and is merged into session state so the editor keeps its draft |
-| Precedence | Local override → signed-in user preference → stored locale → `en`; a failed write reverts the optimistic override |
-| Themes | `data-theme` is set on `<html>` and the shell; `light`, `dark` and `system` map to CSS variables, and switching never remounts widgets or restarts queries |
-| RTL | The shell uses `dir="rtl"` and logical CSS properties; the editor and viewer canvases stay `dir="ltr"` and render the visible `builder.canvas.ltrNotice` disclosure in Persian |
+| Widget entry | `@nama/dashboard-builder/plugins` re-exports `defineWidget`, the plugin/render/settings types, `createWidgetRegistry`, `resolveWidgetConfig` and the registration errors without the viewer, editor or built-in widgets |
+| Data-source contract | `ServerDataSourcePlugin`, `PluginContext`, `PluginQueryRequest`, limits, `TestResult`, `DatasetSchema`, `DataSourceError` and the validation result types moved into `@nama/dashboard-types`; `apps/api` re-exports them, so a connector package never imports the API |
+| Validation | `validateDataSourcePlugin` checks the manifest (kind, semver, name, capabilities), the Zod config and credential schemas, `test`/`validate`/`execute`, `discover` ↔ `schemaDiscovery`, and duplicate kinds; `DataSourcePluginRegistrationError` carries the issues |
+| Registry | `createDataSourcePluginRegistry` supports `register`/`unregister`/`get`/`list`/`has` plus explicit replacement; the API builds it at boot and `list()` returns manifests |
+| Compatibility | Manifest semver is validated at registration; a newer widget `configVersion` renders the placeholder and an older one without `migrate()` fails instead of being coerced |
 
-### Browser coverage
+### Example package
 
 | Area | Contents |
 | --- | --- |
-| Runner | Root `playwright.config.ts`; tests in `apps/web/e2e`; one worker; API and web dev servers started or reused; traces on failure; screenshots allow a 2% pixel ratio |
-| Persian flow | Login in fa → create a dashboard from the `operations` template → editor asserts RTL shell, LTR canvas and the Persian disclosure → publish → viewer asserts RTL shell, LTR canvas and the Persian revision/date line → reload keeps fa/rtl |
-| Theme flow | Dark and light selections are checked against computed body colours and survive a reload; `system` clears the explicit mode |
-| Screenshots | Header in English, login in English and login in Persian |
-| Transport | The test web server sets `NEXT_PUBLIC_NAMA_WS_URL` so realtime uses one WebSocket: the SSE adapter's per-subscription streams would exhaust the browser's HTTP/1.1 pool and stall publish (TD-060). Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` when the browser download is unavailable |
+| plugin-kit | `examples/plugin-kit` ships `@example/status-badge` (config version 2, a version-1 migration and a settings panel) and the `memory` data-source adapter (test/validate/execute/discover with limits and truncation) |
+| Verification | `verify:consumer` copies the kit next to the packed tarballs, registers both kinds, rejects duplicates and capability mismatches, and asserts migration and truncation; it also budgets the new `./plugins` entry |
 
-## Delivered in M9 (summary)
+### Tests and docs
 
 | Area | Contents |
 | --- | --- |
-| Controls | Variables, filters, dashboard time range, visibility and interactions resolve in `dashboard-core`; `DashboardControls` renders them; a chart click writes a variable |
-| Editor | Variable/filter/visibility/interaction authoring, whole-draft import/export, per-breakpoint layout, version restore |
-| Web/API | Host templates, create-with-config, sharing; the editor moved to `@nama/dashboard-builder/editor` with its own budget |
+| Types tests | 11 cases for validation, capability consistency, duplicates, replacement, unregistration and execution |
+| API tests | Registry defaults, duplicate rejection and capability mismatch through the public registry |
+| Docs | Both normative contracts gained import and registration rules; plugin-system, authoring, the SDK entry table, package dependencies and the example README describe the delivered state |
 
-Earlier milestones: M8 realtime gateway, hub, replay and adapters; M7 connector
-plugins and query limits; M6 PostgreSQL, RLS, authentication, drafts/publish/
-versions, sharing and embed tokens; M5 built-in widgets; M4 editor; M3.5 web
-slice; M3 SDK foundation; M2 contracts; M1 workspace.
+## Delivered in M10 (summary)
 
-## Decisions taken during M10
+| Area | Contents |
+| --- | --- |
+| i18n | en/fa `DashboardI18n` with host → SDK → English → key fallback, Jalali display (`fa-IR-u-ca-persian`), Persian digit normalization and parsing, localized SDK chrome |
+| Web chrome | Typed `WEB_MESSAGES` catalog, translated login/list/editor/viewer, header locale selector (local storage while signed out, preference when signed in) and light/dark/system themes merged into session state |
+| Browser coverage | Four Playwright tests: Persian editor→publish→viewer with RTL chrome and the LTR canvas disclosure, theme persistence, Persian dark chrome, header/login screenshots |
+
+Earlier milestones: M10 internationalization and themes; M9 variables, filters,
+controls, visibility, interactions, import/export and templates; M8 realtime
+gateway, hub, replay and adapters; M7 connector plugins and query limits; M6
+PostgreSQL, RLS, authentication, drafts/publish/versions, sharing and embed
+tokens; M5 built-in widgets; M4 editor; M3.5 web slice; M3 SDK foundation; M2
+contracts; M1 workspace.
+
+## Decisions taken during M11
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| Web i18n mechanism | Typed `web.*` catalog through the SDK `DashboardI18n` factory | Shares one fallback chain with SDK text and avoids a runtime dependency (next-intl not adopted) |
-| Locale persistence | Server preference for signed-in users; `localStorage` only while signed out | A user's profile should win across devices, while the login page still honors the last choice before a session exists |
-| Preference application | Merge into session state instead of reloading it | The editor keeps its draft and never remounts on a language or theme change |
-| Jalali strategy | ICU `fa-IR-u-ca-persian` in `formatDate`; storage stays UTC ISO | No calendar library to license or upgrade; native date inputs stay Gregorian |
-| Number input | Normalize digits and separators at the control boundary, keep canonical numbers | Persian input works end to end without changing the query contract |
-| Number display | Format every number embedded in translated copy with `i18n.formatNumber` | Persian chrome must not mix ASCII digits into otherwise Persian copy |
-| E2E realtime transport | Pin `NEXT_PUBLIC_NAMA_WS_URL` in the Playwright web server | Six SSE streams saturate the HTTP/1.1 pool and block publish; WebSocket is the documented fallback-free path (TD-060) |
+| Contract location | Data-source contract in `dashboard-types`; the API re-exports it | A plugin package must compile without `apps/api`, and the package already owns the shared request and result shapes |
+| Registry placement | Public `createDataSourcePluginRegistry` in `dashboard-types`; the API wraps it | The example package can register a connector through the documented API without a fifth workspace package |
+| Capability validation | Reject `discover` ↔ `schemaDiscovery` mismatches at registration | Failing at boot beats failing on the first schema request |
+| Duplicate definitions | Delete the API-local interfaces and re-export the public ones | One normative definition, matching the rule that contracts come from `dashboard-types` |
+| Editor extensions | The widget `settings` component is the v1 extension point | A generic control/action registry has no consumer yet (TD-072) |
+| Example location | `examples/plugin-kit`, copied by `verify:consumer` | Keeps the workspace at four packages while exercising packed-tarball consumption |
 
 ## Open decisions
 
@@ -125,41 +124,42 @@ slice; M3 SDK foundation; M2 contracts; M1 workspace.
 | DNS pinning / egress proxy | Open | — | Guard resolves once (TD-052) |
 | Query rate limiting | Open | — | Only per-source concurrency is bounded |
 | E2E in CI | Open | — | The Playwright suite runs locally; CI wiring and browser provisioning remain (TD-036) |
+| Connector hot-loading | Open | — | Connectors are registered in-process at API boot; there is no install or reload path (TD-071) |
+| Generic editor extensions | Open | — | Only widget `settings` panels extend the editor; no control or action registry (TD-072) |
 | API code generation | Deferred to M12 | — | `api-client` remains hand-written |
 | Public/anonymous sharing | Deferred | — | Organization-scoped sharing only |
 | External time-series store | Deferred | — | Telemetry stays out of Postgres |
 | Plugin sandbox/marketplace | Deferred | — | Trusted install only (ADR-006) |
 
-## What M11 must not assume
+## What M12 must not assume
 
-- That control values persist. They are provider-mount state seeded from
-  `initialControls`; a reload returns every control to its default.
-- That a filter affects every widget. It applies only to widgets whose query
-  `fields` include the filtered field.
-- That visibility expressions can be grouped. There are no parentheses and
-  malformed expressions make widgets visible.
-- That hidden widgets stop existing. The editor renders them with
-  `ignoreVisibility`; the viewer does not mount them.
-- That locale or theme changes remount the editor. Preferences merge into
-  session state; the draft survives a switch.
-- That a locale URL segment exists. Routes are locale-free and the language comes
-  from preferences; there is no `/en` or `/fa` prefix.
-- That authored content is translated. Dashboard titles, saved widget labels and
-  widget configs stay as written; only chrome and template names come from the
-  catalog.
-- That Persian dates are stored differently. Storage stays UTC ISO; Jalali is a
-  display format through ICU, and native date inputs stay Gregorian.
-- That the dashboard canvas or charts mirror in RTL. The canvas is LTR-only with
-  a visible disclosure, and chart axes are not mirrored (TD-001, TD-041).
-- That the E2E suite gates changes. It runs locally with `pnpm test:e2e`, is not
-  wired into CI yet, and runs the WebSocket realtime transport (TD-036, TD-060).
-- That template dashboards work against a real source. They bind the virtual
-  `demo-source` connector.
-- That the editor offers a data-source picker; it does not (TD-043).
-- That editor and viewer lay widgets out identically; the engines differ
-  (TD-038).
+- That plugins are sandboxed. Widgets and connectors are trusted installed code;
+  there is no remote loading, iframe or marketplace (ADR-006, TD-007).
+- That connectors are discovered at runtime. The API registry is built at boot
+  from `static` and `rest`; a new connector is host wiring (TD-071).
+- That a plugin uses only its declared capabilities. Subscription honors
+  `realtime`, discovery honors `schemaDiscovery`, while `export`/`filters` are
+  declarations hosts apply and `stream`/`rawSql` are implemented by no connector.
+- That the editor has a generic extension registry. Only the widget `settings`
+  panel extends it (TD-072).
+- That widgets can be registered after the provider mounts. The registry is
+  rebuilt from the `widgets` array (TD-033).
+- That a `configVersion` bump is self-migrating. Older configs need `migrate()`;
+  newer configs render a placeholder and preserve data.
+- That `examples/plugin-kit` is a workspace package. `examples/` is outside
+  `pnpm-workspace`; `verify:consumer` installs it from tarballs.
+- That the `./plugins` entry ships widgets or editor UI. It is contract-only,
+  and each builder entry has its own budget.
+- That the API exposes plugin installation. Registration happens in-process at
+  boot; there is no upload or reload endpoint.
+- That the SDK is published. Packages stay private at version 0.0.0 until the
+  M12 versioning and release work.
+- That the editor can attach a real source. It still has no data-source picker
+  (TD-043).
+- That the E2E suite gates changes or runs in CI. It runs locally with the
+  WebSocket transport (TD-036, TD-060).
 
-## Verification (M10)
+## Verification (M11)
 
 All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2.
 
@@ -169,22 +169,24 @@ All commands were run from the repository root on Node 24.22.1 with pnpm 10.33.2
 | Lint | `pnpm lint` | Clean |
 | Format | `pnpm format:check` | All files match |
 | Typecheck | `pnpm typecheck` | 10 tasks successful |
-| Test | `pnpm test` | 281 passed, 6 skipped in 30 files: types 80, core 67, builder 56, api-client 14, api 53 (+6 Postgres skipped), web 11 |
+| Test | `pnpm test` | 295 passed, 6 skipped in 31 files: types 91, core 67, builder 56, api-client 14, api 56 (+6 Postgres skipped), web 11 |
 | Build | `pnpm build` | 6 tasks successful, 8 routes |
-| Consumer | `pnpm verify:consumer` | `"use client"` on all three entries; 7.9 / 17.6 / 8.1 KiB gzipped under 16 / 20 / 16 KiB; SSR render; single React copy |
+| Consumer | `pnpm verify:consumer` | `"use client"` on all four entries; 7.9 / 17.6 / 8.1 / 0.1 KiB gzipped under 16 / 20 / 16 / 8 KiB; SSR render; plugin-kit registers a widget and a data-source adapter; single React copy |
 | OpenAPI drift | `pnpm verify:openapi` | In sync: 39 served operations, 39 documented |
 | Browser E2E | `pnpm test:e2e` | 4 passed: Persian editor→publish→viewer with RTL chrome and LTR canvas, theme persistence, Persian dark chrome and screenshot baselines |
 
-The M10 suites cover digit normalization and localized parsing (including
-grouping separators), Jalali formatting with a fixed UTC timezone, missing-key
-fallback, web catalog interpolation and Persian template labels, plus the four
-browser scenarios. The 6 Postgres tests skip without `NAMA_TEST_DATABASE_URL` and
-always run in CI. The Playwright run needed `PLAYWRIGHT_CHROMIUM_EXECUTABLE`
-because the browser download was unreachable in this environment.
+The M11 suites cover data-source manifest and capability validation, duplicate
+and replacement rules, the API registry wrapper, widget config migration from
+version 1 to 2 through the packed `./plugins` entry, truncation under the runtime
+row cap and unknown-field rejection. The 6 Postgres tests skip without
+`NAMA_TEST_DATABASE_URL` and always run in CI. The Playwright run needed
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE` because the browser download was unreachable in
+this environment.
 
 ## Next action
 
-M10 is complete and awaiting acceptance. The next milestone is M11 (plugin
-platform): package and manifest lifecycle for widget and data-source plugins,
-registry hardening, configuration migration and the plugin authoring path
-against the normative contracts in `docs/plugins/`.
+M11 is complete and awaiting acceptance. The next milestone is M12 (production
+readiness): complete coverage including E2E in CI, performance budgets, a security
+review, deployment, migration and key-rotation procedures, API/SDK documentation,
+observability, a versioning and deprecation policy, and verification that the
+packed SDK is installable and operable on its own.

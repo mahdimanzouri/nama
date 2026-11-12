@@ -1,6 +1,7 @@
 # Plugin Authoring Guide
 
-**Status:** Proposed (M0)
+**Status:** Delivered (M11). `examples/plugin-kit` is a runnable widget and
+data-source plugin pair written against these contracts.
 
 This guide explains how to add a visualization or data-source plugin. The
 normative interfaces are in
@@ -21,7 +22,8 @@ normative interfaces are in
 
 1. **Scaffold** a package with `peerDependencies` on `react`, `react-dom` and
    `@nama/dashboard-types`, and a `build` script that emits ESM + declarations
-   and preserves `"use client"`.
+   and preserves `"use client"`. Import `defineWidget` and the contract types from
+   `@nama/dashboard-builder/plugins`.
 2. **Declare the manifest**: stable `id` (e.g. `@acme/gauge`), semver `version`,
    `name`, optional `description`.
 3. **Define `configSchema`** with Zod and a `defaultConfig` that passes it.
@@ -38,12 +40,15 @@ normative interfaces are in
    `UnsupportedConfigVersionError` for versions you cannot migrate.
 8. **Declare capabilities** (`realtime`, `export`, `filters`) only if the widget
    actually uses them.
-9. **Register** the plugin through the host's widget registry before rendering a
-   dashboard that references it.
+9. **Register** the plugin through `createWidgetRegistry` before rendering a
+   dashboard that references it. Duplicate ids are rejected unless the host
+   passes `{ replace: true }`.
 
 ## Data-source plugin: step by step
 
-1. Create a **server-side package** (no React) used by `apps/api`.
+1. Create a **server-side package** (no React) used by `apps/api`. Implement
+   `ServerDataSourcePlugin` from `@nama/dashboard-types`; the package never
+   imports the API.
 2. Implement `kind`, `manifest`, and a `configSchema` for non-secret connection
    settings. Put secrets in `credentialSchema`.
 3. Implement `test()` and map failures to the error taxonomy.
@@ -56,11 +61,16 @@ normative interfaces are in
 7. Access secrets only through `ctx.credentials()`. Never log them.
 8. Implement `subscribe()` only when the source has a native stream; assign
    source offsets for resume, but let the gateway own subscription sequences.
-9. Add tests for timeouts, cancellation, truncation, SSRF rejection and error
-   mapping.
+9. Register the plugin with `createDataSourcePluginRegistry` at API boot. Its
+   manifest, schemas, required methods and capability declarations are validated
+   before it can serve a request.
+10. Add tests for timeouts, cancellation, truncation, SSRF rejection and error
+    mapping.
 
 ## Local development
 
+- Start from `examples/plugin-kit`: a widget plus data-source plugin pair that
+  `pnpm verify:consumer` registers against the packed packages.
 - Build a small host React app (or Storybook) that registers the plugin and
   renders fixture dashboards.
 - Use the static/mock data adapter for widget work and a local API instance for

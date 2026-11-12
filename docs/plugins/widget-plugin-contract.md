@@ -5,9 +5,10 @@
 Runtime `WidgetPlugin`, render-prop and settings interfaces implemented in M3
 (`@nama/dashboard-core`). M4 added the optional `defaultQuery` and
 `defaultDataSourceId` creation defaults; M5 shipped seven built-ins from
-`@nama/dashboard-builder/widgets` (table below). This file is the normative
-source for the widget contract; other documents link here instead of restating
-it.
+`@nama/dashboard-builder/widgets` (table below). M11 added the public
+`@nama/dashboard-builder/plugins` entry and `examples/plugin-kit`, a separate
+package that registers a widget through it. This file is the normative source for
+the widget contract; other documents link here instead of restating it.
 
 ## Manifest
 
@@ -222,9 +223,15 @@ The seven built-ins ship from `@nama/dashboard-builder/widgets` as
 
 ## Registration example
 
+Plugin packages import the authoring surface from
+`@nama/dashboard-builder/plugins`. It carries the contract, `defineWidget`,
+`createWidgetRegistry` and `resolveWidgetConfig` without the viewer, editor or
+built-in widgets. The host registers the plugin explicitly; nothing is
+discovered or fetched at runtime.
+
 ```tsx
 import { z } from "zod";
-import type { WidgetPlugin } from "@nama/dashboard-types";
+import { defineWidget } from "@nama/dashboard-builder/plugins";
 
 const configSchema = z.object({
   valueField: z.string(),
@@ -237,7 +244,7 @@ const configSchema = z.object({
     .default({}),
 });
 
-export const kpiPlugin: WidgetPlugin<z.infer<typeof configSchema>> = {
+export const kpiPlugin = defineWidget({
   manifest: {
     id: "@nama/kpi",
     version: "1.0.0",
@@ -251,8 +258,14 @@ export const kpiPlugin: WidgetPlugin<z.infer<typeof configSchema>> = {
   capabilities: { filters: true },
   component: KpiWidget,
   settings: KpiSettings,
-};
+});
 ```
+
+Registration rejects a duplicate manifest `id` unless the host passes
+`{ replace: true }`, and rejects a manifest, `configVersion`, `defaultSize`,
+`defaultConfig` or `component` that violates the contract. `examples/plugin-kit`
+is a runnable example that also declares a version-2 config with a migration and
+a settings panel.
 
 ## Validation checklist
 

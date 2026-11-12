@@ -1,14 +1,14 @@
 # Package Dependencies
 
-**Status:** Implemented through M7 (2026-11-12)
+**Status:** Implemented through M11 (2026-11-12)
 
 ## Initial packages (created in M1)
 
 | Package | Responsibility | Runtime dependencies | Peer dependencies |
 | --- | --- | --- | --- |
-| `@nama/dashboard-types` | Public types and Zod schemas for dashboard config, widgets, layout, queries, realtime events, plugin manifests | `zod` | — |
+| `@nama/dashboard-types` | Public types and Zod schemas for dashboard config, widgets, layout, queries, realtime events, plugin manifests, the data-source plugin contract and its validated registry | `zod` | — |
 | `@nama/dashboard-core` | Host-agnostic runtime: registries, widget resolution, layout helpers, i18n, theme tokens, query helpers, HTTP/static data adapters | `@nama/dashboard-types`, `zod` | `react` (types only) |
-| `@nama/dashboard-builder` | Public React API and UI: provider, viewer, renderer, hooks, editor, stylesheet; built-in widgets behind the `./widgets` subpath | `@nama/dashboard-types`, `@nama/dashboard-core`, `@tanstack/react-query`, `zustand`, `react-grid-layout`, `zod`, `echarts` | `react`, `react-dom` |
+| `@nama/dashboard-builder` | Public React API and UI: provider, viewer, renderer, hooks, editor, stylesheet; built-in widgets behind `./widgets` and the plugin authoring surface behind `./plugins` | `@nama/dashboard-types`, `@nama/dashboard-core`, `@tanstack/react-query`, `zustand`, `react-grid-layout`, `zod`, `echarts` | `react`, `react-dom` |
 | `@nama/api-client` | Typed HTTP transport for the platform API: requests, cookie/CSRF handling, `ApiError` mapping | `@nama/dashboard-types` (query types) | — |
 
 Rules:
@@ -32,6 +32,12 @@ Rules:
 - **M9 state:** the editor moved behind `./editor`, so `react-grid-layout` and
   `zustand` are loaded only by editor hosts. `verify:consumer` budgets the
   root, editor and widgets entries over each entry's full chunk closure.
+- **M11 state:** the data-source plugin contract and its validated registry live
+  in `dashboard-types`, so a connector package implements the interface without
+  importing `apps/api`; the API re-exports the names and builds its registry from
+  installed connectors. `dashboard-builder` gains a `./plugins` entry for widget
+  authors, and `verify:consumer` budgets four entries and runs `examples/plugin-kit`
+  against the packed packages.
 - React and React DOM are **peer dependencies** of every React package to avoid
   duplicate React copies.
 - No package imports from `apps/web` or `apps/api`.

@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { createId, type QueryRequest } from "@nama/dashboard-types";
 
 import { buildApp } from "../app.ts";
+import { createPluginRegistry } from "../modules/queries/plugins/registry.ts";
 import { issueSession } from "../infrastructure/sessions.ts";
 import type { Persistence } from "../infrastructure/persistence/types.ts";
 import {
@@ -312,5 +313,40 @@ describe("data-source plugins", () => {
 
     expect(response.statusCode).toBe(501);
     expect(response.json().error.code).toBe("NOT_IMPLEMENTED");
+  });
+});
+
+describe("data-source plugin registry", () => {
+  it("registers the built-in static and rest connectors", () => {
+    const registry = createPluginRegistry();
+
+    expect(
+      registry
+        .list()
+        .map((manifest) => manifest.kind)
+        .sort(),
+    ).toEqual(["rest", "static"]);
+  });
+
+  it("rejects a duplicate kind unless the host replaces it", () => {
+    const registry = createPluginRegistry();
+    const staticPlugin = registry.get("static");
+    expect(staticPlugin).toBeDefined();
+
+    expect(() => registry.register(staticPlugin!)).toThrow(/already registered/u);
+    registry.register(staticPlugin!, { replace: true });
+    expect(registry.list()).toHaveLength(2);
+  });
+
+  it("rejects a method the capabilities do not declare", () => {
+    const registry = createPluginRegistry([]);
+    const staticPlugin = createPluginRegistry().get("static")!;
+    const broken = {
+      ...staticPlugin,
+      kind: "broken",
+      capabilities: { ...staticPlugin.capabilities, schemaDiscovery: false },
+    };
+
+    expect(() => registry.register(broken)).toThrow(/discover\(\) is implemented/u);
   });
 });

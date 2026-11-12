@@ -17,6 +17,8 @@ export const ISSUE_CODES = Object.freeze({
   invalidWidgetPlugin: "invalid_widget_plugin",
   duplicateWidgetType: "duplicate_widget_type",
   widgetMigrationFailed: "widget_migration_failed",
+  invalidDataSourcePlugin: "invalid_data_source_plugin",
+  duplicateDataSourceKind: "duplicate_data_source_kind",
   invalidImport: "invalid_import",
 } as const);
 

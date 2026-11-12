@@ -1,15 +1,20 @@
 # Data-Source Plugin Contract (Normative)
 
 **Status:** Runtime implemented in M7 (`apps/api/src/modules/queries/plugins`).
-Manifest and capability schemas landed in M2
-(`dataSourcePluginManifestSchema` in `@nama/dashboard-types`). Streaming
-(`subscribe`), cancellation callbacks and raw SQL remain normative targets for
-later milestones; the implemented surface is marked below.
+M11 moved the normative interface into `@nama/dashboard-types` so a plugin
+package can implement it without importing the API, and added manifest,
+capability and duplicate-kind validation through
+`createDataSourcePluginRegistry`. `examples/plugin-kit` is a registered example.
+Streaming (`subscribe`), cancellation callbacks and raw SQL remain normative
+targets for later milestones; the implemented surface is marked below.
 
 Data-source plugins run inside the API. They are the only code that knows how to
 talk to an external system. The browser never loads them.
 
 ## Interface
+
+Import the contract from `@nama/dashboard-types`; the API re-exports the same
+names for its internal modules.
 
 ```ts
 interface ServerDataSourcePlugin {
@@ -43,7 +48,34 @@ interface ServerDataSourcePlugin {
 ```
 
 Cancellation is delivered through `ctx.signal`; there is no separate `cancel`
-callback yet. Streaming plugins and `dispose` arrive with the M8 gateway.
+callback yet. Streaming plugins and `dispose` arrive with a later connector
+milestone.
+
+## Registration and validation
+
+```ts
+import { createDataSourcePluginRegistry } from "@nama/dashboard-types";
+
+const registry = createDataSourcePluginRegistry([restPlugin, staticPlugin]);
+registry.register(memoryPlugin); // duplicate kinds are rejected
+```
+
+At registration the runtime validates:
+
+- the manifest derived from `kind`, `manifest.version`, `manifest.name` and
+  `capabilities` against `dataSourcePluginManifestSchema` (lowercase kind, semver,
+  required `test` and `execute` capabilities);
+- that `configSchema`, and `credentialSchema` when present, are Zod schemas;
+- that `test`, `validate` and `execute` are implemented;
+- that `discover()` exists exactly when `capabilities.schemaDiscovery` is true;
+- that the `kind` is not already registered, unless the host passes
+  `{ replace: true }`.
+
+`validateDataSourcePlugin` exposes the same checks for hosts that build their own
+registry. `registry.list()` returns manifests, not plugin internals.
+`apps/api` constructs the registry at boot from the built-in `static` and `rest`
+connectors; adding a connector package is a host wiring decision, not remote
+loading (TD-071).
 
 ## Plugin context
 
@@ -150,7 +182,7 @@ See [security.md](../architecture/security.md).
 - Dataset allowlists are server-owned; the browser cannot name arbitrary tables
   (ADR-010).
 
-## Streaming plugins (planned, M8)
+## Streaming plugins (not implemented)
 
 - `subscribe` runs server-side; the browser connects only to `/ws/v1`.
 - Events carry a per-subscription sequence assigned by the gateway, not by the
@@ -159,7 +191,8 @@ See [security.md](../architecture/security.md).
   replay buffer to 60 s or 1,000 events, whichever is smaller.
 - The plugin must stop upstream subscriptions on unsubscribe and on abort.
 
-No streaming connector exists yet; the current adapters expose `execute` only.
+The M8 gateway exists, but no connector exposes `subscribe`; the built-in
+connectors declare `stream: false` and implement `execute` only.
 
 ## Testing checklist
 

@@ -1,6 +1,7 @@
 # Implementation Roadmap
 
-**Status:** Active — M0, M1, M2, M3, M3.5, M4, M5, M6, M7, M8 and M9 complete (2026-11-12)
+**Status:** Active — M0–M9, M10 and M11 complete (2026-11-12); M10.5 accessibility
+is deferred into M12
 **Date:** 2026-11-12
 
 Milestones have review gates. Do not begin the next milestone until the current
@@ -23,9 +24,9 @@ engineer should expect roughly 1.8× the elapsed time.
 | M7 | Data infrastructure | 2 weeks | Adapters behind contracts; limits enforced | Complete |
 | M8 | Realtime infrastructure | 3 weeks | Shared connections; resume, gap, cleanup | Complete |
 | M9 | Advanced dashboard capabilities | 3 weeks | Variables, filters, import/export, templates | Complete |
-| M10 | Internationalization and themes | 2 weeks | en/fa, RTL chrome, LTR canvas disclosed, themes | Not started |
-| M10.5 | Accessibility | 1.5 weeks | Automated checks and keyboard review pass | Not started |
-| M11 | Plugin ecosystem | 2 weeks | Custom widget and data source via public contracts | Not started |
+| M10 | Internationalization and themes | 2 weeks | en/fa, RTL chrome, LTR canvas disclosed, themes | Complete |
+| M10.5 | Accessibility | 1.5 weeks | Automated checks and keyboard review pass | Deferred to M12 |
+| M11 | Plugin ecosystem | 2 weeks | Custom widget and data source via public contracts | Complete |
 | M12 | Production readiness | 2 weeks | Tests, docs, security, deployment procedures | Not started |
 
 Total: roughly 32 engineer-weeks, excluding review latency and scope changes.
@@ -359,7 +360,7 @@ LTR-only canvas disclosure in both editor and viewer; and a Playwright suite
 (`pnpm test:e2e`) covering the Persian editor→publish→viewer flow, theme
 persistence across reloads and screenshot baselines.
 
-**Verified by:** `dashboard-core` i18n tests, `apps/web` catalog tests, the three
+**Verified by:** `dashboard-core` i18n tests, `apps/web` catalog tests, the four
 Playwright tests and the workspace checks recorded in
 [current-phase.md](current-phase.md).
 
@@ -367,6 +368,8 @@ Playwright tests and the workspace checks recorded in
 transport remains SSE, so the browser suite pins the WebSocket transport (TD-060).
 
 ## M10.5 — Accessibility
+
+**Status:** Not started; deferred into M12.
 
 **Tasks:** keyboard navigation and focus management; accessible menus, dialogs
 and settings; a table/summary alternative for every chart; screen-reader labels
@@ -376,7 +379,11 @@ LTR canvas limitation for assistive technology.
 **Acceptance:** core flows pass automated checks and a keyboard-only review.
 Charts expose equivalent data to non-visual users.
 
+The deferred work is tracked as TD-014, TD-016 and TD-042.
+
 ## M11 — Plugin ecosystem
+
+**Status:** Delivered (2026-11-12).
 
 **Tasks:** finalize the public plugin SDK; manifest validation; compatibility
 checks; visualization and editor-extension registration; server-side data-source
@@ -384,6 +391,26 @@ plugin interface; capability checks; examples; lifecycle and security docs.
 
 **Acceptance:** a separate test package registers a custom widget and a
 data-source adapter through documented contracts.
+
+**Delivered:** a `@nama/dashboard-builder/plugins` entry with the widget
+contract, `defineWidget`, registry and config resolution; the data-source plugin
+contract, `DataSourceError`, `validateDataSourcePlugin` and
+`createDataSourcePluginRegistry` moved into `@nama/dashboard-types`, with the API
+re-exporting them instead of keeping a second definition; registration-time
+manifest, schema, capability and duplicate-kind validation in the API; and
+`examples/plugin-kit`, a widget plus `memory` connector that
+`pnpm verify:consumer` installs from packed tarballs and registers through the
+public contracts.
+
+**Verified by:** 11 `dashboard-types` plugin validation/registry tests, three API
+registry tests, the consumer run that budgets the new `./plugins` entry and runs
+the plugin kit, and the workspace checks recorded in
+[current-phase.md](current-phase.md).
+
+**Deferred:** connectors are registered in-process at boot (TD-071); editor
+extensions are limited to widget settings panels (TD-072); live widget
+registration after provider mount remains unsupported (TD-033); no plugin
+sandbox or marketplace (TD-007, ADR-006).
 
 ## M12 — Production readiness
 

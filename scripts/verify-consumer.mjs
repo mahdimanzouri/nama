@@ -41,6 +41,9 @@ const BUNDLE_BUDGET_BYTES = 16 * 1024;
 // The editor entry carries React Grid Layout, the store and the authoring
 // panels; its budget is separate because only editor hosts load it.
 const EDITOR_BUDGET_BYTES = 20 * 1024;
+// The plugin entry is the authoring surface: contract helpers without the
+// viewer, editor or built-in widgets.
+const PLUGINS_BUDGET_BYTES = 8 * 1024;
 
 const failures = [];
 
@@ -164,6 +167,7 @@ try {
   checkEntry(installed, "index", BUNDLE_BUDGET_BYTES);
   checkEntry(installed, "editor", EDITOR_BUDGET_BYTES);
   checkEntry(installed, "widgets", BUNDLE_BUDGET_BYTES);
+  checkEntry(installed, "plugins", PLUGINS_BUDGET_BYTES);
 
   const appRequire = createRequire(join(appDirectory, "package.json"));
   const cssPath = appRequire.resolve("@nama/dashboard-builder/styles.css");
@@ -188,6 +192,24 @@ try {
     pass("SSR renders the dashboard through the installed SDK");
   } else {
     fail(`SSR output is missing: ${missing.join(", ")}`);
+  }
+
+  cpSync(join(root, "examples", "plugin-kit", "src"), join(appDirectory, "plugin-kit"), {
+    recursive: true,
+  });
+  const pluginOutput = run(
+    process.execPath,
+    [join(appDirectory, "plugin-kit", "verify.mjs")],
+    { cwd: appDirectory },
+  );
+  if (
+    pluginOutput.includes("PLUGIN_KIT_OK") &&
+    pluginOutput.includes("duplicate=rejected") &&
+    pluginOutput.includes("capability-mismatch=rejected")
+  ) {
+    pass("plugin-kit registers a widget and a data-source adapter");
+  } else {
+    fail(`plugin-kit verification printed: ${pluginOutput.trim()}`);
   }
 
   const reactCopies = readdirSync(join(appDirectory, "node_modules", ".pnpm")).filter(

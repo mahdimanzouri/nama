@@ -62,19 +62,21 @@ React SDK, a Next.js web application and an independent backend API.
 
 ## Current milestone
 
-M10 (internationalization and themes) is complete and awaiting acceptance
-(2026-11-12); M11 (plugin ecosystem) is next and has not started.
+M11 (plugin ecosystem) is complete and awaiting acceptance (2026-11-12); M12
+(production readiness) is next and has not started.
 ADR-011 is accepted as a self-hosted Docker topology. The workspace contains
 `apps/web`, `apps/api`,
-`examples/standalone-consumer` and exactly four packages:
-`@nama/dashboard-types` (contracts), `@nama/dashboard-core` (host-agnostic
+`examples/standalone-consumer`, `examples/plugin-kit` and exactly four packages:
+`@nama/dashboard-types` (contracts, including the `ServerDataSourcePlugin`
+contract and data-source registry), `@nama/dashboard-core` (host-agnostic
 runtime: plugin contract, registry, query keys, i18n, layout, theme, HTTP/static
 data adapters, WebSocket and SSE realtime adapters, control/filter/visibility
 resolution), `@nama/dashboard-builder` (React provider, viewer, controls, canvas,
 renderer and hooks; the editor behind the `./editor` subpath; seven built-in
-widgets behind `./widgets`) and `@nama/api-client` (hand-written typed transport;
-codegen is deferred). Do not create the target-only packages
-listed in `docs/architecture/package-dependencies.md`.
+widgets behind `./widgets`; the widget registration surface behind `./plugins`)
+and `@nama/api-client` (hand-written typed transport; codegen is deferred). Do
+not create the target-only packages listed in
+`docs/architecture/package-dependencies.md`.
 
 The API persists product data in PostgreSQL behind the `Persistence` facade when
 `APP_DATABASE_URL` is set (required in production) and falls back to the seeded
@@ -89,7 +91,7 @@ role. Demo accounts are seeded from `DEMO_EDITOR_EMAIL`/`DEMO_EDITOR_PASSWORD`
 upgrades are not proxied by Next.js rewrites, so live sockets use
 `NEXT_PUBLIC_NAMA_WS_URL` pointing at the API.
 
-Working rules for M11 and later:
+Working rules for M12 and later:
 
 1. Run commands from the repository root (`pnpm build`, `pnpm lint`,
    `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm verify:workspace`,
@@ -113,8 +115,8 @@ Working rules for M11 and later:
 10. Keep ECharts out of the `@nama/dashboard-builder` root entry: built-in
     widgets live in `./widgets`, import from `echarts/core`, `echarts/charts`,
     `echarts/components` and `echarts/renderers` only, and must keep the root,
-    editor and widgets entries inside their `verify:consumer` budgets. Editor
-    surfaces (editor, toolbar, palette, settings, draft hook) live behind
+    editor, widgets and plugins entries inside their `verify:consumer` budgets.
+    Editor surfaces (editor, toolbar, palette, settings, draft hook) live behind
     `./editor`, and the root entry must not import React Grid Layout, the editor
     store or the authoring panels.
 11. Widget settings must validate through the plugin `configSchema` before
@@ -186,5 +188,17 @@ Working rules for M11 and later:
     so scope chrome locators with `:visible`; regenerate screenshot baselines
     deliberately and keep `test-results/` out of commits. The suite is not wired
     into CI yet (TD-036).
+33. Widget plugins register through `defineWidget`/`createWidgetRegistry` from
+    `@nama/dashboard-builder/plugins`; a plugin must not import `./editor`, and
+    the plugins entry stays inside its 8 KiB `verify:consumer` budget.
+34. Data-source plugins implement `ServerDataSourcePlugin` from
+    `@nama/dashboard-types`, pass `validateDataSourcePlugin` and register only
+    through `createDataSourcePluginRegistry`. Keep capability flags in sync with
+    the methods implemented (a method the capabilities do not declare is a
+    registration error), and never decrypt credentials outside `execute`.
+35. `examples/plugin-kit` is an example, not a workspace package: it is installed
+    from packed tarballs by `pnpm verify:consumer` and must keep printing
+    `PLUGIN_KIT_OK`. Do not add a fifth `@nama/*` package or a workspace
+    dependency on it.
 
 Read `docs/implementation/current-phase.md` before starting any milestone.

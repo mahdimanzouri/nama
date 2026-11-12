@@ -1,6 +1,6 @@
 # Technical Debt
 
-**Status:** Updated at M10 (2026-11-12)
+**Status:** Updated at M11 (2026-11-12)
 
 Debt is recorded honestly with impact, owner and target milestone. Items are
 removed only when the fix is merged and verified; closed items are listed at the
@@ -15,8 +15,8 @@ end so IDs stay stable.
 | TD-007 | No plugin sandbox, marketplace or remote loading | Third-party plugins are trusted code | Security | Future ADR |
 | TD-009 | `docs/guides/` absent despite the planning tree | No step-by-step operator/developer guides yet | Docs | M12 |
 | TD-013 | Raw SQL remains available to `datasource.admin` | High-impact capability; relies on audit and read-only credentials | Security | Review each release |
-| TD-014 | No performance or accessibility measurements yet | Budgets are documented but unproven | QA | M12 / M10.5 |
-| TD-016 | LTR-only canvas is a documented accessibility limitation | Assistive-technology users get a non-mirrored grid | Accessibility | M10.5 documentation |
+| TD-014 | No performance or accessibility measurements yet | Budgets are documented but unproven | QA | M12 |
+| TD-016 | LTR-only canvas is a documented accessibility limitation | Assistive-technology users get a non-mirrored grid | Accessibility | M12 documentation |
 | TD-017 | `dev` builds package dependencies once and does not watch them | Editing `dashboard-core` during `dev` requires a rebuild or restart; M4 did not change this | Tooling | Revisit when package iteration slows development |
 | TD-019 | No coverage collection or thresholds | Test task emits no artefacts; regressions in coverage are invisible | QA | M12 CI hardening |
 | TD-020 | `docs/` and the planning document are excluded from Prettier | Documentation formatting drifts from code formatting | Docs | When docs are stabilised |
@@ -28,15 +28,15 @@ end so IDs stay stable.
 | TD-028 | Widget plugins must be function components; class components are rejected by the erased registry type | A host with class-based widgets needs a wrapper or a contract change | SDK | Revisit if a consumer needs classes |
 | TD-030 | Client adapter lifecycle is covered, but the `useWidgetQuery` buffer/flush path has no React test | The SDK connection manager is tested; widget-level subscription behavior still relies on review | QA | M12 |
 | TD-032 | `verify:consumer` installs with `--offline` and needs React, TanStack Query and zod in the local pnpm store | A clean CI runner must prime the store first (lockfile install) | Tooling | M12 CI hardening |
-| TD-033 | Changing the `widgets` array identity rebuilds the registry; dynamic register/unregister after mount is unsupported | Hosts must pass a stable array; live plugin registration waits for M11 | SDK | M11 |
+| TD-033 | Changing the `widgets` array identity rebuilds the registry; dynamic register/unregister after mount is unsupported even though the registries expose it | Hosts must pass a stable array; M11 documented registration but the provider still builds the registry once per array | SDK | Revisit when a host needs runtime plugin switching |
 | TD-035 | The API has no request rate limiting or connection-pool sizing; RLS and audit logging now exist | A burst can exhaust the pool or the database; login has no throttling | Backend/Security | M12 |
 | TD-036 | The Playwright suite exists (`pnpm test:e2e`) but is not wired into CI, and browser provisioning is manual | UI regressions are caught locally, not on every change; CI still relies on suites and manual checks | QA | M12 CI wiring |
 | TD-038 | Editor and viewer use different layout engines: React Grid Layout for editing, CSS grid for viewing | Widgets can differ by a pixel or two between modes; no parity test exists | Frontend | M12, with visual/E2E coverage |
 | TD-039 | The grid and resize rules from React Grid Layout are reproduced in the SDK stylesheet instead of importing the package CSS | RGL upgrades can silently break drag/resize styling | SDK | Every RGL upgrade |
 | TD-040 | Every built-in chart renders a single series; there is no groupBy, multi-series, stacked or combo chart support | Users cannot compare categories on one chart; the demo dataset has no grouping | Product/Frontend | When a grouped dataset exists |
 | TD-041 | Canvas charts stay LTR inside RTL chrome: axes, legends and tooltips are not mirrored, only text is locale-formatted | Persian dashboards read chart axes left-to-right; disclosed alongside the LTR canvas | Product/UX | Same review as TD-001 |
-| TD-042 | Charts expose only `role="img"` with the widget title; there is no data-table fallback or keyboard interaction | Screen-reader users cannot inspect chart values | Accessibility | M10.5 |
-| TD-043 | `apps/web` still hard-codes a demo query per built-in type, and the editor lists registered data sources but offers no picker; the built-in templates also bind to `demo-source` | Real sources cannot be attached without code changes; template dashboards only work against the demo connector | Frontend | M11 or when a data-source catalog UI is scheduled |
+| TD-042 | Charts expose only `role="img"` with the widget title; there is no data-table fallback or keyboard interaction | Screen-reader users cannot inspect chart values | Accessibility | M12 |
+| TD-043 | `apps/web` still hard-codes a demo query per built-in type, and the editor lists registered data sources but offers no picker; the built-in templates also bind to `demo-source` | Real sources cannot be attached without code changes; template dashboards only work against the demo connector | Frontend | When a data-source catalog UI is scheduled |
 | TD-052 | The egress guard resolves DNS once and relies on disabled redirects; the connect address is not pinned | A hostile DNS answer could rebind between resolution and connect (SSRF) | Security | M12 hardening |
 | TD-053 | `postgres`, `mysql` and `mqtt` data-source kinds are accepted by metadata CRUD but no connector exists; execution returns `501 NOT_IMPLEMENTED` | Users can register sources that cannot run queries | Backend | When SQL/MQTT connectors are scheduled |
 | TD-054 | Query concurrency limits are per process and there is no request rate limiting | Multiple API replicas multiply the effective concurrency; bursts are unbounded | Backend | M12 |
@@ -61,6 +61,8 @@ end so IDs stay stable.
 | TD-068 | The web chrome catalog is a plain `Record<Locale, Record<string, string>>` with no key-parity check between locales | A new `web.*` key added to only one locale silently falls back to English (or renders the key) | Frontend | When the catalog grows or a third locale is requested |
 | TD-069 | Only the locale is stored locally while signed out; the theme selector requires a session | The login page always follows `system` until a user signs in | Frontend | If signed-out theme control is requested |
 | TD-070 | Screenshot baselines are Chromium-on-Linux only and the suite needs a locally available Chromium build | Baselines do not protect the Safari/Firefox rendering path; a clean machine cannot run the suite without a browser download or `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | QA/Tooling | M12 CI wiring |
+| TD-071 | Data-source connectors are registered in-process when the API boots (`createPluginRegistry`); there is no install, discovery or hot-reload path | Adding a connector requires a code change and a restart; the registry validation from M11 guards what is loaded, not how it arrives | Backend | When a connector install path exists |
+| TD-072 | Editor extension points are limited to widget `settings` panels; there is no registry for toolbar actions, control types or palette groups | Third-party plugins can render and configure themselves but cannot contribute editor chrome | SDK | When a plugin asks for editor extensions |
 
 ## Closed
 

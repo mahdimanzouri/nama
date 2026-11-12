@@ -13,5 +13,6 @@ export * from "./query";
 export * from "./dashboard";
 export * from "./realtime";
 export * from "./plugin";
+export * from "./data-source-plugin";
 export * from "./migration";
 export * from "./transfer";

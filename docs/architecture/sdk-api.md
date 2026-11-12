@@ -27,6 +27,7 @@ declarations and an explicit CSS entry point.
 | `@nama/dashboard-builder` | Provider, viewer, renderer, controls, hooks and runtime re-exports | Every host |
 | `@nama/dashboard-builder/editor` | Editor, toolbar, palette, settings and draft hooks, plus React Grid Layout and the editor store | Editor hosts only |
 | `@nama/dashboard-builder/widgets` | Seven built-in widgets; ECharts stays external | Hosts that register the defaults |
+| `@nama/dashboard-builder/plugins` | Plugin contract, `defineWidget`, widget registry and config resolution, without viewer/editor/widgets | Plugin packages and hosts that register them |
 | `@nama/dashboard-builder/styles.css` | Theme tokens and component styles | Every host |
 
 The editor entry exists since M9: importing the root package no longer pulls the
